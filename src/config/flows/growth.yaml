@@ -1,0 +1,190 @@
+# Growth Flow Configuration
+# 성장 극대화 - 근로소득 있는 공격적 투자자
+
+flow_name: growth
+description: "수익 극대화, 섹터 로테이션 활용, 높은 변동성 허용"
+
+# Flow 실행 순서
+execution_order:
+  - portfolio_input
+  - data
+  - macro
+  - research
+  - strategy
+  - rebalancing
+  - validation
+  - critic
+
+# Layer별 설정
+layers:
+  portfolio_input:
+    enabled: true
+    profile: growth  # config/profiles/growth.yaml 참조
+
+  data:
+    enabled: true
+    collectors:
+      - news_collector
+      - report_collector
+      - price_collector
+      - economic_collector
+    focus:
+      - equity_markets
+      - sector_trends
+      - technology_news
+
+  macro:
+    enabled: true
+    agents:
+      - name: geopolitical_agent
+        enabled: true
+        weight: 0.30
+        persona_file: geopolitical.yaml
+        sensitivity: moderate
+
+      - name: sector_rotation_agent
+        enabled: true
+        weight: 0.40  # 높은 가중치 (성장주 섹터 중요)
+        persona_file: sector_rotation.yaml
+        sensitivity: aggressive
+
+      - name: monetary_agent
+        enabled: true
+        weight: 0.30
+        persona_file: monetary.yaml
+        sensitivity: moderate
+
+    ensemble:
+      method: weighted_average
+      min_confidence: 0.60
+
+  research:
+    enabled: true
+    agents:
+      - name: stock_screener
+        enabled: false  # Optional: 개별 종목 발굴 (기본 off)
+        persona_file: stock_screener.yaml
+
+      - name: theme_investment
+        enabled: true
+        persona_file: theme_investment.yaml
+        themes:
+          - ai_infrastructure
+          - renewable_energy
+          - semiconductor
+
+    max_opportunities: 5
+
+  strategy:
+    enabled: true
+    num_candidates: 3  # Aggressive, Balanced, Defensive
+
+    agents:
+      - name: growth_strategy_agent
+        enabled: true
+        role: primary
+        persona_file: growth_strategy.yaml
+        output: 3_candidates
+
+      - name: cash_management_agent
+        enabled: true
+        role: supporting
+        persona_file: cash_management.yaml
+        target_cash_range: [0.05, 0.25]
+
+      - name: tax_optimization_agent
+        enabled: false  # Optional
+        persona_file: tax_optimization.yaml
+
+    constraints:
+      max_single_sector: 0.40
+      max_single_position: 0.15
+      max_drawdown_tolerance: 0.35
+      min_cash_ratio: 0.05
+      max_cash_ratio: 0.30
+
+  rebalancing:
+    enabled: true
+    methods:
+      - name: threshold_based
+        enabled: true
+        threshold: 0.05  # 5% 괴리
+
+      - name: cash_flow_based
+        enabled: true
+        preferred: true  # Growth Flow에서 선호
+        reason: "월급으로 리밸런싱 (매도 최소화)"
+
+      - name: opportunistic
+        enabled: true
+        trigger: vix_spike
+        vix_threshold: 30
+
+    max_methods: 3
+
+  validation:
+    enabled: true
+    backtesting:
+      enabled: true
+      period_years: 10
+      rebalance_frequency: monthly
+
+    risk_metrics:
+      - sharpe_ratio
+      - max_drawdown
+      - var_95
+      - cvar_95
+      - sortino_ratio
+
+    stress_tests:
+      - scenario: "2008_financial_crisis"
+      - scenario: "2020_covid"
+      - scenario: "2022_inflation"
+
+    transaction_costs:
+      enabled: true
+      commission_rate: 0.001  # 0.1%
+
+  critic:
+    enabled: true
+    auto_select_strategy: false  # 사용자가 최종 선택
+    consistency_check: true
+    min_consistency_score: 0.70
+
+    report:
+      format: markdown
+      include_charts: true
+      language: korean
+
+# Retrospection 설정 (월말 실행)
+retrospection:
+  enabled: true
+  frequency: monthly
+  run_day: 15  # 매월 15일
+
+  analysis:
+    - prediction_accuracy
+    - agent_performance
+    - strategy_effectiveness
+    - rebalancing_timing
+
+  feedback_loop:
+    enabled: true
+    auto_adjust_weights: false  # 가중치 자동 조정 off (수동 승인)
+    learning_rate: 0.05
+
+# Output 설정
+output:
+  portfolio_file: "outputs/portfolios/{date}_growth_recommendation.json"
+  report_file: "outputs/reports/{date}_growth_report.md"
+  log_file: "outputs/logs/{date}_growth_execution.log"
+
+# Notification 설정
+notifications:
+  enabled: true
+  channels:
+    - email
+  conditions:
+    - on_completion
+    - on_error
+    - on_critic_rejection

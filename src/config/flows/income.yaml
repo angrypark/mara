@@ -1,0 +1,214 @@
+# Income Flow Configuration
+# 현금흐름 창출 - 은퇴 자산 보호 및 안정적 수익
+
+flow_name: income
+description: "매월 안정적 현금흐름, 원금 보존, 인플레이션 헤지"
+
+# Flow 실행 순서
+execution_order:
+  - portfolio_input
+  - data
+  - macro
+  - research
+  - strategy
+  - rebalancing
+  - validation
+  - critic
+
+# Layer별 설정
+layers:
+  portfolio_input:
+    enabled: true
+    profile: income  # config/profiles/income.yaml 참조
+
+  data:
+    enabled: true
+    collectors:
+      - news_collector
+      - report_collector
+      - price_collector
+      - dividend_collector  # Income Flow만 추가
+      - economic_collector
+    focus:
+      - bond_market
+      - dividend_stocks
+      - inflation_indicators
+      - reit_market
+
+  macro:
+    enabled: true
+    agents:
+      - name: geopolitical_agent
+        enabled: true
+        weight: 0.30
+        persona_file: geopolitical.yaml
+        sensitivity: conservative
+
+      - name: sector_rotation_agent
+        enabled: true
+        weight: 0.30
+        persona_file: sector_rotation_defensive.yaml  # 방어적 버전
+        sensitivity: conservative
+        focus: defensive_sectors  # Healthcare, Utilities, Consumer Staples
+
+      - name: monetary_agent
+        enabled: true
+        weight: 0.40  # 높은 가중치 (금리가 채권/배당에 중요)
+        persona_file: monetary.yaml
+        sensitivity: moderate
+
+    ensemble:
+      method: weighted_average
+      min_confidence: 0.65  # 더 높은 신뢰도 요구
+
+  research:
+    enabled: true
+    agents:
+      - name: alternative_asset_agent
+        enabled: true
+        persona_file: alternative_assets.yaml
+        focus:
+          - reits
+          - tips  # Treasury Inflation-Protected Securities
+          - municipal_bonds
+          - preferred_stocks
+
+      - name: dividend_screener
+        enabled: true
+        persona_file: dividend_screener.yaml
+        criteria:
+          min_yield: 0.03  # 최소 3% 배당수익률
+          min_payout_ratio: 0.40
+          max_payout_ratio: 0.80  # 지속 가능성
+          dividend_growth_years: 5  # 5년 연속 배당 증가
+
+    max_opportunities: 8  # Income은 더 다양한 자산 필요
+
+  strategy:
+    enabled: true
+    num_candidates: 3  # Conservative, Balanced, Growth-Income
+
+    agents:
+      - name: income_strategy_agent
+        enabled: true
+        role: primary
+        persona_file: income_strategy.yaml
+        output: 3_candidates
+        target_yield: 0.03  # 연 3% (월 0.25%)
+
+      - name: cash_management_agent
+        enabled: true
+        role: supporting
+        persona_file: cash_management.yaml
+        target_cash_range: [0.15, 0.25]  # 더 높은 현금 비중
+
+      - name: inflation_hedge_agent
+        enabled: true
+        role: supporting
+        persona_file: inflation_hedge.yaml
+        target_allocation: 0.40  # 40% 이상 인플레이션 헤지 자산
+
+    constraints:
+      max_single_sector: 0.30  # 더 보수적
+      max_single_position: 0.12
+      max_drawdown_tolerance: 0.20  # 20%
+      min_cash_ratio: 0.15
+      max_cash_ratio: 0.25
+      min_dividend_yield: 0.025  # 전체 포트폴리오 최소 2.5% 배당
+
+  rebalancing:
+    enabled: true
+    methods:
+      - name: calendar_based
+        enabled: true
+        preferred: true  # Income Flow에서 선호
+        frequency: quarterly  # 분기별 (예측 가능)
+        reason: "안정적이고 예측 가능한 리밸런싱"
+
+      - name: threshold_based
+        enabled: true
+        threshold: 0.03  # 3% 괴리 (더 타이트)
+
+    max_methods: 2  # 단순하게 유지
+
+  validation:
+    enabled: true
+    backtesting:
+      enabled: true
+      period_years: 15  # 더 긴 기간 (recession 포함)
+      rebalance_frequency: quarterly
+
+    risk_metrics:
+      - sharpe_ratio
+      - sortino_ratio
+      - max_drawdown  # 가장 중요
+      - cvar_95
+      - yield_stability  # Income Flow 전용
+
+    stress_tests:
+      - scenario: "2008_financial_crisis"
+      - scenario: "2011_european_debt_crisis"
+      - scenario: "2020_covid"
+      - scenario: "1970s_stagflation"  # 인플레이션 시나리오
+
+    transaction_costs:
+      enabled: true
+      commission_rate: 0.0005  # 0.05% (더 낮은 회전율)
+
+    income_analysis:  # Income Flow 전용
+      enabled: true
+      monthly_distribution_check: true
+      required_monthly_cash: 5000000  # KRW
+
+  critic:
+    enabled: true
+    auto_select_strategy: false
+    consistency_check: true
+    min_consistency_score: 0.75  # 더 높은 기준
+
+    income_specific_checks:
+      - verify_target_yield: 0.03
+      - verify_max_dd: 0.20
+      - verify_inflation_hedge: 0.40
+      - verify_monthly_liquidity: true
+
+    report:
+      format: markdown
+      include_charts: true
+      include_distribution_plan: true  # 월별 현금흐름 계획
+      language: korean
+
+# Retrospection 설정
+retrospection:
+  enabled: true
+  frequency: monthly
+  run_day: 15
+
+  analysis:
+    - prediction_accuracy
+    - agent_performance
+    - actual_vs_expected_yield  # Income Flow 전용
+    - inflation_hedge_effectiveness
+
+  feedback_loop:
+    enabled: true
+    auto_adjust_weights: false
+    learning_rate: 0.03  # 더 보수적
+
+# Output 설정
+output:
+  portfolio_file: "outputs/portfolios/{date}_income_recommendation.json"
+  report_file: "outputs/reports/{date}_income_report.md"
+  distribution_plan_file: "outputs/portfolios/{date}_income_distribution_plan.json"
+  log_file: "outputs/logs/{date}_income_execution.log"
+
+# Notification 설정
+notifications:
+  enabled: true
+  channels:
+    - email
+  conditions:
+    - on_completion
+    - on_error
+    - on_critic_rejection
+    - on_yield_below_target  # Income Flow 전용

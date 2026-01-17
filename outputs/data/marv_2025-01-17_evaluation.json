@@ -1,0 +1,489 @@
+{
+  "evaluation_id": "eval_marv_2025-01-17",
+  "prediction_id": "marv_2025-01-17",
+  "performance_result_id": "result_marv_2025-01-17",
+  "user_id": "marv",
+
+  "evaluation_period": {
+    "start_date": "2025-01-17",
+    "end_date": "2025-02-17",
+    "days": 31
+  },
+
+  "actual_performance": {
+    "actual_return": 0.08,
+    "actual_volatility": 0.20,
+    "actual_sharpe": 0.40,
+    "actual_max_dd": -0.15,
+
+    "sector_performance": {
+      "technology": 0.12,
+      "healthcare": 0.05,
+      "financials": 0.03,
+      "energy": -0.02
+    },
+
+    "ticker_performance": {
+      "XLK": 0.11,
+      "XLV": 0.06,
+      "QQQ": 0.13,
+      "AAPL": 0.09,
+      "V": 0.07,
+      "GLD": 0.02,
+      "NVDA": 0.18,
+      "AVGO": 0.15,
+      "TSM": 0.14
+    }
+  },
+
+  "prediction_vs_actual": {
+    "expected_return": 0.12,
+    "actual_return": 0.08,
+    "return_error": -0.04,
+    "prediction_accuracy": 0.67
+  },
+
+  "agent_evaluations": {
+    "macro": [
+      {
+        "evaluation_id": "eval_agent_001",
+        "agent_prediction_id": "agent_pred_001",
+        "agent_name": "geopolitical_agent",
+        "agent_persona": "geopolitical",
+        "agent_weight": 0.20,
+
+        "evaluation": {
+          "regime_accuracy": 0.60,
+          "regime_predicted": "moderate_risk",
+          "regime_actual": "bull",
+          "regime_match": false,
+
+          "sector_prediction_accuracy": {
+            "technology": {
+              "predicted": -0.05,
+              "actual": 0.12,
+              "error": 0.17,
+              "accuracy": 0.15
+            },
+            "defense": {
+              "predicted": 0.10,
+              "actual": 0.04,
+              "error": -0.06,
+              "accuracy": 0.40
+            },
+            "energy": {
+              "predicted": 0.05,
+              "actual": -0.02,
+              "error": -0.07,
+              "accuracy": 0.30
+            }
+          },
+
+          "overall_accuracy": 0.45,
+          "contribution_to_performance": -0.02,
+
+          "rationale": "지정학적 리스크를 과대평가. 기술주 공급망 리스크 우려가 현실화되지 않음. 중동 긴장도 시장에 큰 영향 없음.",
+
+          "learning_points": [
+            "단기 지정학적 이벤트의 시장 영향은 제한적",
+            "기술주 공급망은 이미 다변화 진행 중",
+            "방어적 포지션이 상승장에서 기회비용 발생"
+          ]
+        }
+      },
+
+      {
+        "evaluation_id": "eval_agent_002",
+        "agent_prediction_id": "agent_pred_002",
+        "agent_name": "sector_rotation_agent",
+        "agent_persona": "sector_rotation",
+        "agent_weight": 0.40,
+
+        "evaluation": {
+          "regime_accuracy": 0.90,
+          "regime_predicted": "bull",
+          "regime_actual": "bull",
+          "regime_match": true,
+
+          "sector_prediction_accuracy": {
+            "technology": {
+              "predicted": 0.18,
+              "actual": 0.12,
+              "error": -0.06,
+              "accuracy": 0.67
+            },
+            "healthcare": {
+              "predicted": 0.08,
+              "actual": 0.05,
+              "error": -0.03,
+              "accuracy": 0.63
+            },
+            "consumer_discretionary": {
+              "predicted": 0.12,
+              "actual": 0.09,
+              "error": -0.03,
+              "accuracy": 0.75
+            },
+            "industrials": {
+              "predicted": 0.10,
+              "actual": 0.07,
+              "error": -0.03,
+              "accuracy": 0.70
+            }
+          },
+
+          "overall_accuracy": 0.85,
+          "contribution_to_performance": 0.04,
+
+          "rationale": "사이클 판단 정확. 기술주 상승폭은 다소 과대평가했으나 방향성은 정확. XLK, XLY 비중 확대 권고가 수익에 기여.",
+
+          "learning_points": [
+            "AI 테마 강세 정확히 포착",
+            "소비재 수요 회복 예측 적중",
+            "다만 상승폭 예측은 보수적 조정 필요"
+          ]
+        }
+      },
+
+      {
+        "evaluation_id": "eval_agent_003",
+        "agent_prediction_id": "agent_pred_003",
+        "agent_name": "ray_dalio_macro_agent",
+        "agent_persona": "ray_dalio",
+        "agent_weight": 0.30,
+
+        "evaluation": {
+          "regime_accuracy": 0.75,
+          "regime_predicted": "growth_moderate_inflation",
+          "regime_actual": "growth_low_inflation",
+          "regime_match": "partial",
+
+          "asset_class_prediction_accuracy": {
+            "equities": {
+              "predicted": 0.15,
+              "actual": 0.12,
+              "error": -0.03,
+              "accuracy": 0.80
+            },
+            "bonds": {
+              "predicted": 0.05,
+              "actual": 0.03,
+              "error": -0.02,
+              "accuracy": 0.60
+            },
+            "gold": {
+              "predicted": 0.08,
+              "actual": 0.02,
+              "error": -0.06,
+              "accuracy": 0.25
+            }
+          },
+
+          "overall_accuracy": 0.70,
+          "contribution_to_performance": 0.01,
+
+          "rationale": "성장 국면 판단 정확. 인플레이션 압력은 예상보다 빠르게 완화. 금 배분 권고(15%)는 과도했으나 리스크 헤지 측면에서 유효.",
+
+          "learning_points": [
+            "인플레이션 하방 압력 더 강함",
+            "성장 자산 비중 더 공격적으로 가능했음",
+            "리스크 패리티 접근은 변동성 완화에 기여"
+          ]
+        }
+      },
+
+      {
+        "evaluation_id": "eval_agent_004",
+        "agent_prediction_id": "agent_pred_004",
+        "agent_name": "monetary_agent",
+        "agent_persona": "monetary",
+        "agent_weight": 0.10,
+
+        "evaluation": {
+          "regime_accuracy": 0.85,
+          "regime_predicted": "easing_cycle",
+          "regime_actual": "easing_cycle",
+          "regime_match": true,
+
+          "policy_prediction_accuracy": {
+            "rate_direction": "correct",
+            "rate_magnitude": "underestimated",
+            "predicted_rate_6m": 4.00,
+            "actual_rate_1m": 4.25
+          },
+
+          "sector_prediction_accuracy": {
+            "technology": {
+              "predicted": 0.12,
+              "actual": 0.12,
+              "error": 0.00,
+              "accuracy": 1.00
+            },
+            "real_estate": {
+              "predicted": 0.10,
+              "actual": 0.08,
+              "error": -0.02,
+              "accuracy": 0.80
+            },
+            "financials": {
+              "predicted": 0.03,
+              "actual": 0.03,
+              "error": 0.00,
+              "accuracy": 1.00
+            }
+          },
+
+          "overall_accuracy": 0.88,
+          "contribution_to_performance": 0.02,
+
+          "rationale": "금리 하락 추세 정확히 예측. 기술주 및 금리 민감 자산 선호 적중. 부동산 ETF 상승폭은 다소 과대평가.",
+
+          "learning_points": [
+            "연준의 완화 속도는 예상보다 점진적",
+            "금리 하락 기대가 성장주에 즉각 반영",
+            "부동산 섹터는 지연 반응"
+          ]
+        }
+      }
+    ],
+
+    "research": [
+      {
+        "evaluation_id": "eval_agent_005",
+        "agent_prediction_id": "agent_pred_005",
+        "agent_name": "theme_investment",
+        "agent_persona": "theme_investment",
+
+        "evaluation": {
+          "theme_performance": {
+            "ai_infrastructure": {
+              "predicted_score": 0.90,
+              "actual_return": 0.16,
+              "accuracy": 0.90,
+              "opportunities_hit_rate": 0.67,
+              "best_pick": "NVDA (+18%)",
+              "worst_pick": "SMCI (+8%)"
+            },
+            "semiconductor_cycle": {
+              "predicted_score": 0.82,
+              "actual_return": 0.14,
+              "accuracy": 0.85,
+              "opportunities_hit_rate": 1.00,
+              "best_pick": "NVDA (+18%)",
+              "note": "모든 추천 종목 양호한 수익"
+            }
+          },
+
+          "overall_accuracy": 0.88,
+          "contribution_to_performance": 0.03,
+
+          "rationale": "AI 테마 선정 탁월. NVDA, AVGO, TSM 모두 강한 상승. 반도체 업사이클 판단 정확.",
+
+          "learning_points": [
+            "AI 인프라 테마는 더 높은 배분 가능했음",
+            "SMCI는 변동성 높아 주의 필요",
+            "TSM 파운드리 우위 지속"
+          ]
+        }
+      },
+
+      {
+        "evaluation_id": "eval_agent_006",
+        "agent_prediction_id": "agent_pred_006",
+        "agent_name": "warren_buffett_screener",
+        "agent_persona": "warren_buffett",
+
+        "evaluation": {
+          "screening_performance": {
+            "AAPL": {
+              "predicted_upside": 0.19,
+              "actual_return": 0.09,
+              "accuracy": 0.50,
+              "note": "상승폭은 예상보다 낮지만 방향성 정확"
+            },
+            "V": {
+              "predicted_upside": 0.11,
+              "actual_return": 0.07,
+              "accuracy": 0.64,
+              "note": "안정적 상승, 예측 부합"
+            }
+          },
+
+          "overall_accuracy": 0.70,
+          "contribution_to_performance": 0.01,
+
+          "rationale": "우량주 선정은 정확하나 단기 상승폭 예측은 제한적. 장기 관점에서는 유효한 선택.",
+
+          "learning_points": [
+            "가치투자 접근은 단기 수익률보다 안정성에 기여",
+            "AAPL 내재가치 산정 시 AI 효과 추가 고려 필요",
+            "V의 네트워크 효과는 여전히 강력"
+          ]
+        }
+      }
+    ],
+
+    "strategy": [
+      {
+        "evaluation_id": "eval_agent_007",
+        "agent_prediction_id": "agent_pred_008",
+        "agent_name": "growth_strategy_agent",
+        "candidate_id": "balanced_growth",
+        "selected": true,
+
+        "evaluation": {
+          "expected_return": 0.12,
+          "actual_return": 0.08,
+          "return_error": -0.04,
+          "return_accuracy": 0.67,
+
+          "expected_volatility": 0.18,
+          "actual_volatility": 0.20,
+          "volatility_error": 0.02,
+          "volatility_accuracy": 0.89,
+
+          "expected_sharpe": 0.67,
+          "actual_sharpe": 0.40,
+          "sharpe_error": -0.27,
+
+          "expected_max_dd": -0.22,
+          "actual_max_dd": -0.15,
+          "max_dd_accuracy": 0.68,
+
+          "allocation_performance": {
+            "XLK": {"weight": 0.25, "return": 0.11, "contribution": 0.0275},
+            "XLV": {"weight": 0.20, "return": 0.06, "contribution": 0.0120},
+            "QQQ": {"weight": 0.15, "return": 0.13, "contribution": 0.0195},
+            "AAPL": {"weight": 0.10, "return": 0.09, "contribution": 0.0090},
+            "V": {"weight": 0.08, "return": 0.07, "contribution": 0.0056},
+            "GLD": {"weight": 0.07, "return": 0.02, "contribution": 0.0014},
+            "cash": {"weight": 0.15, "return": 0.00, "contribution": 0.0000}
+          },
+
+          "overall_accuracy": 0.73,
+          "contribution_to_performance": 0.08,
+
+          "rationale": "수익률은 예상보다 낮았으나 변동성 관리 양호. 섹터 분산이 하방 리스크 제한에 기여. GLD 배분이 수익률 하락 요인.",
+
+          "learning_points": [
+            "기술주 비중을 더 높일 수 있었음 (QQQ 강세)",
+            "GLD 7% 배분은 과도 (실제 상승 2%)",
+            "현금 15%는 적절 (변동성 대비 유동성 확보)"
+          ]
+        }
+      }
+    ],
+
+    "rebalancing": [
+      {
+        "evaluation_id": "eval_agent_010",
+        "agent_prediction_id": "agent_pred_010",
+        "agent_name": "cash_flow_rebalancer",
+        "selected": true,
+
+        "evaluation": {
+          "method": "cash_flow_based",
+          "effectiveness": 0.80,
+
+          "planned_actions": [
+            {"month": 1, "ticker": "XLK", "amount": 5000000},
+            {"month": 2, "ticker": "NVDA", "amount": 5000000},
+            {"month": 3, "ticker": "XLV", "amount": 5000000}
+          ],
+
+          "actual_actions": [
+            {"date": "2025-01-20", "ticker": "XLK", "amount": 5000000, "price": 180, "return": 0.11}
+          ],
+
+          "timing_score": 0.85,
+          "cost_efficiency": 0.95,
+
+          "rationale": "월급 활용한 점진적 매수 전략 효과적. 첫 매수(XLK) 타이밍 양호. 매도 없어 세금 효율적.",
+
+          "learning_points": [
+            "상승장에서 점진적 매수는 기회비용 발생",
+            "하지만 변동성 분산 효과 있음",
+            "다음 매수(NVDA)는 더 높은 수익 기대"
+          ]
+        }
+      }
+    ]
+  },
+
+  "agent_weight_updates": {
+    "recommendations": [
+      {
+        "layer": "macro",
+        "agent_name": "geopolitical_agent",
+        "current_weight": 0.20,
+        "recommended_weight": 0.15,
+        "change": -0.05,
+        "reason": "지정학 리스크 과대평가 경향, 단기 예측력 낮음"
+      },
+      {
+        "layer": "macro",
+        "agent_name": "sector_rotation_agent",
+        "current_weight": 0.40,
+        "recommended_weight": 0.45,
+        "change": 0.05,
+        "reason": "사이클 판단 및 섹터 전망 정확도 높음"
+      },
+      {
+        "layer": "macro",
+        "agent_name": "ray_dalio_macro_agent",
+        "current_weight": 0.30,
+        "recommended_weight": 0.30,
+        "change": 0.00,
+        "reason": "리스크 관리 기여, 변동성 완화 효과"
+      },
+      {
+        "layer": "macro",
+        "agent_name": "monetary_agent",
+        "current_weight": 0.10,
+        "recommended_weight": 0.10,
+        "change": 0.00,
+        "reason": "금리 전망 정확, 현재 가중치 적정"
+      },
+      {
+        "layer": "research",
+        "agent_name": "theme_investment",
+        "recommended_weight": "increase_confidence",
+        "reason": "테마 선정 및 종목 발굴 능력 탁월"
+      },
+      {
+        "layer": "research",
+        "agent_name": "warren_buffett_screener",
+        "recommended_weight": "maintain",
+        "reason": "장기 안정성 기여, 단기 수익보다 변동성 완화 역할"
+      }
+    ]
+  },
+
+  "overall_assessment": {
+    "prediction_quality": "good",
+    "top_performing_agents": [
+      "monetary_agent (0.88)",
+      "theme_investment (0.88)",
+      "sector_rotation_agent (0.85)"
+    ],
+    "needs_improvement": [
+      "geopolitical_agent (0.45)"
+    ],
+
+    "key_insights": [
+      "AI 및 반도체 테마 강세는 정확히 포착",
+      "지정학 리스크는 과대평가되었고 실제 영향 미미",
+      "금 배분은 수익률 하락 요인이나 리스크 헤지 역할",
+      "현금흐름 기반 리밸런싱은 세금 효율적이나 상승장에서 기회비용 존재"
+    ],
+
+    "recommendations_for_next_run": [
+      "기술주 비중 확대 고려 (AI 테마 지속)",
+      "지정학 Agent 가중치 하향 조정",
+      "섹터 로테이션 Agent 신뢰도 제고",
+      "금 배분 비중 축소 (7% → 5%)"
+    ]
+  },
+
+  "evaluated_at": "2025-02-17T10:15:30Z"
+}

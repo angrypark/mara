@@ -1,0 +1,111 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables
+.env
+.env.local
+
+# Data
+data/raw/*
+data/processed/*
+data/cache/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/cache/.gitkeep
+
+# Outputs
+outputs/reports/*
+outputs/portfolios/*
+outputs/logs/*
+outputs/data/*
+outputs/visualizations/*
+
+# Keep .gitkeep files
+!outputs/reports/.gitkeep
+!outputs/portfolios/.gitkeep
+!outputs/logs/.gitkeep
+!outputs/data/.gitkeep
+!outputs/visualizations/.gitkeep
+
+# Keep sample output files for documentation
+!outputs/data/marv_2025-01-17_full.json
+!outputs/data/marv_2025-01-17_evaluation.json
+!outputs/visualizations/marv_timeline.html
+!outputs/visualizations/marv_2025-01-17_detail.html
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type checking
+.mypy_cache/
+.pytype/
+.pyre/
+
+# Linting
+.ruff_cache/
+
+# LangGraph checkpoints
+checkpoints/
+
+# Database (keep schema, ignore actual DB files)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+!src/db/schema.sql
+
+# Temporary
+*.tmp
+*.bak
+*.log
+
+# UV lock file (optional - can be included for reproducibility)
+# uv.lock
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Claude Code
+.claude/

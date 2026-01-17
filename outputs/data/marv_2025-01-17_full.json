@@ -1,0 +1,476 @@
+{
+  "prediction_id": "marv_2025-01-17",
+  "user_id": "marv",
+  "flow": "growth",
+  "flow_execution_id": "exec_20250117_093045",
+  "prediction_date": "2025-01-17",
+  "input_portfolio_id": "portfolio_marv_20250117",
+
+  "execution_summary": {
+    "start_time": "2025-01-17T09:30:45Z",
+    "end_time": "2025-01-17T09:42:18Z",
+    "duration_seconds": 693,
+    "layers_completed": [
+      "portfolio_input",
+      "data",
+      "macro",
+      "research",
+      "strategy",
+      "rebalancing",
+      "validation",
+      "critic"
+    ],
+    "status": "completed"
+  },
+
+  "input_portfolio": {
+    "portfolio_id": "portfolio_marv_20250117",
+    "total_value": 100000000,
+    "holdings": {
+      "SPY": {"shares": 100, "value": 45000000, "cost_basis": 40000000},
+      "QQQ": {"shares": 50, "value": 22000000, "cost_basis": 18000000},
+      "cash": {"value": 33000000}
+    },
+    "allocation": {
+      "SPY": 0.45,
+      "QQQ": 0.22,
+      "cash": 0.33
+    }
+  },
+
+  "layers": {
+    "macro": {
+      "ensemble_result": {
+        "market_regime": "bull",
+        "confidence": 0.78,
+        "sector_outlook": {
+          "technology": {"score": 0.12, "rationale": "AI infrastructure 확대, 반도체 수요 증가"},
+          "healthcare": {"score": 0.08, "rationale": "고령화 트렌드, 바이오테크 혁신"},
+          "financials": {"score": 0.05, "rationale": "금리 안정화, 대출 수요 회복"},
+          "energy": {"score": -0.03, "rationale": "재생에너지 전환, 유가 변동성"}
+        },
+        "macro_themes": [
+          "ai_infrastructure",
+          "semiconductor_cycle",
+          "monetary_easing"
+        ]
+      },
+
+      "agents": [
+        {
+          "agent_prediction_id": "agent_pred_001",
+          "agent_name": "geopolitical_agent",
+          "agent_persona": "geopolitical",
+          "weight": 0.20,
+          "confidence": 0.72,
+
+          "analysis": {
+            "market_regime": "moderate_risk",
+            "geopolitical_events": [
+              {
+                "event": "US-China Tech Decoupling",
+                "impact": "negative",
+                "affected_sectors": ["technology", "semiconductors"],
+                "severity": 0.6
+              },
+              {
+                "event": "Middle East Tensions",
+                "impact": "negative",
+                "affected_sectors": ["energy", "defense"],
+                "severity": 0.4
+              }
+            ],
+            "sector_outlook": {
+              "technology": {"score": -0.05, "rationale": "공급망 리스크"},
+              "defense": {"score": 0.10, "rationale": "지정학적 긴장 증가"},
+              "energy": {"score": 0.05, "rationale": "중동 리스크"}
+            },
+            "recommendation": "방어적 섹터 비중 확대, 기술주 공급망 다변화된 기업 선호"
+          }
+        },
+
+        {
+          "agent_prediction_id": "agent_pred_002",
+          "agent_name": "sector_rotation_agent",
+          "agent_persona": "sector_rotation",
+          "weight": 0.40,
+          "confidence": 0.85,
+
+          "analysis": {
+            "market_regime": "bull",
+            "cycle_phase": "mid_cycle",
+            "leading_sectors": ["technology", "consumer_discretionary", "industrials"],
+            "lagging_sectors": ["utilities", "consumer_staples"],
+
+            "sector_outlook": {
+              "technology": {"score": 0.18, "rationale": "AI 투자 사이클 초기, 클라우드 성장"},
+              "healthcare": {"score": 0.08, "rationale": "GLP-1 약물 혁신, 고령화"},
+              "consumer_discretionary": {"score": 0.12, "rationale": "소비 회복, 여행 수요"},
+              "industrials": {"score": 0.10, "rationale": "인프라 투자, 리쇼어링"},
+              "financials": {"score": 0.05, "rationale": "금리 안정화"},
+              "energy": {"score": -0.05, "rationale": "재생에너지 전환"},
+              "utilities": {"score": -0.08, "rationale": "성장 국면에서 저조"}
+            },
+
+            "rotation_recommendation": {
+              "increase": ["XLK", "XLY", "XLI"],
+              "decrease": ["XLU", "XLP"],
+              "hold": ["XLV", "XLF"]
+            }
+          }
+        },
+
+        {
+          "agent_prediction_id": "agent_pred_003",
+          "agent_name": "ray_dalio_macro_agent",
+          "agent_persona": "ray_dalio",
+          "weight": 0.30,
+          "confidence": 0.75,
+
+          "analysis": {
+            "market_regime": "growth_moderate_inflation",
+            "debt_cycle_phase": "late_mid_cycle",
+
+            "economic_regime_analysis": {
+              "growth": 0.70,
+              "inflation": 0.40,
+              "assessment": "성장은 지속되나 인플레이션 압력 완화 중"
+            },
+
+            "asset_class_outlook": {
+              "equities": {"score": 0.15, "rationale": "성장 국면, 기업 이익 증가"},
+              "bonds": {"score": 0.05, "rationale": "금리 하락 기대"},
+              "gold": {"score": 0.08, "rationale": "인플레이션 헤지, 달러 약세"},
+              "commodities": {"score": 0.03, "rationale": "수요 회복"}
+            },
+
+            "risk_parity_allocation": {
+              "equities": 0.40,
+              "bonds": 0.30,
+              "gold": 0.15,
+              "commodities": 0.10,
+              "cash": 0.05
+            },
+
+            "recommendation": "성장 자산 비중 유지하되, 인플레이션 헤지 자산 15% 확보"
+          }
+        },
+
+        {
+          "agent_prediction_id": "agent_pred_004",
+          "agent_name": "monetary_agent",
+          "agent_persona": "monetary",
+          "weight": 0.10,
+          "confidence": 0.80,
+
+          "analysis": {
+            "market_regime": "easing_cycle",
+            "fed_policy": {
+              "current_rate": 4.50,
+              "expected_rate_6m": 4.00,
+              "rate_cuts_expected": 2,
+              "stance": "dovish"
+            },
+
+            "sector_outlook": {
+              "technology": {"score": 0.12, "rationale": "금리 하락 시 성장주 선호"},
+              "real_estate": {"score": 0.10, "rationale": "금리 하락 수혜"},
+              "financials": {"score": 0.03, "rationale": "순이자마진 축소 우려"},
+              "utilities": {"score": 0.08, "rationale": "배당 매력 증가"}
+            },
+
+            "recommendation": "금리 민감 성장주 비중 확대, 부동산 ETF 고려"
+          }
+        }
+      ]
+    },
+
+    "research": {
+      "opportunities": [
+        {
+          "agent_prediction_id": "agent_pred_005",
+          "agent_name": "theme_investment",
+          "agent_persona": "theme_investment",
+
+          "themes": [
+            {
+              "theme": "ai_infrastructure",
+              "score": 0.90,
+              "rationale": "AI 모델 학습 및 추론 인프라 수요 폭발적 증가",
+              "opportunities": [
+                {"ticker": "NVDA", "score": 0.92, "reason": "GPU 독점, H100/H200 수요"},
+                {"ticker": "AVGO", "score": 0.85, "reason": "커스텀 AI 칩, 네트워킹"},
+                {"ticker": "SMCI", "score": 0.78, "reason": "AI 서버 인프라"}
+              ]
+            },
+            {
+              "theme": "semiconductor_cycle",
+              "score": 0.82,
+              "rationale": "반도체 업사이클 진입, 재고 정상화",
+              "opportunities": [
+                {"ticker": "TSM", "score": 0.88, "reason": "최첨단 파운드리 독점"},
+                {"ticker": "ASML", "score": 0.84, "reason": "EUV 장비 독점"},
+                {"ticker": "AMAT", "score": 0.80, "reason": "반도체 장비 수요"}
+              ]
+            }
+          ]
+        },
+
+        {
+          "agent_prediction_id": "agent_pred_006",
+          "agent_name": "warren_buffett_screener",
+          "agent_persona": "warren_buffett",
+
+          "screening_results": [
+            {
+              "ticker": "AAPL",
+              "score": 0.85,
+              "valuation": {
+                "intrinsic_value": 220,
+                "current_price": 185,
+                "margin_of_safety": 0.16
+              },
+              "moat": "strong",
+              "financials": {
+                "roe": 0.45,
+                "debt_to_equity": 0.35,
+                "free_cash_flow_margin": 0.25
+              },
+              "rationale": "강력한 브랜드 파워, 생태계 효과, 안정적 현금흐름"
+            },
+            {
+              "ticker": "V",
+              "score": 0.82,
+              "valuation": {
+                "intrinsic_value": 310,
+                "current_price": 280,
+                "margin_of_safety": 0.10
+              },
+              "moat": "very_strong",
+              "financials": {
+                "roe": 0.40,
+                "debt_to_equity": 0.20,
+                "free_cash_flow_margin": 0.40
+              },
+              "rationale": "네트워크 효과, 독점적 지위, 무부채 경영"
+            }
+          ]
+        }
+      ]
+    },
+
+    "strategy": {
+      "candidates": [
+        {
+          "agent_prediction_id": "agent_pred_007",
+          "agent_name": "growth_strategy_agent",
+          "agent_persona": "growth_strategy",
+          "candidate_id": "aggressive_growth",
+
+          "strategy_name": "Aggressive Growth",
+          "target_allocation": {
+            "XLK": 0.35,
+            "QQQ": 0.25,
+            "NVDA": 0.10,
+            "AVGO": 0.08,
+            "TSM": 0.07,
+            "cash": 0.15
+          },
+
+          "expected_metrics": {
+            "return": 0.15,
+            "volatility": 0.25,
+            "sharpe": 0.60,
+            "max_drawdown": -0.32
+          },
+
+          "rationale": "AI 및 반도체 테마 집중, 높은 성장 잠재력"
+        },
+
+        {
+          "agent_prediction_id": "agent_pred_008",
+          "agent_name": "growth_strategy_agent",
+          "agent_persona": "growth_strategy",
+          "candidate_id": "balanced_growth",
+
+          "strategy_name": "Balanced Growth",
+          "target_allocation": {
+            "XLK": 0.25,
+            "XLV": 0.20,
+            "QQQ": 0.15,
+            "AAPL": 0.10,
+            "V": 0.08,
+            "GLD": 0.07,
+            "cash": 0.15
+          },
+
+          "expected_metrics": {
+            "return": 0.12,
+            "volatility": 0.18,
+            "sharpe": 0.67,
+            "max_drawdown": -0.22
+          },
+
+          "rationale": "섹터 분산, 우량주 중심, 금 헤지 포함"
+        },
+
+        {
+          "agent_prediction_id": "agent_pred_009",
+          "agent_name": "growth_strategy_agent",
+          "agent_persona": "growth_strategy",
+          "candidate_id": "defensive_growth",
+
+          "strategy_name": "Defensive Growth",
+          "target_allocation": {
+            "XLV": 0.25,
+            "XLK": 0.20,
+            "AAPL": 0.12,
+            "V": 0.10,
+            "GLD": 0.10,
+            "AGG": 0.08,
+            "cash": 0.15
+          },
+
+          "expected_metrics": {
+            "return": 0.09,
+            "volatility": 0.14,
+            "sharpe": 0.64,
+            "max_drawdown": -0.16
+          },
+
+          "rationale": "방어적 섹터 중심, 변동성 최소화"
+        }
+      ]
+    },
+
+    "rebalancing": {
+      "agents": [
+        {
+          "agent_prediction_id": "agent_pred_010",
+          "agent_name": "cash_flow_rebalancer",
+          "agent_persona": "cash_flow_based",
+
+          "method": "cash_flow_based",
+          "preferred": true,
+
+          "analysis": {
+            "monthly_cash_flow": 5000000,
+            "rebalancing_horizon": "3_months",
+            "actions": [
+              {"month": 1, "action": "buy", "ticker": "XLK", "amount": 5000000},
+              {"month": 2, "action": "buy", "ticker": "NVDA", "amount": 5000000},
+              {"month": 3, "action": "buy", "ticker": "XLV", "amount": 5000000}
+            ],
+            "rationale": "월급으로 점진적 리밸런싱, 매도 최소화"
+          }
+        },
+
+        {
+          "agent_prediction_id": "agent_pred_011",
+          "agent_name": "threshold_rebalancer",
+          "agent_persona": "threshold_based",
+
+          "method": "threshold_based",
+          "threshold": 0.05,
+
+          "analysis": {
+            "current_vs_target": {
+              "XLK": {"current": 0.00, "target": 0.35, "deviation": 0.35, "action": "buy"},
+              "cash": {"current": 0.33, "target": 0.15, "deviation": -0.18, "action": "sell"}
+            },
+            "actions": [
+              {"action": "buy", "ticker": "XLK", "amount": 35000000, "from": "cash"},
+              {"action": "buy", "ticker": "QQQ", "amount": 3000000, "from": "cash"}
+            ],
+            "rationale": "즉시 목표 배분 달성"
+          }
+        }
+      ],
+
+      "recommended_method": "cash_flow_based",
+      "reasoning": "Growth Flow에서 선호, 세금 효율적, 타이밍 리스크 분산"
+    },
+
+    "validation": {
+      "agent_prediction_id": "agent_pred_012",
+      "agent_name": "validation_agent",
+
+      "backtest_results": {
+        "period": "2015-01-01 to 2024-12-31",
+        "annual_return": 0.11,
+        "annual_volatility": 0.17,
+        "sharpe_ratio": 0.65,
+        "max_drawdown": -0.28,
+        "win_rate": 0.68
+      },
+
+      "stress_test_results": [
+        {
+          "scenario": "2020_covid",
+          "max_drawdown": -0.34,
+          "recovery_days": 120,
+          "final_return": 0.25
+        },
+        {
+          "scenario": "2022_inflation",
+          "max_drawdown": -0.22,
+          "recovery_days": 180,
+          "final_return": -0.08
+        }
+      ]
+    },
+
+    "critic": {
+      "agent_prediction_id": "agent_pred_013",
+      "agent_name": "critic_agent",
+
+      "consistency_score": 0.82,
+      "consistency_checks": [
+        {
+          "check": "macro_strategy_alignment",
+          "passed": true,
+          "score": 0.85,
+          "comment": "Macro 분석의 기술주 선호와 전략 배분 일치"
+        },
+        {
+          "check": "risk_constraint_compliance",
+          "passed": true,
+          "score": 0.90,
+          "comment": "모든 전략이 리스크 제약 준수"
+        },
+        {
+          "check": "diversification",
+          "passed": true,
+          "score": 0.75,
+          "comment": "섹터 분산 양호하나 기술주 비중 높음"
+        }
+      ],
+
+      "final_recommendation": "balanced_growth",
+      "reasoning": "리스크 대비 수익률 최적, 섹터 분산 양호, 변동성 관리 가능"
+    }
+  },
+
+  "final_output": {
+    "selected_strategy": "balanced_growth",
+    "target_allocation": {
+      "XLK": 0.25,
+      "XLV": 0.20,
+      "QQQ": 0.15,
+      "AAPL": 0.10,
+      "V": 0.08,
+      "GLD": 0.07,
+      "cash": 0.15
+    },
+    "expected_metrics": {
+      "return": 0.12,
+      "volatility": 0.18,
+      "sharpe": 0.67,
+      "max_drawdown": -0.22
+    },
+    "rebalancing_method": "cash_flow_based",
+    "report_path": "outputs/reports/2025-01-17_growth_report.md"
+  },
+
+  "created_at": "2025-01-17T09:42:18Z"
+}

@@ -1,0 +1,148 @@
+persona_name: warren_buffett
+display_name: "Warren Buffett Value Investing"
+description: "워렌 버핏의 가치투자 원칙 기반 종목 발굴 및 전략"
+
+investment_philosophy: |
+  Warren Buffett의 핵심 원칙:
+
+  1. 내재가치 (Intrinsic Value)
+     - 기업의 진짜 가치는 미래 현금흐름의 현재가치
+     - 시장 가격과 내재가치의 괴리를 찾아라
+
+  2. 경제적 해자 (Economic Moat)
+     - 지속 가능한 경쟁우위 (브랜드, 네트워크 효과, 규제, 원가우위)
+     - 해자가 넓을수록 장기 수익성 보장
+
+  3. 안전마진 (Margin of Safety)
+     - 내재가치 대비 충분한 할인된 가격에 매수
+     - 최소 25% 이상의 안전마진 확보
+
+  4. 우량기업 장기보유 (Buy and Hold Quality)
+     - 이해 가능한 비즈니스 모델
+     - 훌륭한 경영진
+     - 예측 가능한 수익성
+     - 적정 가격
+
+  5. 시장 타이밍 무시 (Ignore Market Noise)
+     - 단기 시장 변동성에 흔들리지 않음
+     - "다른 사람들이 탐욕적일 때 두려워하고, 두려워할 때 탐욕적이어라"
+
+applicable_layers:
+  - research
+  - strategy
+
+layer_configs:
+  research:
+    screening_criteria:
+      financial_strength:
+        roe_min: 0.15           # ROE > 15%
+        roic_min: 0.12          # ROIC > 12%
+        debt_to_equity_max: 0.50
+        current_ratio_min: 1.5
+        free_cash_flow_positive: true
+
+      business_quality:
+        competitive_advantage: true      # 경제적 해자 존재
+        predictable_business: true       # 예측 가능한 비즈니스
+        pricing_power: true              # 가격결정력
+        low_capital_intensity: preferred # 자본집약도 낮은 것 선호
+
+      management:
+        shareholder_friendly: true       # 주주친화적 (배당, 자사주 매입)
+        transparent_reporting: true      # 투명한 재무 보고
+        consistent_strategy: true        # 일관된 전략
+
+      earnings_quality:
+        earnings_growth_5y: 0.08        # 5년 평균 이익 성장률 > 8%
+        dividend_growth_years: 5        # 5년 연속 배당 증가
+        payout_ratio_range: [0.25, 0.60] # 배당성향 25-60%
+
+    valuation_methods:
+      - method: dcf_analysis
+        discount_rate: 0.10
+        terminal_growth: 0.03
+
+      - method: owner_earnings
+        formula: "Net Income + D&A - CapEx - Working Capital Changes"
+
+      - method: pe_ratio_comparison
+        compare_to:
+          - historical_avg
+          - industry_avg
+          - sp500_avg
+
+      - method: price_to_book
+        max_pb_ratio: 3.0
+
+      - method: ev_to_ebitda
+        max_ev_ebitda: 12
+
+    margin_of_safety: 0.25  # 최소 25% 할인
+
+    red_flags:
+      - excessive_debt
+      - declining_margins
+      - management_turnover
+      - accounting_irregularities
+      - customer_concentration  # 소수 고객 의존도 높음
+
+  strategy:
+    principles:
+      - concentrated_portfolio  # 집중 투자 (5-10 종목)
+      - long_term_hold         # 장기 보유 (최소 5년)
+      - ignore_market_timing   # 시장 타이밍 무시
+      - buy_quality_cheap      # 우량 기업을 싸게
+
+    allocation_style:
+      max_positions: 10
+      min_position_size: 0.05   # 최소 5%
+      max_position_size: 0.25   # 최대 25%
+      target_holding_period: "5+ years"
+
+    portfolio_construction:
+      - rank_by_moat_width       # 해자 넓이로 정렬
+      - rank_by_margin_of_safety # 안전마진으로 정렬
+      - rank_by_management       # 경영진 품질로 정렬
+      - final_selection: "Top 5-10 종목"
+
+    rebalancing:
+      frequency: annual
+      triggers:
+        - valuation_reached_fair_value  # 내재가치 도달 시 매도 고려
+        - fundamental_deterioration     # 펀더멘털 악화 시 매도
+        - better_opportunity           # 더 좋은 기회 발견 시 교체
+
+system_prompt_file: "src/agents/personas/WARREN_BUFFETT_VALUE.md"
+
+# 예시 포트폴리오 (Buffett's Berkshire 스타일)
+example_holdings:
+  - ticker: AAPL
+    rationale: "강력한 브랜드, 생태계 효과, 높은 ROE, 안정적 현금흐름"
+    moat: "very_strong"
+    margin_of_safety: 0.15
+
+  - ticker: BAC
+    rationale: "금융 위기 후 구조조정 완료, 저평가, 경영진 우수"
+    moat: "moderate"
+    margin_of_safety: 0.30
+
+  - ticker: KO
+    rationale: "글로벌 브랜드 파워, 안정적 배당, 예측 가능한 수익"
+    moat: "very_strong"
+    margin_of_safety: 0.10
+
+  - ticker: V
+    rationale: "네트워크 효과, 독점적 지위, 무부채 경영"
+    moat: "very_strong"
+    margin_of_safety: 0.12
+
+# 기본 설정
+default_weight: 0.25
+sensitivity: conservative
+
+# 메타데이터
+created_by: "system"
+notes: |
+  Warren Buffett의 가치투자 접근은 단기 수익보다 장기 안정성을 추구합니다.
+  시장 변동성이 클 때 오히려 기회를 찾는 역발상 전략입니다.
+  Growth Flow보다는 Income Flow 또는 방어적 전략에 더 적합할 수 있습니다.

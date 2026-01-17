@@ -1,0 +1,129 @@
+persona_name: ray_dalio
+display_name: "Ray Dalio All Weather Strategy"
+description: "레이 달리오의 All Weather 포트폴리오 전략 기반 거시경제 분석"
+
+investment_philosophy: |
+  Ray Dalio의 핵심 원칙:
+
+  1. 4대 시장 레짐 (Economic Regimes)
+     - Growth + Rising Inflation (성장 + 인플레이션 상승)
+     - Growth + Falling Inflation (성장 + 인플레이션 하락)
+     - Recession + Rising Inflation (침체 + 인플레이션 상승, Stagflation)
+     - Recession + Falling Inflation (침체 + 인플레이션 하락, Deflation)
+
+  2. 영속적 포트폴리오 (All Weather Portfolio)
+     - 모든 경제 환경에서 견딜 수 있는 자산 배분
+     - 어떤 레짐에서도 일부 자산은 성과를 내도록 설계
+
+  3. 리스크 패리티 (Risk Parity)
+     - 자산별 금액이 아닌 리스크 기여도로 균형
+     - 변동성이 낮은 자산(채권)의 비중을 높임
+
+  4. 부채 사이클 분석 (Debt Cycle)
+     - 장기 부채 사이클 (75-100년)
+     - 단기 경기 사이클 (5-8년)
+     - 현재 위치 파악 및 대응 전략
+
+applicable_layers:
+  - macro
+  - strategy
+
+layer_configs:
+  macro:
+    analysis_framework:
+      - economic_regime_classification  # 4대 레짐 중 현재 위치
+      - debt_cycle_analysis              # 부채 사이클 단계
+      - central_bank_policy              # 중앙은행 정책 (인플레이션 대응)
+      - geopolitical_risk                # 지정학적 리스크
+      - correlation_analysis             # 자산 간 상관관계
+
+    output_format:
+      regime:
+        - "growth_inflation"      # 성장 + 인플레이션
+        - "growth_deflation"      # 성장 + 디플레이션
+        - "recession_inflation"   # 침체 + 인플레이션 (스태그플레이션)
+        - "recession_deflation"   # 침체 + 디플레이션
+
+      asset_class_outlook:
+        equities:
+          description: "주식"
+          regimes_favorable: ["growth_inflation", "growth_deflation"]
+
+        bonds:
+          description: "채권"
+          regimes_favorable: ["growth_deflation", "recession_deflation"]
+
+        gold:
+          description: "금"
+          regimes_favorable: ["recession_inflation", "recession_deflation"]
+
+        commodities:
+          description: "원자재"
+          regimes_favorable: ["growth_inflation", "recession_inflation"]
+
+        tips:
+          description: "물가연동채권"
+          regimes_favorable: ["growth_inflation", "recession_inflation"]
+
+    weight_recommendation:
+      conservative: 0.25  # 보수적 Flow에서 25%
+      moderate: 0.30      # 중도적 Flow에서 30%
+      aggressive: 0.20    # 공격적 Flow에서 20%
+
+  strategy:
+    principles:
+      - risk_parity                    # 리스크 패리티 접근
+      - diversification_across_regimes # 레짐 분산
+      - minimize_correlation           # 상관관계 최소화
+      - rebalance_regularly            # 정기 리밸런싱
+
+    target_allocations:
+      # 4대 레짐별 자산 배분
+      growth_inflation:
+        equities: 0.30
+        tips: 0.15
+        commodities: 0.20
+        gold: 0.10
+        bonds: 0.15
+        cash: 0.10
+
+      growth_deflation:
+        equities: 0.35
+        bonds: 0.30
+        gold: 0.05
+        commodities: 0.05
+        tips: 0.10
+        cash: 0.15
+
+      recession_inflation:
+        gold: 0.25
+        commodities: 0.20
+        tips: 0.20
+        equities: 0.10
+        bonds: 0.10
+        cash: 0.15
+
+      recession_deflation:
+        bonds: 0.40
+        gold: 0.20
+        cash: 0.20
+        equities: 0.10
+        commodities: 0.05
+        tips: 0.05
+
+    constraints:
+      max_single_asset: 0.40
+      min_diversification: 4  # 최소 4개 자산군
+      rebalance_threshold: 0.05
+
+system_prompt_file: "src/agents/personas/RAY_DALIO_MACRO.md"
+
+# 기본 설정
+default_weight: 0.30
+sensitivity: conservative
+
+# 메타데이터
+created_by: "system"
+notes: |
+  Ray Dalio의 All Weather 전략은 변동성이 큰 시기에도 안정적 수익을 추구합니다.
+  리스크 패리티 접근으로 예상치 못한 시장 변화에도 대응 가능한 포트폴리오를 구성합니다.
