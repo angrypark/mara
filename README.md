@@ -4,13 +4,13 @@ AI 기반 거시 경제 분석 및 개인 맞춤형 동적 포트폴리오 최�
 
 ## 🚀 Key Features
 
-- **5-Layer Agent Architecture**: User Profile → Data → Perspective Agents (병렬) → Strategy → Validation → Retrospection
+- **6-Layer Agent Pipeline**: User Profile → Data → Perspective Agents (병렬) → Strategy → Validation → Retrospection
 - **Perspective-Based Parallel Analysis**: 지정학, 섹터, 매크로, 금리 등 다양한 관점의 Agent가 병렬로 분석
-- **Multi-Hop Agent Communication**: Perspective Agent ↔ Research Agent 간 반복적 소통으로 심층 분석
+- **Multi-Hop Agent Communication**: Perspective Agent ↔ Research Agent 간 반복 소통 (최대 3회)으로 심층 분석
 - **Tool-Based Integration**: Price, Portfolio, Backtest 등 기능은 Tool로 분리하여 재사용성 확보
 - **User-Defined Risk Metrics**: MDD, Volatility, VaR 등 사용자가 직접 리스크 허용도 정의
 - **Investment Goals**: 공격(Aggressive), 균형(Balanced), 안정(Defensive) 목표 선택
-- **Validation Loop**: Strategy ↔ Validation 간 피드백 루프로 리스크 조건 충족까지 반복 조정
+- **Validation Loop**: Strategy ↔ Validation 간 피드백 루프 (최대 3회) 로 리스크 조건 충족까지 반복 조정
 - **Self-Learning System**: Retrospection Layer에서 예측 vs 실제 비교 → Agent 가중치 자동 조정 제안
 - **Interactive Visualization**: Timeline & Detail View로 전체 분석 과정 시각화
 
@@ -23,7 +23,7 @@ AI 기반 거시 경제 분석 및 개인 맞춤형 동적 포트폴리오 최�
 | Layer | 역할 |
 |-------|------|
 | **User Profile Layer** | 현재 포트폴리오, 투자 목표(공격/균형/안정), 리스크 허용도 정의 |
-| **Data Layer** | 리포트, 뉴스, 트윗 수집 및 요약 / 가격 변동 분석 |
+| **Data Layer** | 뉴스, 리포트 수집 및 요약 / 가격 변동 분석 |
 | **Perspective Agents** | 다양한 관점(지정학, 섹터, 매크로 등)에서 병렬 분석 및 리밸런싱 제안 |
 | **Strategy Layer** | 여러 Agent 제안을 종합하여 최종 포트폴리오 조정 방향 제시 |
 | **Validation Layer** | Backtest, 리스크 측정으로 목표 조건 충족 여부 검증 |
@@ -31,15 +31,16 @@ AI 기반 거시 경제 분석 및 개인 맞춤형 동적 포트폴리오 최�
 
 ### Tools
 
-Agent가 아닌 **도구(Tool)** 로 분리된 기능들:
+Agent가 LangGraph Tool로 호출하는 기능들 (`src/tools/`):
 
-| Tool | 기능 |
-|------|------|
-| **Price Tool** | 특정 종목의 현재가, 과거 가격, 수익률 조회 |
-| **Portfolio Loader** | 특정 기관/펀드의 포트폴리오 다운로드 |
-| **News Fetcher** | 최신 뉴스 및 트윗 수집 |
-| **Report Fetcher** | 전문가 리포트 수집 |
-| **Backtest Tool** | 포트폴리오 백테스팅 수행 |
+| Tool | 기능 | 위치 |
+|------|------|------|
+| **Price Tool** | 종목의 현재가, 과거 가격, 수익률 조회 | `src/tools/market/price.py` |
+| **Portfolio Loader** | ETF/펀드 구성 종목 조회 | `src/tools/market/portfolio.py` |
+| **Backtest Tool** | 포트폴리오 과거 성과 시뮬레이션 | `src/tools/analysis/backtest.py` |
+| **Risk Tool** | MDD, VaR, Volatility, Beta 계산 | `src/tools/analysis/risk.py` |
+
+> **Note**: 뉴스/리포트 수집은 Tool이 아닌 Data Layer(`src/data/collectors/`)에서 처리
 
 ### Risk Metrics
 
@@ -63,7 +64,7 @@ flowchart TB
 
     subgraph Data["📊 Data Layer"]
         DC[Data Collector]
-        DC --> |리포트/뉴스/트윗| DS[Data Summarizer]
+        DC --> |리포트/뉴스| DS[Data Summarizer]
         DC --> |가격 데이터| PA[Price Analyzer]
         DS --> DI[/"Data Insights"/]
         PA --> DI
@@ -71,12 +72,13 @@ flowchart TB
 
     subgraph Tools["🔧 Tools"]
         PT[Price Tool]
-        RA[Research Agent]
-        VA[Validation Agent]
+        BKT[Backtest Tool]
+        RSK[Risk Tool]
     end
 
     subgraph Perspectives["🔀 Perspective Agents"]
         direction TB
+        RA[Research Agent]
         GP[Geopolitical<br/>Agent]
         SR[Sector Rotation<br/>Agent]
         RD[Ray Dalio<br/>Macro Agent]
@@ -103,12 +105,13 @@ flowchart TB
     UP --> DC
     DI --> GP & SR & RD & MO
 
-    %% Perspective Agents ↔ Tools (multi-hop)
+    %% Perspective Agents ↔ Research Agent (multi-hop, max 3 iterations)
     GP <-.-> |"조사 요청"| RA
     SR <-.-> |"조사 요청"| RA
     RD <-.-> |"조사 요청"| RA
     MO <-.-> |"조사 요청"| RA
 
+    %% Perspective Agents → Tools
     GP <-.-> |"가격 조회"| PT
     SR <-.-> |"가격 조회"| PT
     RD <-.-> |"가격 조회"| PT
@@ -120,9 +123,10 @@ flowchart TB
     RD --> |"리밸런싱 제안"| SA
     MO --> |"리밸런싱 제안"| SA
 
-    %% Strategy ↔ Validation loop
+    %% Strategy ↔ Validation loop (max 3 iterations)
     SP --> VL
-    VL <-.-> |"검증 요청"| VA
+    VL <-.-> BKT
+    VL <-.-> RSK
     RC -.-> |"비율 수정 피드백"| SA
     BT --> |"최종 승인"| RT
 
@@ -135,14 +139,16 @@ flowchart TB
 1. **User Profile Layer**: 사용자가 현재 포트폴리오, 투자 목표(공격/균형/안정), 감당 가능한 리스크(MDD, Volatility 등)를 정의합니다.
 
 2. **Data Layer**: 외부 소스에서 데이터를 수집합니다.
-   - **Data Collector**: 리포트, 뉴스, 트윗을 수집
-   - **Data Summarizer**: 수집된 텍스트 데이터를 요약하여 핵심 인사이트 추출
-   - **Price Analyzer**: 가격 변동 추이, 주요 지표 변화 분석
+   - **Data Collector**: 뉴스(RSS/웹 스크래핑), 리포트(공개 PDF) 수집
+   - **Data Summarizer**: LLM 기반 텍스트 요약, 핵심 인사이트 추출
+   - **Price Analyzer**: yfinance 기반 가격 변동 추이, 기술적 지표 분석
 
 3. **Perspective Agents**: Data Layer의 인사이트를 기반으로 **여러 관점의 Agent가 병렬로 분기**됩니다.
    - 각 Agent는 자신의 관점(지정학, 섹터, 매크로, 금리)에서 현재 포트폴리오를 평가
-   - **Research Agent와 multi-hop 소통**하여 새로운 섹터/테마 발굴
-   - **Price Tool**을 통해 실시간 가격 정보 조회
+   - **Research Agent와 multi-hop 소통** (최대 3회)하여 새로운 섹터/테마 발굴
+     - **종료 조건**: 충분한 정보 확보 시 조기 종료 / 3회 도달 시 현재까지 수집된 정보로 진행
+     - **실패 처리**: Research Agent 응답 실패 시 해당 Perspective Agent는 자체 분석으로 fallback
+   - **Price Tool**을 통해 시장 가격 정보 조회
    - 각 Agent가 독립적으로 **리밸런싱 제안**까지 수행
 
 4. **Strategy Layer**: 여러 Perspective Agent의 제안을 종합합니다.
@@ -152,7 +158,11 @@ flowchart TB
 5. **Validation Layer**: 제안된 전략을 검증합니다.
    - **Backtest**: 과거 데이터로 성과 시뮬레이션
    - **Risk Check**: 사용자가 정의한 리스크 조건(MDD, VaR 등) 충족 여부 확인
-   - 조건 미충족 시 → Strategy Layer에 **비율 수정 피드백** 전달
+   - 조건 미충족 시 → Strategy Layer에 **비율 수정 피드백** 전달 (최대 3회 반복)
+   - **Loop 종료 조건**:
+     - ✅ 성공: 모든 리스크 조건 충족
+     - ⚠️ 부분 승인: 3회 반복 후에도 일부 조건 미충족 시, 위반 사항을 명시하고 사용자 확인 요청
+     - ❌ 거부: 핵심 리스크 조건(MDD) 위반 시 포트폴리오 제안 불가, 보수적 대안 제시
 
 6. **Retrospection Layer**: 시간이 지난 후 평가합니다.
    - 예측 vs 실제 성과 비교
@@ -170,67 +180,227 @@ flowchart TB
 - **ValidationState**: 백테스팅 결과, 리스크 메트릭, 승인/거부
 - **RetrospectionState**: 예측 vs 실제, 학습 인사이트, Agent 가중치 조정
 
+### Output Schemas (Pydantic)
+
+각 Layer의 출력 형식을 명확히 정의합니다:
+
+```python
+from pydantic import BaseModel, Field
+from typing import Literal
+from datetime import datetime
+
+# Perspective Agent → Strategy Layer
+class RebalanceProposal(BaseModel):
+    """개별 Perspective Agent의 리밸런싱 제안"""
+    agent_id: str                                    # e.g., "ray_dalio_macro"
+    ticker: str                                      # e.g., "XLK"
+    action: Literal["BUY", "SELL", "HOLD"]
+    current_weight: float = Field(ge=0, le=1)        # 현재 비중
+    target_weight: float = Field(ge=0, le=1)         # 제안 비중
+    confidence: float = Field(ge=0, le=1)            # 확신도
+    rationale: str                                   # 근거 설명
+    supporting_data: list[str]                       # 참조한 데이터 소스
+
+class PerspectiveOutput(BaseModel):
+    """Perspective Agent 전체 출력"""
+    agent_id: str
+    timestamp: datetime
+    market_outlook: Literal["BULLISH", "NEUTRAL", "BEARISH"]
+    proposals: list[RebalanceProposal]
+    risk_assessment: str
+    research_queries: list[str]                      # Research Agent에 요청한 쿼리들
+
+# Strategy Layer → Validation Layer
+class PortfolioAllocation(BaseModel):
+    """최종 포트폴리오 배분"""
+    ticker: str
+    weight: float = Field(ge=0, le=1)
+    rationale: str
+
+class StrategyOutput(BaseModel):
+    """Strategy Layer 출력"""
+    timestamp: datetime
+    allocations: list[PortfolioAllocation]
+    total_weight: float = Field(eq=1.0)              # 합계 100%
+    dominant_perspective: str                        # 가장 영향력 있던 Agent
+    dissenting_views: list[str]                      # 반대 의견 요약
+
+# Validation Layer → Final Output / Strategy Feedback
+class ValidationResult(BaseModel):
+    """Validation Layer 출력"""
+    is_approved: bool
+    iteration: int = Field(ge=1, le=3)
+    risk_metrics: dict[str, float]                   # {"mdd": 0.18, "volatility": 0.12, ...}
+    violations: list[str]                            # 위반된 조건들
+    feedback: str | None                             # Strategy Layer로 보낼 피드백 (미승인 시)
+    backtest_summary: dict                           # {"sharpe": 1.2, "cagr": 0.08, ...}
+```
+
 ## 📂 Project Structure
 
 ```
 mara/
 ├── src/
-│   ├── data/              # Data Layer - 데이터 수집, 요약, 가격 분석
-│   ├── tools/             # Tools - Agent가 사용하는 도구들
-│   │   ├── price/         # Price Tool - 가격 조회
-│   │   ├── portfolio/     # Portfolio Loader - 포트폴리오 다운로드
-│   │   ├── news/          # News Fetcher - 뉴스/트윗 수집
-│   │   ├── report/        # Report Fetcher - 리포트 수집
-│   │   └── backtest/      # Backtest Tool - 백테스팅
-│   ├── agents/            # Agent Layers
-│   │   ├── perspective/   # Perspective Agents (지정학, 섹터, 매크로, 금리)
-│   │   ├── research/      # Research Agent - 신규 섹터/테마 발굴
-│   │   ├── strategy/      # Strategy Layer - 최종 전략 종합
-│   │   ├── validation/    # Validation Layer - 백테스트/리스크 검증
-│   │   └── retrospection/ # Retrospection Layer - 성과 분석 및 학습
-│   ├── orchestration/     # LangGraph 워크플로우 관리
-│   ├── utils/             # 공통 유틸리티 함수
-│   └── config/            # YAML 설정 파일
-├── data/                  # 로컬 데이터 저장소
-│   ├── raw/               # 원본 데이터
-│   ├── processed/         # 전처리된 데이터
-│   └── cache/             # 캐시 데이터
-├── outputs/               # 출력 결과물
-│   ├── reports/           # 포트폴리오 리포트 (Markdown)
-│   ├── portfolios/        # 포트폴리오 정의 (JSON)
-│   └── logs/              # 실행 로그
-├── tests/                 # 테스트 코드
-└── docs/                  # 문서
-    ├── ARCHITECTURE.md    # 시스템 아키텍처 상세
-    └── QUICKSTART.md      # 빠른 시작 가이드
+│   ├── core/                    # 핵심 도메인
+│   │   ├── state.py             # LangGraph State 정의 (6개 State 클래스)
+│   │   ├── models.py            # 도메인 모델 (Pydantic)
+│   │   ├── profile.py           # User Profile 로더 (YAML → UserProfileState)
+│   │   └── exceptions.py        # 커스텀 예외
+│   │
+│   ├── data/                    # Data Layer - 데이터 수집 및 분석
+│   │   ├── collectors/          # 데이터 수집기
+│   │   │   ├── news.py          # 뉴스 수집 (RSS, 웹 스크래핑)
+│   │   │   └── report.py        # 전문가 리포트 수집
+│   │   ├── analyzers/           # 데이터 분석기
+│   │   │   ├── price.py         # 가격 변동 분석
+│   │   │   └── sentiment.py     # 감성 분석
+│   │   └── summarizer.py        # 텍스트 요약 (LLM 기반)
+│   │
+│   ├── tools/                   # LangGraph Tools (Agent가 호출하는 도구)
+│   │   ├── market/              # 시장 데이터 도구
+│   │   │   ├── price.py         # 가격 조회 Tool
+│   │   │   └── portfolio.py     # 포트폴리오 로더 Tool
+│   │   └── analysis/            # 분석 도구
+│   │       ├── backtest.py      # 백테스팅 Tool
+│   │       └── risk.py          # 리스크 계산 Tool (MDD, VaR, Beta)
+│   │
+│   ├── agents/                  # Agent Layers
+│   │   ├── perspective/         # Perspective Agents (Persona 기반 동적 생성)
+│   │   │   ├── base.py          # BasePerspectiveAgent 추상 클래스
+│   │   │   └── factory.py       # Persona YAML → Agent 인스턴스 생성
+│   │   ├── research/            # Research Agent - 신규 섹터/테마 발굴
+│   │   │   └── agent.py         # 웹 검색, 심층 조사 수행
+│   │   ├── strategy/            # Strategy Layer - 최종 전략 종합
+│   │   │   ├── aggregator.py    # 다중 Agent 제안 종합
+│   │   │   └── optimizer.py     # cvxpy 기반 포트폴리오 최적화
+│   │   ├── validation/          # Validation Layer - 백테스트/리스크 검증
+│   │   │   └── validator.py     # 리스크 조건 검증, 피드백 생성
+│   │   └── retrospection/       # Retrospection Layer - 성과 분석 및 학습
+│   │       └── evaluator.py     # 예측 vs 실제 비교, 가중치 조정 제안
+│   │
+│   ├── orchestration/           # LangGraph 워크플로우 관리
+│   │   ├── graph.py             # 메인 그래프 정의
+│   │   ├── nodes.py             # 노드 함수들
+│   │   └── cli.py               # CLI 엔트리포인트
+│   │
+│   ├── db/                      # 데이터베이스 (SQLite)
+│   │   ├── models.py            # SQLAlchemy 모델 (predictions, evaluations, personas)
+│   │   ├── repository.py        # 데이터 접근 계층
+│   │   └── migrations/          # Alembic 마이그레이션
+│   │
+│   ├── utils/                   # 공통 유틸리티
+│   │   ├── llm.py               # LLM 클라이언트 (Anthropic)
+│   │   ├── cache.py             # 캐싱 유틸리티
+│   │   └── logging.py           # 로깅 설정
+│   │
+│   └── config/                  # YAML 설정 파일
+│       ├── flows/               # 워크플로우 설정
+│       │   ├── growth.yaml      # 공격적 투자자 Flow
+│       │   └── income.yaml      # 안정 수익 투자자 Flow
+│       ├── personas/            # Agent 페르소나 정의
+│       │   ├── ray_dalio_macro.yaml
+│       │   ├── warren_buffett_value.yaml
+│       │   ├── geopolitical.yaml
+│       │   └── sector_rotation.yaml
+│       ├── profiles/            # 사용자 투자 프로필
+│       └── ensemble_weights.yaml # Agent 간 가중치
+│
+├── data/                        # 로컬 데이터 저장소
+│   ├── raw/                     # 원본 데이터 (API 응답)
+│   ├── processed/               # 전처리된 데이터
+│   └── cache/                   # 캐시 데이터 (SQLite/Redis)
+│
+├── outputs/                     # 출력 결과물
+│   ├── reports/                 # 포트폴리오 리포트 (Markdown)
+│   ├── portfolios/              # 포트폴리오 정의 (JSON)
+│   ├── visualizations/          # 시각화 결과 (HTML)
+│   └── logs/                    # 실행 로그
+│
+├── tests/                       # 테스트 코드
+│   ├── unit/                    # 단위 테스트
+│   ├── integration/             # 통합 테스트
+│   └── fixtures/                # 테스트 데이터
+│
+└── docs/                        # 문서
+    ├── SYSTEM_SUMMARY.md        # 전체 시스템 요약
+    ├── FLOW_DEFINITIONS.md      # Flow 상세 정의
+    ├── AGENT_TRACKING.md        # Agent 추적 및 평가
+    ├── VISUALIZATION_GUIDE.md   # 시각화 가이드
+    └── QUICKSTART.md            # 빠른 시작 가이드
 ```
 
-각 폴더에는 상세한 설명이 담긴 `README.md`가 포함되어 있습니다.
+### 구조 설계 원칙
+
+| 원칙 | 적용 |
+|------|------|
+| **Layer 분리** | `data/` → `agents/` → `orchestration/` 순서로 의존성 흐름 |
+| **Persona 기반 확장** | `perspective/factory.py`가 YAML에서 Agent 동적 생성 |
+| **도구-에이전트 분리** | `tools/`는 순수 함수, `agents/`는 LLM 호출 로직 |
+| **State 중심 설계** | `core/state.py`에 모든 State 클래스 정의, 단일 진실 공급원 |
 
 ## 🚦 Quick Start
+
+### 요구 사항
+
+- Python 3.11+ (< 3.13)
+- [uv](https://docs.astral.sh/uv/) (권장) 또는 pip
 
 ### 1. 설치
 
 ```bash
-# 의존성 설치
-pip install -r requirements.txt
+# uv 사용 (권장)
+uv venv && source .venv/bin/activate
+uv pip install -e ".[dev]"
 
-# 환경 변수 설정
-cp .env.example .env
-# .env 파일에 ANTHROPIC_API_KEY 입력
+# 또는 pip 사용
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
-### 2. 기본 실행
+### 2. 환경 변수 설정
+
+```bash
+cp .env.example .env
+```
+
+`.env` 파일을 편집하여 필수 API 키를 설정합니다:
+
+```bash
+# 필수
+ANTHROPIC_API_KEY=sk-ant-your-api-key-here
+
+# 선택 (추가 데이터 소스)
+ALPHA_VANTAGE_API_KEY=your-api-key-here
+FRED_API_KEY=your-api-key-here
+```
+
+### 3. 기본 실행
 
 ```bash
 # Growth 프로필로 전체 워크플로우 실행
-python -m src.orchestration.cli run --profile growth
+mara run --profile growth
 
 # Income 프로필로 실행
-python -m src.orchestration.cli run --profile income
+mara run --profile income
+
+# 또는 모듈 직접 실행
+python -m src.orchestration.cli run --profile growth
 ```
 
-### 3. 출력 확인
+### 4. 추가 명령어
+
+```bash
+# 월간 성과 회고 (Retrospection)
+mara retrospect --prediction-id 2025-01-15-growth
+
+# 포트폴리오 백테스팅
+mara backtest --allocation '{"XLK": 0.3, "XLV": 0.2}' --start-date 2015-01-01
+
+# 도움말
+mara --help
+```
+
+### 5. 출력 확인
 
 ```bash
 # 생성된 리포트 확인
@@ -238,109 +408,93 @@ cat outputs/reports/latest_growth_portfolio.md
 
 # 포트폴리오 JSON 확인
 cat outputs/portfolios/latest_growth_portfolio.json
+
+# 시각화 확인 (브라우저에서 열기)
+open outputs/visualizations/latest_timeline.html
 ```
 
 더 자세한 사용법은 [Quick Start Guide](docs/QUICKSTART.md)를 참고하세요.
 
-## 🎯 Use Cases
+## ⚡ Error Handling & Resilience
 
-### 1. 월별 포트폴리오 리밸런싱
-매월 15일 실행하여 최신 거시 경제 상황을 반영한 포트폴리오 제안을 받습니다.
+### 재시도 정책
 
-### 2. 투자 전략 백테스팅
-제안된 포트폴리오를 과거 10년 데이터로 시뮬레이션하여 예상 성과를 확인합니다.
+| 컴포넌트 | 재시도 횟수 | 백오프 전략 | Timeout |
+|----------|-------------|-------------|---------|
+| **LLM API (Anthropic)** | 3회 | Exponential (1s, 2s, 4s) | 60s |
+| **Market Data (yfinance)** | 2회 | Linear (2s, 4s) | 30s |
+| **Research Agent 웹 검색** | 2회 | Linear (1s, 2s) | 20s |
 
-### 3. 리스크 관리
-현재 포트폴리오의 Max Drawdown, VaR 등을 계산하여 리스크를 모니터링합니다.
+### Fallback 전략
 
-### 4. 성과 회고
-매달 예측 vs 실제 성과를 비교하여 시스템을 개선합니다.
-
-## 🛠 Customization
-
-### 투자 프로필 커스터마이징
-
-[src/config/profiles/](src/config/profiles/)에서 프로필을 수정하거나 새로 생성할 수 있습니다.
-
-```yaml
-# src/config/profiles/my_profile.yaml
-profile_name: my_profile
-risk_tolerance: medium
-constraints:
-  max_drawdown_tolerance: 0.25
-  min_cash_ratio: 0.10
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 장애 상황                    │ Fallback 동작                    │
+├─────────────────────────────────────────────────────────────────┤
+│ LLM API 장애                 │ 캐시된 최근 분석 결과 사용        │
+│                              │ (24시간 이내), 없으면 작업 중단   │
+├─────────────────────────────────────────────────────────────────┤
+│ Market Data 장애             │ 캐시된 가격 데이터 사용 (1시간    │
+│                              │ 이내), stale 데이터 경고 표시     │
+├─────────────────────────────────────────────────────────────────┤
+│ Research Agent 실패          │ Perspective Agent가 자체 분석     │
+│                              │ 으로 진행 (research_failed 플래그)│
+├─────────────────────────────────────────────────────────────────┤
+│ 개별 Perspective Agent 실패  │ 해당 Agent 제외하고 나머지로 종합 │
+│                              │ (최소 2개 Agent 필요, 미만 시 중단)│
+├─────────────────────────────────────────────────────────────────┤
+│ Validation Backtest 실패     │ 리스크 메트릭만으로 검증 진행     │
+│                              │ (backtest_skipped 경고 표시)      │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Agent 페르소나 수정
+### Rate Limiting
 
-[src/config/personas/](src/config/personas/)에서 각 Agent의 분석 관점을 조정할 수 있습니다.
+| API | 제한 | 대응 |
+|-----|------|------|
+| **Anthropic Claude** | 분당 요청 제한 | Token bucket으로 요청 속도 조절 |
+| **yfinance** | 비공식 제한 존재 | 요청 간 0.5초 딜레이, 일일 캐싱 |
+| **FRED** | 분당 120회 | Rate limiter 적용 |
 
-```yaml
-# src/config/personas/geopolitical.yaml
-sensitivity: conservative  # conservative, moderate, aggressive
+### 예외 계층 구조
+
+```python
+# src/core/exceptions.py
+class MARAException(Exception):
+    """Base exception for MARA"""
+
+class DataFetchError(MARAException):
+    """데이터 수집 실패"""
+
+class LLMResponseError(MARAException):
+    """LLM 응답 파싱/검증 실패"""
+
+class ValidationError(MARAException):
+    """리스크 검증 실패 (3회 반복 후에도 미충족)"""
+
+class AgentTimeoutError(MARAException):
+    """Agent 실행 시간 초과"""
+
+class InsufficientAgentsError(MARAException):
+    """최소 Agent 수(2개) 미달"""
 ```
-
-### Ensemble 가중치 조정
-
-[src/config/ensemble_weights.yaml](src/config/ensemble_weights.yaml)에서 Agent 간 가중치를 조정할 수 있습니다.
-
-```yaml
-macro_ensemble:
-  default:
-    geopolitical_agent: 0.30
-    sector_rotation_agent: 0.40
-    monetary_agent: 0.30
-```
-
-## 📚 Documentation
-
-### 📖 읽는 순서
-
-1. **[System Summary](docs/SYSTEM_SUMMARY.md)** ⭐ - 전체 시스템 요약 (처음 읽기)
-2. **[Flow Definitions](docs/FLOW_DEFINITIONS.md)** - Growth vs Income Flow
-3. **[Agent Tracking](docs/AGENT_TRACKING.md)** - Agent별 추적 및 성과 평가
-4. **[Visualization Guide](docs/VISUALIZATION_GUIDE.md)** - 시각화 결과 확인
-5. **[Quick Start](docs/QUICKSTART.md)** - 설치 및 실행
-
-### Core Documentation
-- [System Summary](docs/SYSTEM_SUMMARY.md) - 전체 시스템 설계 요약
-- [Flow Definitions](docs/FLOW_DEFINITIONS.md) - Growth vs Income Flow 상세
-- [State Persistence](docs/STATE_PERSISTENCE.md) - DB 스키마 및 데이터 영속성
-- [Agent Tracking](docs/AGENT_TRACKING.md) - Agent별 예측 저장 및 성과 평가
-- [Visualization Guide](docs/VISUALIZATION_GUIDE.md) - Timeline & Detail View 가이드
-- [Quick Start](docs/QUICKSTART.md) - 빠른 시작 가이드
-- [UV Setup](docs/UV_SETUP.md) - Python 환경 관리
-
-### Layer Documentation
-- [Data Layer](src/data/README.md) - 데이터 수집, 요약, 가격 분석
-- [Perspective Agents](src/agents/perspective/README.md) - 다양한 관점의 병렬 분석
-- [Research Agent](src/agents/research/README.md) - 신규 섹터/테마 발굴
-- [Strategy Layer](src/agents/strategy/README.md) - 최종 전략 종합
-- [Validation Layer](src/agents/validation/README.md) - 백테스팅 및 리스크 검증
-- [Retrospection Layer](src/agents/retrospection/README.md) - 성과 분석 및 자가 학습
-
-### Tools Documentation
-- [Price Tool](src/tools/price/README.md) - 가격 조회
-- [Backtest Tool](src/tools/backtest/README.md) - 백테스팅 수행
-
-### Configuration
-- **Flow 설정**: [Growth](src/config/flows/growth.yaml) | [Income](src/config/flows/income.yaml)
-- **Persona 설정**: [Ray Dalio](src/config/personas/ray_dalio_macro.yaml) | [Warren Buffett](src/config/personas/warren_buffett_value.yaml)
-
-### Sample Outputs
-- **데이터**: [Prediction](outputs/data/marv_2025-01-17_full.json) | [Evaluation](outputs/data/marv_2025-01-17_evaluation.json)
-- **시각화**: [Timeline](outputs/visualizations/marv_timeline.html) | [Detail](outputs/visualizations/marv_2025-01-17_detail.html)
 
 ## 🔧 Tech Stack
 
-- **Orchestration**: LangGraph
-- **LLM**: Claude Opus 4.5 (Anthropic)
-- **Data Sources**: MCP Tools, Yahoo Finance, FRED
-- **Optimization**: cvxpy (Mean-Variance Optimization)
-- **Analysis**: pandas, numpy, scipy
-- **Visualization**: matplotlib, plotly
-- **Configuration**: YAML
-- **Caching**: SQLite / Redis
+| 카테고리 | 기술 | 용도 |
+|----------|------|------|
+| **Orchestration** | LangGraph, LangChain | 멀티 에이전트 워크플로우, State 관리 |
+| **LLM** | Claude Opus 4.5 (Anthropic) | 금융 분석 reasoning, 텍스트 요약 |
+| **Data Sources** | yfinance, pandas-datareader (FRED) | 시장 데이터, 거시경제 지표 |
+| **Optimization** | cvxpy | Mean-Variance 포트폴리오 최적화 |
+| **Analysis** | pandas, numpy, scipy | 금융 데이터 처리, 통계 분석 |
+| **Visualization** | plotly, matplotlib, seaborn | 인터랙티브 차트, 통계적 시각화 |
+| **Database** | SQLAlchemy, Alembic, SQLite | ORM, 마이그레이션, 로컬 저장소 |
+| **Validation** | Pydantic | State/Model 스키마 검증 |
+| **CLI** | Click, Rich | 명령줄 인터페이스, 터미널 UX |
+| **Configuration** | PyYAML | Persona, Flow, Profile 설정 |
+| **Logging** | Loguru | 구조화된 로깅 |
+| **Caching** | SQLite / Redis (optional) | API 응답 캐싱 |
 
 ## 📝 License
 

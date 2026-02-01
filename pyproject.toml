@@ -51,6 +51,10 @@ dependencies = [
     # Logging
     "loguru>=0.7.0",
 
+    # Database
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.13.0",
+
     # Utilities
     "tqdm>=4.66.0",
 ]

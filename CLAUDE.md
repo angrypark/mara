@@ -39,7 +39,7 @@ pytest --cov=src --cov-report=html
 
 ## Architecture
 
-### 5-Layer Agent Pipeline
+### 6-Layer Agent Pipeline
 
 1. **User Profile Layer** → 현재 포트폴리오, 투자 목표(공격/균형/안정), 리스크 허용도 정의
 2. **Data Layer** → 리포트/뉴스/트윗 수집 및 요약, 가격 변동 분석
@@ -50,12 +50,24 @@ pytest --cov=src --cov-report=html
 
 ### Tools
 
-Agent가 사용하는 도구들 (`src/tools/`):
-- **Price Tool**: 특정 종목의 현재가, 과거 가격, 수익률 조회
-- **Portfolio Loader**: 특정 기관/펀드의 포트폴리오 다운로드
-- **News Fetcher**: 최신 뉴스 및 트윗 수집
-- **Report Fetcher**: 전문가 리포트 수집
-- **Backtest Tool**: 포트폴리오 백테스팅 수행
+Agent가 LangGraph Tool로 호출하는 도구들 (`src/tools/`):
+- **Price Tool** (`src/tools/market/price.py`): 종목의 현재가, 과거 가격, 수익률 조회
+- **Portfolio Loader** (`src/tools/market/portfolio.py`): ETF/펀드 구성 종목 조회
+- **Backtest Tool** (`src/tools/analysis/backtest.py`): 포트폴리오 과거 성과 시뮬레이션
+- **Risk Tool** (`src/tools/analysis/risk.py`): MDD, VaR, Volatility, Beta 계산
+
+> **Note**: 뉴스/리포트 수집은 Tool이 아닌 Data Layer(`src/data/collectors/`)에서 처리
+
+### Loop Termination Conditions
+
+**Perspective Agent ↔ Research Agent (최대 3회)**:
+- 종료: 충분한 정보 확보 시 조기 종료 / 3회 도달 시 현재까지 수집된 정보로 진행
+- 실패: Research Agent 응답 실패 시 자체 분석으로 fallback
+
+**Strategy ↔ Validation Loop (최대 3회)**:
+- ✅ 성공: 모든 리스크 조건 충족
+- ⚠️ 부분 승인: 3회 후에도 일부 미충족 시, 위반 사항 명시 + 사용자 확인 요청
+- ❌ 거부: 핵심 리스크(MDD) 위반 시 보수적 대안 제시
 
 ### Persona-Based Agent System
 
@@ -77,6 +89,15 @@ Key state objects passed through the pipeline:
 - `ValidationState`: 백테스팅 결과, 리스크 메트릭, 승인/거부
 - `RetrospectionState`: 예측 vs 실제, 학습 인사이트, Agent 가중치 조정
 
+### Output Schemas
+
+Core Pydantic models (`src/core/models.py`):
+- `RebalanceProposal`: 개별 Agent 리밸런싱 제안 (ticker, action, target_weight, confidence, rationale)
+- `PerspectiveOutput`: Perspective Agent 전체 출력 (market_outlook, proposals[], risk_assessment)
+- `PortfolioAllocation`: 최종 포트폴리오 배분 (ticker, weight, rationale)
+- `StrategyOutput`: Strategy Layer 출력 (allocations[], dominant_perspective, dissenting_views)
+- `ValidationResult`: Validation 결과 (is_approved, risk_metrics, violations[], feedback)
+
 ### Database Tables
 
 - `agent_predictions`: Individual agent analyses per run
@@ -88,28 +109,40 @@ Key state objects passed through the pipeline:
 ```
 mara/
 ├── src/
-│   ├── data/              # Data Layer - 데이터 수집, 요약, 가격 분석
-│   ├── tools/             # Tools - Agent가 사용하는 도구들
-│   │   ├── price/         # Price Tool
-│   │   ├── portfolio/     # Portfolio Loader
-│   │   ├── news/          # News Fetcher
-│   │   ├── report/        # Report Fetcher
-│   │   └── backtest/      # Backtest Tool
+│   ├── core/              # 핵심 도메인
+│   │   ├── state.py       # LangGraph State 정의 (6개 State 클래스)
+│   │   ├── models.py      # 도메인 모델 (Pydantic) - Output Schemas
+│   │   ├── profile.py     # User Profile 로더 (YAML → UserProfileState)
+│   │   └── exceptions.py  # 커스텀 예외 (MARAException 계층)
+│   ├── data/              # Data Layer
+│   │   ├── collectors/    # 데이터 수집 (news.py, report.py)
+│   │   ├── analyzers/     # 데이터 분석 (price.py, sentiment.py)
+│   │   └── summarizer.py  # LLM 기반 텍스트 요약
+│   ├── tools/             # LangGraph Tools
+│   │   ├── market/        # price.py, portfolio.py
+│   │   └── analysis/      # backtest.py, risk.py
 │   ├── agents/            # Agent Layers
-│   │   ├── perspective/   # Perspective Agents (지정학, 섹터, 매크로, 금리)
-│   │   ├── research/      # Research Agent
-│   │   ├── strategy/      # Strategy Layer
-│   │   ├── validation/    # Validation Layer
-│   │   └── retrospection/ # Retrospection Layer
-│   ├── orchestration/     # LangGraph 워크플로우 관리
-│   ├── utils/             # 공통 유틸리티 함수
+│   │   ├── perspective/   # base.py, factory.py (Persona YAML → Agent)
+│   │   ├── research/      # agent.py (웹 검색, 심층 조사)
+│   │   ├── strategy/      # aggregator.py, optimizer.py (cvxpy)
+│   │   ├── validation/    # validator.py (리스크 검증, 피드백)
+│   │   └── retrospection/ # evaluator.py (예측 vs 실제, 가중치 조정)
+│   ├── orchestration/     # LangGraph 워크플로우
+│   │   ├── graph.py       # 메인 그래프 정의
+│   │   ├── nodes.py       # 노드 함수들
+│   │   └── cli.py         # CLI 엔트리포인트
+│   ├── db/                # SQLite 데이터베이스
+│   │   ├── models.py      # SQLAlchemy 모델
+│   │   ├── repository.py  # 데이터 접근 계층
+│   │   └── migrations/    # Alembic 마이그레이션
+│   ├── utils/             # 공통 유틸리티 (llm.py, cache.py, logging.py)
 │   └── config/            # YAML 설정 파일
 │       ├── flows/         # growth.yaml, income.yaml
-│       ├── personas/      # ray_dalio_macro.yaml, warren_buffett_value.yaml 등
-│       └── profiles/      # 투자 프로필 설정
-├── data/                  # 로컬 데이터 저장소 (raw, processed, cache)
-├── outputs/               # 출력 결과물 (reports, portfolios, logs, visualizations)
-├── tests/                 # 테스트 코드
+│       ├── personas/      # ray_dalio_macro.yaml 등
+│       └── profiles/      # 사용자 투자 프로필
+├── data/                  # 로컬 데이터 (raw/, processed/, cache/)
+├── outputs/               # 출력 (reports/, portfolios/, visualizations/, logs/)
+├── tests/                 # unit/, integration/, fixtures/
 └── docs/                  # 문서
 ```
 
@@ -129,14 +162,40 @@ ANTHROPIC_API_KEY=sk-ant-...
 ALPHA_VANTAGE_API_KEY=...  # optional
 ```
 
+## Error Handling
+
+### Retry Policy
+| Component | Retries | Backoff | Timeout |
+|-----------|---------|---------|---------|
+| LLM API (Anthropic) | 3 | Exponential (1s, 2s, 4s) | 60s |
+| Market Data (yfinance) | 2 | Linear (2s, 4s) | 30s |
+| Research Agent | 2 | Linear (1s, 2s) | 20s |
+
+### Fallback Strategy
+- **LLM API 장애**: 캐시된 최근 분석 결과 사용 (24시간 이내), 없으면 중단
+- **Market Data 장애**: 캐시된 가격 데이터 사용 (1시간 이내), stale 경고 표시
+- **Research Agent 실패**: Perspective Agent가 자체 분석으로 진행 (research_failed 플래그)
+- **개별 Perspective Agent 실패**: 해당 Agent 제외, 나머지로 종합 (최소 2개 필요)
+- **Validation Backtest 실패**: 리스크 메트릭만으로 검증 (backtest_skipped 경고)
+
+### Exception Hierarchy (`src/core/exceptions.py`)
+```python
+MARAException          # Base exception
+├── DataFetchError     # 데이터 수집 실패
+├── LLMResponseError   # LLM 응답 파싱/검증 실패
+├── ValidationError    # 리스크 검증 실패 (3회 후에도 미충족)
+├── AgentTimeoutError  # Agent 실행 시간 초과
+└── InsufficientAgentsError  # 최소 Agent 수(2개) 미달
+```
+
 ## Tech Stack
 
 - **Orchestration**: LangGraph
 - **LLM**: Claude Opus 4.5 (Anthropic)
-- **Data Sources**: MCP Tools, Yahoo Finance, FRED
+- **Data Sources**: yfinance, pandas-datareader (FRED)
 - **Optimization**: cvxpy (Mean-Variance Optimization)
 - **Analysis**: pandas, numpy, scipy
-- **Visualization**: matplotlib, plotly
+- **Visualization**: plotly, matplotlib
 
 ## Python Version
 
