@@ -6,10 +6,11 @@ For simplicity, starting with Pydantic models and raw SQL.
 """
 
 from datetime import date, datetime
-from typing import Optional, Dict, List, Any
 from decimal import Decimal
-from pydantic import BaseModel, Field
 from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FlowType(str, Enum):
@@ -59,12 +60,11 @@ class Portfolio(BaseModel):
     snapshot_date: date
     portfolio_type: PortfolioType
     total_value: Decimal
-    holdings: Dict[str, Any]  # {"SPY": {"shares": 100, "value": 45000}, ...}
-    allocation: Dict[str, float]  # {"cash": 0.30, "XLK": 0.25, ...}
-    metadata: Optional[Dict[str, Any]] = None
+    holdings: dict[str, Any]  # {"SPY": {"shares": 100, "value": 45000}, ...}
+    allocation: dict[str, float]  # {"cash": 0.30, "XLK": 0.25, ...}
+    metadata: dict[str, Any] | None = None
 
-    class Config:
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(ser_json_inf_nan="strings")
 
 
 class Prediction(BaseModel):
@@ -79,30 +79,29 @@ class Prediction(BaseModel):
     input_portfolio_id: str
 
     # Macro Analysis
-    market_regime: Optional[MarketRegime] = None
-    macro_insights: Optional[Dict[str, Any]] = None
+    market_regime: MarketRegime | None = None
+    macro_insights: dict[str, Any] | None = None
 
     # Strategy
-    recommended_strategy: Optional[str] = None
-    target_allocation: Optional[Dict[str, float]] = None
-    expected_return: Optional[Decimal] = None
-    expected_volatility: Optional[Decimal] = None
-    expected_sharpe: Optional[Decimal] = None
-    expected_max_dd: Optional[Decimal] = None
+    recommended_strategy: str | None = None
+    target_allocation: dict[str, float] | None = None
+    expected_return: Decimal | None = None
+    expected_volatility: Decimal | None = None
+    expected_sharpe: Decimal | None = None
+    expected_max_dd: Decimal | None = None
 
     # Rebalancing
-    rebalancing_method: Optional[str] = None
-    rebalancing_actions: Optional[List[Dict[str, Any]]] = None
+    rebalancing_method: str | None = None
+    rebalancing_actions: list[dict[str, Any]] | None = None
 
     # Report
-    report_markdown: Optional[str] = None
-    report_path: Optional[str] = None
+    report_markdown: str | None = None
+    report_path: str | None = None
 
     # Metadata
     created_at: datetime = Field(default_factory=datetime.now)
 
-    class Config:
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(ser_json_inf_nan="strings")
 
 
 class PerformanceResult(BaseModel):
@@ -118,23 +117,22 @@ class PerformanceResult(BaseModel):
 
     # 실제 성과
     actual_return: Decimal
-    actual_volatility: Optional[Decimal] = None
-    actual_sharpe: Optional[Decimal] = None
-    actual_max_dd: Optional[Decimal] = None
+    actual_volatility: Decimal | None = None
+    actual_sharpe: Decimal | None = None
+    actual_max_dd: Decimal | None = None
 
     # 예측 vs 실제
     return_error: Decimal  # actual - expected
     prediction_accuracy: Decimal  # 0.0 to 1.0
 
     # 세부 분석
-    sector_performance: Optional[Dict[str, float]] = None
-    agent_attribution: Optional[Dict[str, Any]] = None
+    sector_performance: dict[str, float] | None = None
+    agent_attribution: dict[str, Any] | None = None
 
     # Metadata
     analyzed_at: datetime = Field(default_factory=datetime.now)
 
-    class Config:
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(ser_json_inf_nan="strings")
 
 
 class AgentPerformance(BaseModel):
@@ -150,16 +148,15 @@ class AgentPerformance(BaseModel):
     accuracy_rate: Decimal = Decimal("0.0")
 
     # 최근 성과
-    recent_accuracy: Optional[Decimal] = None
+    recent_accuracy: Decimal | None = None
 
     # 가중치
     current_weight: Decimal
-    recommended_weight: Optional[Decimal] = None
+    recommended_weight: Decimal | None = None
 
     updated_at: datetime = Field(default_factory=datetime.now)
 
-    class Config:
-        json_encoders = {Decimal: float}
+    model_config = ConfigDict(ser_json_inf_nan="strings")
 
 
 class ExecutionLog(BaseModel):
@@ -171,9 +168,9 @@ class ExecutionLog(BaseModel):
     execution_date: datetime = Field(default_factory=datetime.now)
 
     status: ExecutionStatus
-    layers_completed: List[str] = []
+    layers_completed: list[str] = []
 
-    error_message: Optional[str] = None
-    execution_time_seconds: Optional[int] = None
+    error_message: str | None = None
+    execution_time_seconds: int | None = None
 
     created_at: datetime = Field(default_factory=datetime.now)

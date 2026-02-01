@@ -108,4 +108,5 @@ checkpoints/
 .LSOverride
 
 # Claude Code
-.claude/
+.claude/settings.local.json
+
