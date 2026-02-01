@@ -6,240 +6,165 @@ LangGraph를 활용하여 전체 Agent 워크플로우를 관리하는 레이어
 
 - Agent 간 실행 순서 및 데이터 흐름 제어
 - State Management (공유 상태 관리)
-- 조건부 분기 (Critic의 결정에 따라 재실행)
+- 조건부 분기 (Loop 조건에 따라 재실행)
 - 에러 핸들링 및 재시도 로직
 
-## LangGraph Workflow
+## 구조
 
-### Graph 구조
+```
+orchestration/
+├── graph.py             # 메인 그래프 정의
+├── nodes.py             # 노드 함수들
+└── cli.py               # CLI 엔트리포인트
+```
+
+## 6-Layer Pipeline
+
+```
+User Profile → Data → Perspective Agents (병렬) → Strategy → Validation → Retrospection
+                              ↑                       ↓
+                              └──── Research Agent ←──┘
+                                   (multi-hop)
+```
+
+## State 정의
+
+각 Layer는 공유 State를 읽고 쓰며, 다음 정보를 전달합니다:
+
+| State | 내용 |
+|-------|------|
+| `UserProfileState` | 포트폴리오, 투자 목표, 리스크 허용도 |
+| `DataState` | 시장 데이터 요약, 가격 변동, 핵심 인사이트 |
+| `PerspectiveState` | 각 Agent별 평가 및 리밸런싱 제안 |
+| `StrategyState` | 종합된 포트폴리오 조정 방향, 최종 비중 |
+| `ValidationState` | 백테스팅 결과, 리스크 메트릭, 승인/거부 |
+| `RetrospectionState` | 예측 vs 실제, 학습 인사이트, Agent 가중치 조정 |
+
+## Graph 구조
 
 ```python
 from langgraph.graph import StateGraph, END
-
-# State 정의
-class PortfolioState(TypedDict):
-    # Data Layer
-    market_data: Dict
-    news_data: List[Dict]
-    reports: List[Dict]
-
-    # Macro Layer
-    macro_insights: Dict
-    market_regime: str
-
-    # Strategy Layer
-    strategy_output: Dict
-    target_portfolio: Dict
-
-    # Validation Layer
-    validation_results: Dict
-    passed_validation: bool
-
-    # Critic Layer
-    critic_decision: str
-    final_portfolio: Dict
-    report: str
-
-    # Retrospection Layer
-    retrospection: Dict
-
-    # Control
-    iteration: int
-    max_iterations: int
 
 # Graph 생성
 workflow = StateGraph(PortfolioState)
 
 # Nodes 추가
 workflow.add_node("data_collection", collect_data)
-workflow.add_node("macro_analysis", analyze_macro)
+workflow.add_node("perspective_analysis", analyze_perspectives)
 workflow.add_node("strategy_design", design_strategy)
 workflow.add_node("validation", validate_portfolio)
-workflow.add_node("critic_review", review_by_critic)
 workflow.add_node("retrospection", perform_retrospection)
 
 # Edges 정의
-workflow.add_edge("data_collection", "macro_analysis")
-workflow.add_edge("macro_analysis", "strategy_design")
+workflow.add_edge("data_collection", "perspective_analysis")
+workflow.add_edge("perspective_analysis", "strategy_design")
 workflow.add_edge("strategy_design", "validation")
-workflow.add_edge("validation", "critic_review")
 
-# Conditional Edge (Critic 결정에 따라 분기)
+# Conditional Edge (Validation 결과에 따라 분기)
 workflow.add_conditional_edges(
-    "critic_review",
-    route_critic_decision,
+    "validation",
+    route_validation_result,
     {
-        "APPROVE": END,
-        "APPROVE_WITH_WARNINGS": END,
-        "REQUEST_REVISION": "strategy_design",  # 재조정
-        "REJECT": "macro_analysis"  # 처음부터 재분석
+        "APPROVED": "retrospection",
+        "REVISION_NEEDED": "strategy_design",  # 최대 3회
+        "REJECTED": END
     }
 )
 
+workflow.add_edge("retrospection", END)
 workflow.set_entry_point("data_collection")
 ```
 
-### Node 구현 예시
+## Loop 구조
+
+### Perspective ↔ Research Loop (최대 3회)
 
 ```python
-async def collect_data(state: PortfolioState) -> PortfolioState:
-    """
-    Data Layer 실행
-    """
-    from src.data.collectors import NewsCollector, PriceCollector
-
-    news_collector = NewsCollector()
-    price_collector = PriceCollector()
-
-    state["market_data"] = await price_collector.collect()
-    state["news_data"] = await news_collector.collect()
-
-    return state
-
-async def analyze_macro(state: PortfolioState) -> PortfolioState:
-    """
-    Macro Layer 실행 (Multi-Agent Ensemble)
-    """
-    from src.agents.macro import GeopoliticalAgent, SectorAgent, MonetaryAgent
-    from src.agents.macro.ensemble import ensemble_insights
-
-    # 병렬 실행
-    geo_agent = GeopoliticalAgent()
-    sector_agent = SectorAgent()
-    monetary_agent = MonetaryAgent()
-
-    results = await asyncio.gather(
-        geo_agent.analyze(state["news_data"]),
-        sector_agent.analyze(state["market_data"]),
-        monetary_agent.analyze(state["market_data"])
-    )
-
-    # Ensemble
-    state["macro_insights"] = ensemble_insights(*results)
-    state["market_regime"] = state["macro_insights"]["regime"]
-
-    return state
+# Perspective Agent 내부에서 Research Agent 호출
+for i in range(3):
+    if has_enough_info():
+        break
+    research_result = await research_agent.query(question)
+    update_analysis(research_result)
 ```
 
-### Conditional Routing
+### Strategy ↔ Validation Loop (최대 3회)
 
 ```python
-def route_critic_decision(state: PortfolioState) -> str:
-    """
-    Critic의 결정에 따라 다음 노드 결정
-    """
-    decision = state["critic_decision"]
-    iteration = state.get("iteration", 0)
-    max_iterations = state.get("max_iterations", 3)
+def route_validation_result(state: PortfolioState) -> str:
+    if state["validation_result"]["is_approved"]:
+        return "APPROVED"
 
-    if decision in ["APPROVE", "APPROVE_WITH_WARNINGS"]:
-        return "APPROVE"
+    if state["iteration"] >= 3:
+        # 부분 승인 또는 거부
+        return "APPROVED" if partial_pass else "REJECTED"
 
-    if iteration >= max_iterations:
-        # 최대 반복 횟수 초과 시 강제 종료
-        logger.warning(f"Max iterations reached ({max_iterations}). Forcing approval.")
-        return "APPROVE_WITH_WARNINGS"
-
-    if decision == "REQUEST_REVISION":
-        state["iteration"] = iteration + 1
-        return "REQUEST_REVISION"
-
-    if decision == "REJECT":
-        state["iteration"] = iteration + 1
-        return "REJECT"
-
-    return "APPROVE"
+    state["iteration"] += 1
+    return "REVISION_NEEDED"
 ```
 
-## 실행 모드
+## CLI 인터페이스
 
-### 1. Full Run (전체 실행)
-```python
-from src.orchestration.graph import create_portfolio_graph
+```bash
+# 전체 워크플로우 실행
+python -m src.orchestration.cli run --profile growth
 
-graph = create_portfolio_graph()
-app = graph.compile()
+# Income 프로필로 실행
+python -m src.orchestration.cli run --profile income
 
-initial_state = {
-    "iteration": 0,
-    "max_iterations": 3
-}
+# 회고 실행
+python -m src.orchestration.cli retrospect --prediction-id 2025-01-15-growth
 
-result = await app.ainvoke(initial_state)
-print(result["final_portfolio"])
-```
-
-### 2. Partial Run (특정 Layer만 실행)
-```python
-# Macro Analysis만 재실행
-partial_graph = StateGraph(PortfolioState)
-partial_graph.add_node("macro_analysis", analyze_macro)
-partial_graph.set_entry_point("macro_analysis")
-partial_graph.add_edge("macro_analysis", END)
-
-app = partial_graph.compile()
-result = await app.ainvoke({"news_data": [...], "market_data": [...]})
-```
-
-### 3. Retrospection Run (월말 회고)
-```python
-# 매월 15일 실행
-from src.orchestration.graph import create_retrospection_graph
-
-retro_graph = create_retrospection_graph()
-app = retro_graph.compile()
-
-result = await app.ainvoke({
-    "prediction_id": "2025-01-15-growth",
-    "actual_returns": {...}
-})
+# 백테스팅
+python -m src.orchestration.cli backtest --allocation '{"XLK": 0.3, "XLV": 0.2}' --start-date 2015-01-01
 ```
 
 ## 에러 핸들링
 
+### 재시도 정책
+
+| 컴포넌트 | 재시도 횟수 | 백오프 전략 | Timeout |
+|----------|-------------|-------------|---------|
+| LLM API (Anthropic) | 3회 | Exponential (1s, 2s, 4s) | 60s |
+| Market Data (yfinance) | 2회 | Linear (2s, 4s) | 30s |
+| Research Agent | 2회 | Linear (1s, 2s) | 20s |
+
+### Fallback 전략
+
+| 장애 상황 | Fallback 동작 |
+|-----------|---------------|
+| LLM API 장애 | 캐시된 최근 분석 결과 사용 (24시간 이내), 없으면 중단 |
+| Market Data 장애 | 캐시된 가격 데이터 사용 (1시간 이내), stale 경고 표시 |
+| Research Agent 실패 | Perspective Agent가 자체 분석으로 진행 |
+| 개별 Perspective Agent 실패 | 해당 Agent 제외, 나머지로 종합 (최소 2개 필요) |
+| Validation Backtest 실패 | 리스크 메트릭만으로 검증 진행 |
+
+## 병렬 실행
+
+Perspective Agents는 병렬로 실행됩니다:
+
 ```python
-async def safe_node_execution(node_func, state, max_retries=3):
-    """
-    Node 실행 시 에러 처리 및 재시도
-    """
-    for attempt in range(max_retries):
-        try:
-            return await node_func(state)
-        except ExternalAPIError as e:
-            logger.warning(f"Attempt {attempt + 1} failed: {e}")
-            await asyncio.sleep(2 ** attempt)  # Exponential backoff
-        except Exception as e:
-            logger.error(f"Unexpected error in {node_func.__name__}: {e}")
-            raise
-
-    raise MaxRetriesExceeded(f"Failed after {max_retries} attempts")
-```
-
-## 병렬 실행 최적화
-
-```python
-# Macro Layer의 3개 Agent를 병렬 실행
-async def analyze_macro_parallel(state: PortfolioState) -> PortfolioState:
+async def analyze_perspectives(state: PortfolioState) -> PortfolioState:
     agents = [
         GeopoliticalAgent(),
-        SectorAgent(),
+        SectorRotationAgent(),
+        RayDalioMacroAgent(),
         MonetaryAgent()
     ]
 
-    # 동시 실행
+    # 병렬 실행
     tasks = [agent.analyze(state) for agent in agents]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # 에러 체크
+    # 최소 2개 Agent 성공 필요
     valid_results = [r for r in results if not isinstance(r, Exception)]
-
     if len(valid_results) < 2:
-        raise InsufficientAgentResults("Less than 2 agents succeeded")
+        raise InsufficientAgentsError("최소 2개 Agent 필요")
 
-    return ensemble_insights(valid_results)
+    return state
 ```
 
-## 상태 저장 및 체크포인트
+## 상태 체크포인트
 
 ```python
 from langgraph.checkpoint import MemorySaver
@@ -251,63 +176,18 @@ app = graph.compile(checkpointer=checkpointer)
 # 중단 후 재개 가능
 config = {"configurable": {"thread_id": "portfolio-2025-01-15"}}
 result = await app.ainvoke(initial_state, config=config)
-
-# 나중에 재개
-result = await app.ainvoke(None, config=config)
 ```
 
-## 구현 파일 구조
+## 구현 가이드라인
 
-```
-orchestration/
-├── graph.py                 # 메인 Graph 정의
-├── nodes/
-│   ├── data_node.py         # Data Layer 노드
-│   ├── macro_node.py        # Macro Layer 노드
-│   ├── strategy_node.py     # Strategy Layer 노드
-│   ├── validation_node.py   # Validation Layer 노드
-│   ├── critic_node.py       # Critic Layer 노드
-│   └── retrospection_node.py # Retrospection 노드
-├── routing.py               # Conditional routing 로직
-├── error_handlers.py        # 에러 핸들링
-└── cli.py                   # CLI 인터페이스
-```
+1. **State 불변성**
+   - State는 직접 수정하지 않고 새 객체 반환
+   - LangGraph 규칙 준수
 
-## CLI 인터페이스
+2. **로깅**
+   - 각 노드 실행 전후 로깅
+   - 실행 시간 기록
 
-```bash
-# 전체 워크플로우 실행
-python -m src.orchestration.cli run --profile growth
-
-# Macro Analysis만 실행
-python -m src.orchestration.cli run --only macro
-
-# 회고 실행
-python -m src.orchestration.cli retrospect --prediction-id 2025-01-15-growth
-
-# 이전 실행 재개
-python -m src.orchestration.cli resume --thread-id portfolio-2025-01-15
-```
-
-## 모니터링 및 로깅
-
-```python
-import logging
-from langgraph.graph import Graph
-
-logger = logging.getLogger(__name__)
-
-# 각 노드 실행 전후 로깅
-async def logged_node(node_func):
-    async def wrapper(state):
-        logger.info(f"Starting {node_func.__name__}")
-        start_time = time.time()
-
-        result = await node_func(state)
-
-        elapsed = time.time() - start_time
-        logger.info(f"Completed {node_func.__name__} in {elapsed:.2f}s")
-
-        return result
-    return wrapper
-```
+3. **테스트 용이성**
+   - 각 노드는 독립적으로 테스트 가능
+   - Mock State로 단위 테스트

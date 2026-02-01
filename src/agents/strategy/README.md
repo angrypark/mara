@@ -1,144 +1,135 @@
-# Strategy Design Layer
+# Strategy Layer
 
-투자 프로필별 맞춤형 자산 배분 전략을 수립하는 레이어입니다.
+여러 Perspective Agent의 제안을 종합하여 최종 포트폴리오 조정 방향을 제시하는 레이어입니다.
 
 ## 책임 (Responsibilities)
 
-- Macro Insight를 바탕으로 구체적인 포트폴리오 생성
-- 투자자 프로필별 차별화된 전략 (Growth vs Income)
-- 동적 현금 비중 조절
-- 리밸런싱 계획 수립
+- 다중 Perspective Agent 제안 종합
+- 각 Agent의 신뢰도(과거 성과 기반) 가중치 적용
+- cvxpy 기반 포트폴리오 최적화
+- 최종 포트폴리오 조정 방향 제시
 
-## Agent 구조
+## 구조
 
-### 1. Growth Strategy Agent (`growth_agent.py`)
-**대상**: 근로소득이 있는 공격적 투자자
-
-**전략 특징**:
-- 높은 주식 비중 (70-90%)
-- 섹터 로테이션 적극 활용
-- 개별 종목보다 섹터 ETF 선호
-- 변동성 허용 범위 높음 (Max DD 30-40%)
-
-**입력**:
-- MarketState (from Macro Layer)
-- Current Portfolio
-- Risk Profile (from config)
-
-**출력**:
-```json
-{
-  "target_allocation": {
-    "cash": 0.10,
-    "bonds": 0.10,
-    "equities": 0.80
-  },
-  "equity_sectors": {
-    "technology": 0.35,
-    "healthcare": 0.20,
-    "financials": 0.15,
-    "energy": 0.10
-  },
-  "rebalancing_actions": [
-    {"action": "buy", "ticker": "XLK", "weight_change": 0.05},
-    {"action": "sell", "ticker": "XLE", "weight_change": -0.03}
-  ],
-  "rationale": "AI 모멘텀 지속, 에너지 사이클 후반부 진입"
-}
+```
+strategy/
+├── aggregator.py        # 다중 Agent 제안 종합
+└── optimizer.py         # cvxpy 기반 포트폴리오 최적화
 ```
 
-### 2. Income Strategy Agent (`income_agent.py`)
-**대상**: 은퇴 자산 보호 및 현금흐름 창출
+## 주요 모듈
 
-**전략 특징**:
-- 안정적 배당 + 인플레이션 헤지 (TIPS, 금)
-- 낮은 변동성 목표 (Max DD 15-20%)
-- 월 0.25% (연 3%) 현금흐름 창출
-- 원금 보존 우선
+### `aggregator.py`
 
-**입력**:
-- MarketState
-- Required Cash Flow (월 필요 금액)
-- Risk Tolerance (낮음)
+여러 Perspective Agent의 리밸런싱 제안을 종합합니다.
 
-**출력**:
-```json
-{
-  "target_allocation": {
-    "cash": 0.15,
-    "bonds": 0.40,
-    "dividend_stocks": 0.30,
-    "reits": 0.10,
-    "gold": 0.05
-  },
-  "expected_yield": 0.032,
-  "inflation_hedge": 0.45,
-  "max_drawdown_estimate": 0.18,
-  "cash_flow_plan": {
-    "monthly_distribution": 5000000,
-    "sources": ["dividend", "bond_coupon", "reit_distribution"]
-  }
-}
+```python
+def aggregate_proposals(
+    proposals: list[PerspectiveOutput],
+    weights: dict[str, float]  # agent_id -> weight
+) -> AggregatedProposal:
+    """
+    다수의 Perspective Agent 제안을 가중 평균으로 종합
+
+    Args:
+        proposals: 각 Perspective Agent의 출력
+        weights: Agent별 신뢰도 가중치 (과거 성과 기반)
+
+    Returns:
+        종합된 리밸런싱 제안
+    """
 ```
 
-### 3. Cash Management Agent (`cash_agent.py`)
-**전략**: 동적 현금 비중 조절
+### `optimizer.py`
 
-**로직**:
-- **기본 현금 비중**: 20%
-- **시장 하락 시 (VIX > 25)**: 현금 비중 줄임 (10-15%) → 저점 매수
-- **시장 과열 시 (Valuation 높음)**: 현금 비중 늘림 (25-30%) → 수익 실현
+Mean-Variance Optimization을 통해 최적 포트폴리오를 계산합니다.
 
-**입력**:
-- MarketState.regime
-- VIX Level
-- Valuation Metrics (P/E, CAPE)
-- Current Cash Position
+```python
+def optimize_portfolio(
+    expected_returns: np.ndarray,
+    cov_matrix: np.ndarray,
+    constraints: dict
+) -> np.ndarray:
+    """
+    cvxpy 기반 포트폴리오 최적화
 
-**출력**:
-```json
-{
-  "target_cash_ratio": 0.15,
-  "reason": "VIX 급등 (32), 저점 매수 기회",
-  "action": "deploy_cash",
-  "amount": 10000000
-}
+    Constraints:
+    - 가중치 합 = 1
+    - 숏 금지 (weights >= 0)
+    - 단일 자산 최대 비중
+    - 최대 변동성
+    """
 ```
 
-## Profile Configuration
+## Output Schema
 
-각 투자자 프로필은 YAML로 정의됩니다.
+### PortfolioAllocation
 
-### `config/profiles/growth.yaml`
+```python
+class PortfolioAllocation(BaseModel):
+    """최종 포트폴리오 배분"""
+    ticker: str
+    weight: float                     # 비중 (0-1)
+    rationale: str                    # 배분 근거
+```
+
+### StrategyOutput
+
+```python
+class StrategyOutput(BaseModel):
+    """Strategy Layer 출력"""
+    timestamp: datetime
+    allocations: list[PortfolioAllocation]
+    total_weight: float               # 합계 = 1.0
+    dominant_perspective: str         # 가장 영향력 있던 Agent
+    dissenting_views: list[str]       # 반대 의견 요약
+```
+
+## Strategy ↔ Validation Loop
+
+Strategy Layer는 Validation Layer와 피드백 루프를 형성합니다 (최대 3회).
+
+```
+┌─────────────────┐         ┌─────────────────┐
+│  Strategy Layer │         │ Validation Layer│
+└────────┬────────┘         └────────┬────────┘
+         │                           │
+         │  1. 전략 제안             │
+         │──────────────────────────▶│
+         │                           │
+         │  2. 리스크 검증 결과      │
+         │◀──────────────────────────│
+         │     (비율 수정 피드백)    │
+         │                           │
+         │  3. 수정된 전략 제안      │
+         │──────────────────────────▶│
+         │                           │
+         ▼                           ▼
+```
+
+### Loop 종료 조건
+
+- **성공**: 모든 리스크 조건 충족
+- **부분 승인**: 3회 반복 후에도 일부 조건 미충족 시, 위반 사항 명시 + 사용자 확인 요청
+- **거부**: 핵심 리스크 조건(MDD) 위반 시 보수적 대안 제시
+
+## Agent 가중치
+
+Agent별 가중치는 `src/config/ensemble_weights.yaml`에서 설정합니다:
+
 ```yaml
-profile: growth
-risk_tolerance: high
-investment_horizon: 10_years
-constraints:
-  max_single_sector: 0.40
-  max_drawdown_tolerance: 0.35
-  min_cash_ratio: 0.05
-  max_cash_ratio: 0.30
-preferences:
-  sector_rotation: true
-  individual_stocks: false
-  leverage: false
-```
+strategy_ensemble:
+  growth:
+    ray_dalio_macro: 0.30
+    sector_rotation: 0.40
+    geopolitical: 0.20
+    monetary: 0.10
 
-### `config/profiles/income.yaml`
-```yaml
-profile: income
-risk_tolerance: low
-investment_horizon: indefinite
-constraints:
-  max_drawdown_tolerance: 0.20
-  min_cash_ratio: 0.10
-  max_cash_ratio: 0.25
-  required_annual_yield: 0.03
-preferences:
-  dividend_focus: true
-  inflation_hedge: true
-  principal_protection: true
+  income:
+    ray_dalio_macro: 0.40
+    sector_rotation: 0.20
+    geopolitical: 0.20
+    monetary: 0.20
 ```
 
 ## 구현 가이드라인
@@ -155,21 +146,12 @@ preferences:
    - 신규 입금 활용 우선 (매도 최소화)
    - 큰 괴리만 조정
 
-4. **시나리오 분석**
-   - 제안한 포트폴리오를 2008, 2020 시나리오에서 테스트
-   - Stress Test 결과 첨부
+4. **반대 의견 기록**
+   - 다수 의견과 다른 Agent의 의견도 기록
+   - 추후 Retrospection에서 활용
 
-## 출력 스키마
+## 필수 라이브러리
 
-```python
-@dataclass
-class StrategyState:
-    profile: str  # "growth" or "income"
-    target_allocation: Dict[str, float]
-    rebalancing_actions: List[Action]
-    expected_return: float
-    expected_risk: float
-    rationale: str
-    citations: List[str]
-    timestamp: datetime
-```
+- `cvxpy`: 포트폴리오 최적화
+- `numpy`: 수치 계산
+- `pandas`: 데이터 처리
