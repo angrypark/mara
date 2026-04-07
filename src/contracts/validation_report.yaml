@@ -1,0 +1,40 @@
+name: validation_report
+description: Validation Agent 출력 스키마. 제약조건 검증, 리스크 추정, 판단을 포함해야 한다.
+output_path: "outputs/intermediate/{date}_{profile}/04_validation_report.md"
+
+required_sections:
+  - "제약조건 검증"
+  - "리스크 추정"
+  - "스트레스 테스트"
+  - "판단"
+
+required_fields:
+  판단:
+    type: enum
+    values: ["승인", "부분 승인", "거부"]
+    pattern: "판단[:\s]*(승인|부분 승인|거부)"
+
+required_tables:
+  제약조건:
+    section: "제약조건 검증"
+    required_columns:
+      - "Constraint"
+      - "Value"
+      - "Limit"
+      - "Pass"
+    row_constraints:
+      Pass:
+        type: enum
+        values: ["O", "X", "Yes", "No", "PASS", "FAIL"]
+  리스크:
+    section: "리스크 추정"
+    required_columns:
+      - "Metric"
+      - "Estimated"
+      - "Threshold"
+      - "Pass"
+  스트레스:
+    section: "스트레스 테스트"
+    required_columns:
+      - "Scenario"
+      - "Estimated Impact"

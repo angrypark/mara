@@ -1,0 +1,34 @@
+name: strategy_report
+description: Strategy Agent 출력 스키마. 최종 보고서로 시장 현황, 전문가 분석, 리밸런싱 제안을 포함해야 한다.
+output_path: "outputs/intermediate/{date}_{profile}/05_strategy_report.md"
+
+required_sections:
+  - "시장 현황 요약"
+  - "전문가 분석 요약"
+  - "리밸런싱 제안"
+  - "Validation 결과"
+  - "리스크 요약"
+  - "다음 단계"
+
+required_fields: {}
+
+required_tables:
+  전문가_요약:
+    section: "전문가 분석 요약"
+    required_columns:
+      - "Agent"
+      - "전망"
+      - "신뢰도"
+      - "핵심 주장"
+  리밸런싱:
+    section: "리밸런싱 제안"
+    required_columns:
+      - "Ticker"
+      - "Action"
+      - "Current"
+      - "Target"
+      - "Rationale"
+    row_constraints:
+      Action:
+        type: enum
+        values: ["BUY", "SELL", "HOLD", "INCREASE", "DECREASE"]

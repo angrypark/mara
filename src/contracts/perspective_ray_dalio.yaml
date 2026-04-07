@@ -1,0 +1,35 @@
+name: perspective_ray_dalio
+description: Ray Dalio Agent 출력 스키마. perspective_common을 상속하고 경제 사이클/리스크 패리티 고유 필드를 추가한다.
+inherits: perspective_common
+output_path: "outputs/intermediate/{date}_{profile}/03_perspective_ray_dalio.md"
+
+required_sections:
+  - "경제 레짐"
+  - "부채 사이클"
+  - "레짐 근거"
+  - "자산군 전망"
+  - "All Weather 점검"
+
+required_fields:
+  경제_레짐:
+    type: enum
+    values: ["growth_inflation", "growth_deflation", "recession_inflation", "recession_deflation"]
+    pattern: "경제 레짐[:\s]*(growth_inflation|growth_deflation|recession_inflation|recession_deflation)"
+  부채_사이클:
+    type: enum
+    values: ["early", "mid", "late", "deleveraging"]
+    pattern: "부채 사이클[:\s]*(early|mid|late|deleveraging)"
+
+required_tables:
+  레짐_근거:
+    section: "레짐 근거"
+    required_columns:
+      - "Indicator"
+      - "Value"
+      - "Implication"
+  자산군_전망:
+    section: "자산군 전망"
+    required_columns:
+      - "Asset Class"
+      - "Outlook"
+      - "Weight Rationale"

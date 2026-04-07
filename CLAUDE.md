@@ -1,202 +1,239 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with this project.
 
 ## Project Overview
 
-MARA (Macro Asset Rebalance Agent) is an AI-driven portfolio optimization system that uses multiple specialized agents to analyze macroeconomic conditions and provide personalized portfolio rebalancing recommendations. Built with LangGraph for agent orchestration.
-
-## Development Commands
-
-```bash
-# Install dependencies (using uv - preferred)
-uv venv && source .venv/bin/activate
-uv pip install -e ".[dev]"
-
-# Or with pip
-pip install -r requirements.txt
-
-# Run the full workflow
-python -m src.orchestration.cli run --profile growth
-python -m src.orchestration.cli run --profile income
-
-# Run retrospection (monthly evaluation)
-python -m src.orchestration.cli retrospect --prediction-id 2025-01-15-growth
-
-# Run backtest
-python -m src.orchestration.cli backtest --allocation '{"XLK": 0.3, "XLV": 0.2}' --start-date 2015-01-01
-
-# Linting and formatting
-ruff check src/ --fix
-black src/ tests/
-mypy src/
-
-# Run tests
-pytest
-pytest tests/test_specific.py -v
-pytest --cov=src --cov-report=html
-```
+MARA (Macro Asset Rebalance Agent)는 AI 기반 포트폴리오 리밸런싱 시스템이다. Telegram Bot(Mara1Bot)을 통해 사용자 명령을 받아 여러 Sub Agent를 순차 실행하고, 최종 보고서를 생성한다.
 
 ## Architecture
 
-### 6-Layer Agent Pipeline
+### Telegram → MaraBot → Sub Agents
 
-1. **User Profile Layer** → 현재 포트폴리오, 투자 목표(공격/균형/안정), 리스크 허용도 정의
-2. **Data Layer** → 리포트/뉴스/트윗 수집 및 요약, 가격 변동 분석
-3. **Perspective Agents** → 다양한 관점(Geopolitical, Sector Rotation, Ray Dalio Macro, Monetary)에서 병렬 분석 및 리밸런싱 제안
-4. **Strategy Layer** → 여러 Agent 제안을 종합하여 최종 포트폴리오 조정 방향 제시
-5. **Validation Layer** → Backtest, 리스크 측정으로 목표 조건 충족 여부 검증 (Strategy ↔ Validation 루프)
-6. **Retrospection Layer** → 시간 경과 후 예측 vs 실제 비교, Agent 가중치 조정 제안
+```
+사용자 (Telegram @Mara1Bot)
+  ↓
+MaraBot (AGENT.md 기반 오케스트레이터)
+  ├── 1. User Profile Agent    → 프로필 로드 또는 저장
+  ├── 2. Data Agent            → 시장 데이터 수집 + 리서치
+  ├── 3. Perspective Agents    → 관점별 분석 (4개 병렬 가능, 상호 독립)
+  │       ├── George Soros          ─┐
+  │       ├── Paul Tudor Jones       │ 의존 관계 없음 → 병렬 실행 권장
+  │       ├── Ray Dalio              │
+  │       └── Stanley Druckenmiller ─┘
+  ├── 4. Validation Agent      → 리스크 검증
+  └── 5. Strategy Agent        → 최종 보고서 작성
+  
+  (월 1회) Retrospection Agent  → 성과 회고
+```
 
-### Tools
+### Sub Agent 이중 구조
 
-Agent가 LangGraph Tool로 호출하는 도구들 (`src/tools/`):
-- **Price Tool** (`src/tools/market/price.py`): 종목의 현재가, 과거 가격, 수익률 조회
-- **Portfolio Loader** (`src/tools/market/portfolio.py`): ETF/펀드 구성 종목 조회
-- **Backtest Tool** (`src/tools/analysis/backtest.py`): 포트폴리오 과거 성과 시뮬레이션
-- **Risk Tool** (`src/tools/analysis/risk.py`): MDD, VaR, Volatility, Beta 계산
+**Source of Truth는 `src/agents/*/AGENT.md`**. `.claude/agents/`는 thin wrapper다.
 
-> **Note**: 뉴스/리포트 수집은 Tool이 아닌 Data Layer(`src/data/collectors/`)에서 처리
+| 계층 | 역할 | 내용 |
+|------|------|------|
+| `.claude/agents/*.md` | **실행 정의** (thin wrapper) | 모델 지정, 도구 허용 목록, AGENT.md 경로 참조만 |
+| `src/agents/*/AGENT.md` | **도메인 로직** (source of truth) | 분석 프레임워크, 출력 형식, wiki 규칙, 판단 기준 |
 
-### Loop Termination Conditions
+| Agent | Wrapper | Source of Truth | Model |
+|-------|---------|----------------|-------|
+| User Profile | .claude/agents/user-profile.md | src/agents/user_profile/AGENT.md | Haiku |
+| Data | .claude/agents/data-collector.md | src/agents/data/AGENT.md | Sonnet |
+| Perspective | .claude/agents/perspective-analyst.md | src/agents/perspective/*/AGENT.md | Sonnet |
+| Validation | .claude/agents/risk-validator.md | src/agents/validation/AGENT.md | Sonnet |
+| Strategy | .claude/agents/strategy-synthesizer.md | src/agents/strategy/AGENT.md | Sonnet |
+| Retrospection | .claude/agents/retrospection-evaluator.md | src/agents/retrospection/AGENT.md | Sonnet |
 
-**Perspective Agent ↔ Research Agent (최대 3회)**:
-- 종료: 충분한 정보 확보 시 조기 종료 / 3회 도달 시 현재까지 수집된 정보로 진행
-- 실패: Research Agent 응답 실패 시 자체 분석으로 fallback
+## Wiki (지식 축적)
 
-**Strategy ↔ Validation Loop (최대 3회)**:
-- ✅ 성공: 모든 리스크 조건 충족
-- ⚠️ 부분 승인: 3회 후에도 일부 미충족 시, 위반 사항 명시 + 사용자 확인 요청
-- ❌ 거부: 핵심 리스크(MDD) 위반 시 보수적 대안 제시
+Karpathy LLM Wiki 패턴 적용. 공통 데이터와 유저별 데이터를 분리하여 관리한다. Docsify로 웹 브라우징 가능.
 
-### Persona-Based Agent System
+```
+wiki/
+├── index.html              # Docsify SPA
+├── _sidebar.md             # 글로벌 네비게이션
+├── README.md               # Wiki 홈페이지
+│
+├── _shared/                        # 유저 무관 공통 데이터
+│   ├── market/
+│   │   ├── macro.md                # Data Agent 갱신
+│   │   ├── sectors.md              # 섹터 데이터
+│   │   └── events.md              # 주요 이벤트 타임라인
+│   └── personas/
+│       └── ray_dalio.md            # 페르소나 Agent 실행 결과 축적
+│
+└── users/
+    └── {user_id}/                  # Telegram user_id
+        ├── profile.md              # 프로필 + 포트폴리오 + 제약조건 + Agent 가중치
+        ├── watchlist.md            # 관심 종목
+        ├── perspective/
+        │   ├── george_soros.md
+        │   ├── paul_tudor_jones.md
+        │   ├── ray_dalio.md
+        │   └── stanley_druckenmiller.md
+        ├── validation/
+        │   └── latest.md
+        ├── strategy/
+        │   ├── current.md          # 최신 전략 보고서
+        │   └── history/
+        │       └── {YYYY-MM-DD}.md # 날짜별 아카이브
+        └── retrospection/
+            └── {YYYY-MM}.md        # 월별 회고
+```
 
-Agents are defined by their investment philosophy (Persona):
-- **Config files**: `src/config/personas/*.yaml` - define analysis framework and output format
-- **Flow configs**: `src/config/flows/{growth,income}.yaml` - which personas to use with what weights
+### Wiki 조회
 
-To add a new agent:
-1. Create persona config in `src/config/personas/`
-2. Add to flow config with weight and layer assignment
+```bash
+# 실시간 반영 (live-reload) — 권장
+npx live-server wiki/
 
-### State Management (LangGraph)
+# Docsify CLI (live-reload 불안정)
+npx docsify-cli serve wiki/
 
-Key state objects passed through the pipeline:
-- `UserProfileState`: 포트폴리오, 투자 목표, 리스크 허용도
-- `DataState`: 시장 데이터 요약, 가격 변동, 핵심 인사이트
-- `PerspectiveState`: 각 Agent별 평가 및 리밸런싱 제안
-- `StrategyState`: 종합된 포트폴리오 조정 방향, 최종 비중
-- `ValidationState`: 백테스팅 결과, 리스크 메트릭, 승인/거부
-- `RetrospectionState`: 예측 vs 실제, 학습 인사이트, Agent 가중치 조정
+# 단순 정적 서버 (새로고침 수동)
+uv run python -m http.server -d wiki/ 3000
+```
 
-### Output Schemas
+### Frontmatter 규약
 
-Core Pydantic models (`src/core/models.py`):
-- `RebalanceProposal`: 개별 Agent 리밸런싱 제안 (ticker, action, target_weight, confidence, rationale)
-- `PerspectiveOutput`: Perspective Agent 전체 출력 (market_outlook, proposals[], risk_assessment)
-- `PortfolioAllocation`: 최종 포트폴리오 배분 (ticker, weight, rationale)
-- `StrategyOutput`: Strategy Layer 출력 (allocations[], dominant_perspective, dissenting_views)
-- `ValidationResult`: Validation 결과 (is_approved, risk_metrics, violations[], feedback)
+모든 wiki 마크다운은 YAML frontmatter를 포함해야 한다:
 
-### Database Tables
+```markdown
+---
+title: George Soros Analysis
+date: 2026-04-06
+agent: perspective_george_soros
+user: marv
+tags: [perspective, george_soros]
+---
+```
 
-- `agent_predictions`: Individual agent analyses per run
-- `agent_evaluations`: Performance comparison (predicted vs actual) after 1 month
-- `agent_personas`: Persona definitions and default weights
+### Config vs Wiki Persona
+
+| Config (`src/config/personas/*.yaml`) | Wiki (`wiki/_shared/personas/*.md`) |
+|--------------------------------------|-------------------------------------|
+| 정적 정의: 투자 철학, 목표 배분 | 런타임 결과: 레짐 판단 이력, 분석 축적 |
+
+## Config Files
+
+- `src/config/flows/growth.yaml` — 공격적 투자자 Flow (Agent 가중치, 제약 조건)
+- `src/config/flows/income.yaml` — 안정 수익 투자자 Flow
+- `src/config/personas/george_soros.yaml` — George Soros 반사성 이론 전략 설정
+- `src/config/personas/paul_tudor_jones.yaml` — Paul Tudor Jones 방어 우선 매크로 설정
+- `src/config/personas/ray_dalio.yaml` — Ray Dalio All Weather 전략 설정
+- `src/config/personas/stanley_druckenmiller.yaml` — Stanley Druckenmiller 집중 베팅 매크로 설정
+
+### Config 소비 경로
+
+```
+flows/*.yaml
+  → MaraBot이 읽음 → agent_weights, constraints를 Perspective/Validation/Strategy Agent에 전달
+
+personas/*.yaml
+  → Perspective Agent가 직접 읽음 → 분석 프레임워크, 레짐 분류, 목표 배분 기준으로 사용
+  → 예: Ray Dalio Agent가 ray_dalio.yaml의 target_allocations을 참조하여 레짐별 배분 결정
+  → 예: George Soros Agent가 george_soros.yaml의 divergence 기준으로 괴리 분석
+```
+
+## Output Validation
+
+각 Agent의 출력은 `src/contracts/` YAML 스키마 대비 자동 검증된다.
+
+### 구조
+
+```
+src/contracts/           # Agent별 출력 스키마 (YAML)
+├── user_profile.yaml
+├── data_summary.yaml
+├── perspective_common.yaml    # 4개 Perspective 공통 규약
+├── perspective_george_soros.yaml
+├── perspective_paul_tudor_jones.yaml
+├── perspective_ray_dalio.yaml
+├── perspective_stanley_druckenmiller.yaml
+├── validation_report.yaml
+├── strategy_report.yaml
+└── retrospection_report.yaml
+
+src/validation/
+└── validate.py          # Python validator (stdlib only)
+```
+
+### 사용법
+
+```bash
+uv run python src/validation/validate.py <agent_name> <output_file>
+# 예: uv run python src/validation/validate.py perspective_geopolitical outputs/intermediate/2026-04-06_growth/03_perspective_geopolitical.md
+```
+
+- Exit 0 = PASS, Exit 1 = FAIL, Exit 2 = ERROR
+- JSON 출력: `{ "status": "PASS|FAIL", "errors": [...], "warnings": [...] }`
+- Perspective contract는 `perspective_common.yaml`을 상속 (`inherits` 키)
+
+### 중간 결과 저장
+
+파이프라인 실행 시 모든 Agent 출력을 `outputs/intermediate/{date}_{profile}/`에 저장한다.
+상세 경로와 검증 프로세스는 `AGENT.md`의 Output Validation 섹션을 참조.
 
 ## Project Structure
 
 ```
 mara/
-├── src/
-│   ├── core/              # 핵심 도메인
-│   │   ├── state.py       # LangGraph State 정의 (6개 State 클래스)
-│   │   ├── models.py      # 도메인 모델 (Pydantic) - Output Schemas
-│   │   ├── profile.py     # User Profile 로더 (YAML → UserProfileState)
-│   │   └── exceptions.py  # 커스텀 예외 (MARAException 계층)
-│   ├── data/              # Data Layer
-│   │   ├── collectors/    # 데이터 수집 (news.py, report.py)
-│   │   ├── analyzers/     # 데이터 분석 (price.py, sentiment.py)
-│   │   └── summarizer.py  # LLM 기반 텍스트 요약
-│   ├── tools/             # LangGraph Tools
-│   │   ├── market/        # price.py, portfolio.py
-│   │   └── analysis/      # backtest.py, risk.py
-│   ├── agents/            # Agent Layers
-│   │   ├── perspective/   # base.py, factory.py (Persona YAML → Agent)
-│   │   ├── research/      # agent.py (웹 검색, 심층 조사)
-│   │   ├── strategy/      # aggregator.py, optimizer.py (cvxpy)
-│   │   ├── validation/    # validator.py (리스크 검증, 피드백)
-│   │   └── retrospection/ # evaluator.py (예측 vs 실제, 가중치 조정)
-│   ├── orchestration/     # LangGraph 워크플로우
-│   │   ├── graph.py       # 메인 그래프 정의
-│   │   ├── nodes.py       # 노드 함수들
-│   │   └── cli.py         # CLI 엔트리포인트
-│   ├── db/                # SQLite 데이터베이스
-│   │   ├── models.py      # SQLAlchemy 모델
-│   │   ├── repository.py  # 데이터 접근 계층
-│   │   └── migrations/    # Alembic 마이그레이션
-│   ├── utils/             # 공통 유틸리티 (llm.py, cache.py, logging.py)
-│   └── config/            # YAML 설정 파일
-│       ├── flows/         # growth.yaml, income.yaml
-│       ├── personas/      # ray_dalio_macro.yaml 등
-│       └── profiles/      # 사용자 투자 프로필
-├── data/                  # 로컬 데이터 (raw/, processed/, cache/)
-├── outputs/               # 출력 (reports/, portfolios/, visualizations/, logs/)
-├── tests/                 # unit/, integration/, fixtures/
-└── docs/                  # 문서
+├── AGENT.md                    # MaraBot 메인 오케스트레이터 지침
+├── CLAUDE.md                   # 이 파일
+├── README.md                   # 프로젝트 소개
+├── TECHSPEC.md                 # 원본 기획 배경
+├── .claude/agents/             # Claude Code subagent 정의 (6개)
+├── src/agents/                 # Agent별 상세 AGENT.md
+├── src/config/                 # Flow, Persona, Profile YAML 설정
+├── src/contracts/              # Agent별 출력 스키마 (YAML)
+├── src/validation/             # 출력 검증 스크립트
+├── wiki/                       # Agent 지식 축적 (_shared/ + users/{uid}/, Docsify 서빙)
+└── outputs/                    # 검증 중간 결과 (intermediate/)
 ```
 
-## Key Configuration Files
+## Rules
 
-- `src/config/flows/growth.yaml` - Aggressive investor flow (higher equity, sector rotation focus)
-- `src/config/flows/income.yaml` - Retiree flow (income-focused, lower drawdown tolerance)
-- `src/config/personas/ray_dalio_macro.yaml` - All Weather strategy persona
-- `src/config/personas/warren_buffett_value.yaml` - Value investing persona
-- `src/config/ensemble_weights.yaml` - Agent 간 가중치 설정
-
-## Environment Setup
-
-Required environment variables in `.env`:
-```
-ANTHROPIC_API_KEY=sk-ant-...
-ALPHA_VANTAGE_API_KEY=...  # optional
-```
+- 한국어로 대화한다.
+- 코드 수정 대신 AGENT.md와 config 파일을 통해 Agent 동작을 정의한다.
+- 새 기능은 MCP skill로 추가한다.
+- wiki 내용은 덮어쓰지 않고 날짜와 함께 누적한다.
+- 모든 분석 결과에 출처를 명시한다.
 
 ## Error Handling
 
-### Retry Policy
-| Component | Retries | Backoff | Timeout |
-|-----------|---------|---------|---------|
-| LLM API (Anthropic) | 3 | Exponential (1s, 2s, 4s) | 60s |
-| Market Data (yfinance) | 2 | Linear (2s, 4s) | 30s |
-| Research Agent | 2 | Linear (1s, 2s) | 20s |
+| 실패 지점 | 동작 | 파이프라인 |
+|-----------|------|-----------|
+| Data Agent 수집 실패 | wiki/_shared/market/ 캐시된 최근 데이터 사용, stale 경고 | 계속 진행 |
+| 개별 Perspective Agent 실패 | 해당 Agent 건너뛰고 나머지로 진행 | 최소 2개 성공 필요 |
+| 전체 Perspective < 2개 | 파이프라인 중단, 사용자에게 알림 | 중단 |
+| Validation Agent 실패 | 검증 없이 Strategy에 경고 표시 | 계속 (validation_skipped) |
+| Strategy Agent 실패 | Perspective 결과를 요약하여 직접 전달 | 대체 |
 
-### Fallback Strategy
-- **LLM API 장애**: 캐시된 최근 분석 결과 사용 (24시간 이내), 없으면 중단
-- **Market Data 장애**: 캐시된 가격 데이터 사용 (1시간 이내), stale 경고 표시
-- **Research Agent 실패**: Perspective Agent가 자체 분석으로 진행 (research_failed 플래그)
-- **개별 Perspective Agent 실패**: 해당 Agent 제외, 나머지로 종합 (최소 2개 필요)
-- **Validation Backtest 실패**: 리스크 메트릭만으로 검증 (backtest_skipped 경고)
+## Retrospection 트리거
 
-### Exception Hierarchy (`src/core/exceptions.py`)
-```python
-MARAException          # Base exception
-├── DataFetchError     # 데이터 수집 실패
-├── LLMResponseError   # LLM 응답 파싱/검증 실패
-├── ValidationError    # 리스크 검증 실패 (3회 후에도 미충족)
-├── AgentTimeoutError  # Agent 실행 시간 초과
-└── InsufficientAgentsError  # 최소 Agent 수(2개) 미달
+- **수동**: Telegram에서 "회고" 명령
+- **자동**: Claude Code의 `/schedule`로 크론 등록 가능 (예: 매월 15일)
+  ```
+  /schedule "매월 15일 retrospection 실행" --cron "0 9 15 * *"
+  ```
+
+## 데이터 생명주기
+
+| 디렉토리 | 보관 정책 | 비고 |
+|----------|----------|------|
+| `outputs/intermediate/` | 최근 5회 실행분 보관 | 디버깅용 |
+| `wiki/_shared/` | 전체 보관 (누적) | 오래된 정보는 `[outdated]` 플래그 |
+| `wiki/users/*/strategy/history/` | 전체 보관 | 날짜별 개별 파일 |
+| `wiki/users/*/retrospection/` | 전체 보관 | 월별 개별 파일 |
+
+## Strategy 복구 전략
+
+`wiki/users/{user_id}/strategy/current.md` 업데이트 전 반드시 기존 내용을 `wiki/users/{user_id}/strategy/history/{date}.md`에 아카이브한다. 오작동 시 `history/`의 최신 파일로 `current.md`를 복원한다.
+
+## Environment
+
 ```
-
-## Tech Stack
-
-- **Orchestration**: LangGraph
-- **LLM**: Claude Opus 4.5 (Anthropic)
-- **Data Sources**: yfinance, pandas-datareader (FRED)
-- **Optimization**: cvxpy (Mean-Variance Optimization)
-- **Analysis**: pandas, numpy, scipy
-- **Visualization**: plotly, matplotlib
-
-## Python Version
-
-Requires Python 3.11+ (< 3.13)
+ANTHROPIC_API_KEY=sk-ant-...    # 필수
+TELEGRAM_BOT_TOKEN=...          # Telegram 채널용
+```

@@ -1,0 +1,41 @@
+name: retrospection_report
+description: Retrospection Agent 출력 스키마. 예측 vs 실제, Agent 성과, 편향 분석을 포함해야 한다.
+output_path: "outputs/reports/{date}_retrospection.md"
+
+required_sections:
+  - "예측 vs 실제"
+  - "Agent 성과"
+  - "편향 분석"
+  - "가중치 조정 제안"
+  - "학습 인사이트"
+
+required_fields: {}
+
+required_tables:
+  예측_비교:
+    section: "예측 vs 실제"
+    required_columns:
+      - "Item"
+      - "Predicted"
+      - "Actual"
+      - "Correct"
+  Agent_성과:
+    section: "Agent 성과"
+    required_columns:
+      - "Agent"
+      - "Hit Rate"
+      - "Alpha"
+      - "Grade"
+  편향:
+    section: "편향 분석"
+    required_columns:
+      - "Agent"
+      - "Bias Type"
+      - "Description"
+  가중치:
+    section: "가중치 조정 제안"
+    required_columns:
+      - "Agent"
+      - "Current"
+      - "Suggested"
+      - "Reason"

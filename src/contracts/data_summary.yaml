@@ -1,0 +1,32 @@
+name: data_summary
+description: Data Agent 출력 스키마. 시장 데이터, 거시경제 지표, 뉴스, 센티먼트를 포함해야 한다.
+output_path: "outputs/intermediate/{date}_{profile}/02_data_summary.md"
+
+required_sections:
+  - "시장 현황"
+  - "핵심 가격 데이터"
+  - "거시경제 지표"
+  - "주요 뉴스"
+  - "시장 센티먼트"
+
+required_fields:
+  센티먼트:
+    type: enum
+    values: ["bullish", "neutral", "bearish"]
+    pattern: "(?:Overall|종합|센티먼트)[:\s]*(bullish|neutral|bearish)"
+    case_insensitive: true
+
+required_tables:
+  가격_데이터:
+    section: "핵심 가격 데이터"
+    required_columns:
+      - "Asset"
+      - "Price"
+      - "1W Return"
+      - "1M Return"
+  거시경제:
+    section: "거시경제 지표"
+    required_columns:
+      - "Indicator"
+      - "Value"
+      - "Trend"

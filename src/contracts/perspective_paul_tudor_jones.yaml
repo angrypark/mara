@@ -1,0 +1,35 @@
+name: perspective_paul_tudor_jones
+description: Paul Tudor Jones Agent 출력 스키마. perspective_common을 상속하고 방어 우선 매크로 고유 필드를 추가한다.
+inherits: perspective_common
+output_path: "outputs/intermediate/{date}_{profile}/03_perspective_paul_tudor_jones.md"
+
+required_sections:
+  - "리스크 레짐"
+  - "비대칭 기회"
+  - "테일 리스크 시나리오"
+  - "방어 점검"
+
+required_fields:
+  리스크_레짐:
+    type: enum
+    values: ["low_risk", "moderate_risk", "high_risk", "crisis"]
+    pattern: "리스크 레짐[:\s]*(low_risk|moderate_risk|high_risk|crisis)"
+
+required_tables:
+  비대칭_기회:
+    section: "비대칭 기회"
+    required_columns:
+      - "Theme"
+      - "Upside"
+      - "Downside"
+      - "Risk/Reward Ratio"
+      - "Confidence"
+      - "Timeframe"
+  테일_리스크:
+    section: "테일 리스크 시나리오"
+    required_columns:
+      - "Scenario"
+      - "Probability"
+      - "Portfolio Impact"
+      - "Trigger"
+      - "Hedge"

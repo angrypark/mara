@@ -1,0 +1,38 @@
+name: perspective_george_soros
+description: George Soros Agent 출력 스키마. perspective_common을 상속하고 반사성 이론 고유 필드를 추가한다.
+inherits: perspective_common
+output_path: "outputs/intermediate/{date}_{profile}/03_perspective_george_soros.md"
+
+required_sections:
+  - "반사성 레짐"
+  - "시장 괴리"
+  - "피드백 루프 현황"
+
+required_fields:
+  반사성_레짐:
+    type: enum
+    values: ["bubble_forming", "stable", "reversal_imminent"]
+    pattern: "반사성 레짐[:\s]*(bubble_forming|stable|reversal_imminent)"
+
+required_tables:
+  시장_괴리:
+    section: "시장 괴리"
+    required_columns:
+      - "Area"
+      - "Perception"
+      - "Reality"
+      - "Divergence Direction"
+      - "Divergence Score"
+    row_constraints:
+      Divergence Score:
+        type: float
+        min: -1.0
+        max: 1.0
+  피드백_루프:
+    section: "피드백 루프 현황"
+    required_columns:
+      - "Theme"
+      - "Loop Type"
+      - "Strength"
+      - "Duration"
+      - "Reversal Risk"

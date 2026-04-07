@@ -1,0 +1,44 @@
+name: user_profile
+description: User Profile Agent 출력 스키마. 투자 프로필, 포트폴리오, 제약 조건을 포함해야 한다.
+output_path: "outputs/intermediate/{date}_{profile}/01_user_profile.md"
+
+required_sections:
+  - "프로필 유형"
+  - "현재 포트폴리오"
+  - "투자 목표"
+  - "리스크 허용도"
+  - "제약 조건"
+  - "Agent 가중치"
+
+required_fields:
+  프로필_유형:
+    type: enum
+    values: ["growth", "income"]
+    pattern: "프로필 유형[:\s]*(growth|income)"
+
+required_tables:
+  포트폴리오:
+    section: "현재 포트폴리오"
+    required_columns:
+      - "Ticker"
+      - "Weight"
+    row_constraints:
+      Weight:
+        type: percentage
+        min: 0.0
+        max: 1.0
+  제약_조건:
+    section: "제약 조건"
+    required_columns:
+      - "Constraint"
+      - "Value"
+  Agent_가중치:
+    section: "Agent 가중치"
+    required_columns:
+      - "Agent"
+      - "Weight"
+    row_constraints:
+      Weight:
+        type: float
+        min: 0.0
+        max: 1.0

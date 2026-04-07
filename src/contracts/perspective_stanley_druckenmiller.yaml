@@ -1,0 +1,35 @@
+name: perspective_stanley_druckenmiller
+description: Stanley Druckenmiller Agent 출력 스키마. perspective_common을 상속하고 집중 베팅 매크로 고유 필드를 추가한다.
+inherits: perspective_common
+output_path: "outputs/intermediate/{date}_{profile}/03_perspective_stanley_druckenmiller.md"
+
+required_sections:
+  - "확신도 레짐"
+  - "집중 베팅"
+  - "미반영 매크로 변화"
+  - "포트폴리오 집중도 점검"
+
+required_fields:
+  확신도_레짐:
+    type: enum
+    values: ["high_conviction", "moderate_conviction", "low_conviction", "wait"]
+    pattern: "확신도 레짐[:\s]*(high_conviction|moderate_conviction|low_conviction|wait)"
+
+required_tables:
+  집중_베팅:
+    section: "집중 베팅"
+    required_columns:
+      - "Theme"
+      - "Position Size"
+      - "Timeframe"
+      - "Catalyst"
+      - "Exit Trigger"
+      - "Confidence"
+  미반영_매크로:
+    section: "미반영 매크로 변화"
+    required_columns:
+      - "Macro Shift"
+      - "Current Pricing"
+      - "Fair Pricing"
+      - "Gap"
+      - "Timeframe"

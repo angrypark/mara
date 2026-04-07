@@ -1,0 +1,37 @@
+name: perspective_common
+description: 4개 Perspective Agent 공통 출력 규약. 각 perspective contract가 이를 상속한다.
+
+required_sections:
+  - "시장 전망"
+  - "신뢰도"
+  - "리밸런싱 제안"
+
+required_fields:
+  시장_전망:
+    type: enum
+    values: ["BULLISH", "NEUTRAL", "BEARISH"]
+    pattern: "시장 전망[:\s]*(BULLISH|NEUTRAL|BEARISH)"
+  신뢰도:
+    type: float
+    min: 0.0
+    max: 1.0
+    pattern: "신뢰도[:\s]*(\d+\.\d+)"
+
+required_tables:
+  리밸런싱_제안:
+    section: "리밸런싱 제안"
+    required_columns:
+      - "Ticker"
+      - "Action"
+      - "Current Weight"
+      - "Target Weight"
+      - "Confidence"
+      - "Rationale"
+    row_constraints:
+      Action:
+        type: enum
+        values: ["BUY", "SELL", "HOLD", "INCREASE", "DECREASE"]
+      Confidence:
+        type: float
+        min: 0.0
+        max: 1.0
