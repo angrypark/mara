@@ -37,9 +37,9 @@ python3 scripts/service.py install
 - `.local/toss/credentials.json`: `client_id`, `client_secret`, `account_seq`
 - `.local/toss/policy.json`: 위 한도, `allowed_symbols`, `live_enabled: false`
 
-`credentials.json`에 토스에서 발급한 두 값을 직접 채워주세요. 키를 채팅에 보내거나 저장소에 커밋하지 않아요. `account_seq`는 계좌번호가 아니라 API가 반환한 계좌 식별 키예요. 자동으로 첫 계좌를 선택하지 않아요.
+`credentials.json`에 토스에서 발급한 두 값을 직접 채워주세요. 키를 채팅에 보내거나 저장소에 커밋하지 않아요. `account_seq`는 계좌번호가 아니라 API가 반환한 계좌 식별 키예요. 설정된 계좌가 없고 종합매매 계좌가 정확히 하나일 때만 조회 검증 후 계좌 식별 키를 반영해요. 여러 계좌 중 첫 계좌를 임의로 선택하지 않아요.
 
-토스는 이미 키 발급·허용 IP 등록을 마쳤다고 알려주셨어요. 아직 이 파일에 값이 없으므로 계좌 연결은 검증하지 않았어요. 토큰은 같은 디렉터리의 `access-token.json`에 0600으로 캐시해요. 동시에 다른 프로그램에서 같은 client의 토큰을 재발급하면 이전 토큰이 무효화될 수 있어요.
+토스는 이미 키 발급·허용 IP 등록을 마쳤다고 알려주셨어요. 자격증명을 입력한 뒤 `python3 -m mara.connection`으로 인증·계좌·보유·매수가능금액·미체결 조회를 검증할 수 있어요. 성공한 조회의 확인 시각이 상시 화면에 표시돼요. 실제 보유 정보는 모의 포트폴리오에 섞지 않아요. 토큰은 같은 디렉터리의 `access-token.json`에 0600으로 캐시해요. 동시에 다른 프로그램에서 같은 client의 토큰을 재발급하면 이전 토큰이 무효화될 수 있어요.
 
 ## 조회와 모의 주문
 
@@ -47,6 +47,8 @@ python3 scripts/service.py install
 
 ```sh
 python3 -m mara.trading accounts
+# 주문 없이 연결을 확인하고 화면 상태에 반영해요.
+python3 -m mara.connection
 ```
 
 확인한 `account_seq`를 credentials와 policy 양쪽에 넣고, 정책의 `allowed_symbols`에 운용 대상으로 검토한 종목을 명시해요. 특정 종목을 이번 작업에서 임의로 정하지 않았어요.
@@ -87,3 +89,5 @@ python3 -m mara.trading reconcile --order-id BROKER_ORDER_ID --intent-id LOCAL_I
 - [OpenAPI 원본](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json)
 
 OAuth2 Client Credentials, 계좌별 `X-Tossinvest-Account`, 문자열 decimal 수량·가격, 10분 유효 `clientOrderId`, REST 주문 상세·미체결 조회를 반영했어요. 고정된 한도를 추측한 고속 재시도 대신 직렬 저빈도 호출과 429 중단을 사용해요. 모델·클라이언트는 비밀 키를 분석 문맥이나 실행 보고서에 포함하지 않아요.
+
+연결 표시는 최근 24시간 이내에 검증한 자격증명·계좌에만 유효해요. 화면 자체는 토스 API를 반복 호출하지 않으며, 표시 시각은 실시간 잔고 갱신 시각이 아니에요.

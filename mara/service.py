@@ -13,6 +13,7 @@ from pathlib import Path
 from .agents import DemoModel
 from .engine import Engine
 from .store import Store
+from .connection import status as connection_status
 
 
 def resource(relative):
@@ -90,8 +91,9 @@ class Application:
                 if policy_path.exists():
                     policy=json.loads(policy_path.read_text())
                     limits={key:policy.get(key) for key in ['market','max_capital_krw','max_order_krw','max_daily_krw']}
+                broker_status=connection_status(self.directory.parent/'toss')
                 return {'service':'running','mode':'demo','live_trading':False,
-                    'broker':'toss','broker_connected':False,'error':self.last_error,
+                    'broker':'toss','broker_connected':broker_status['verified'],'broker_check':broker_status,'error':self.last_error,
                     'today':date.today().isoformat(),'latest':latest,'trading_limits':limits,
                     'history':[{'id':e['id'],'as_of':e['effective'],'action':e['body']['proposal']['action']}
                                for e in reversed(reports[-40:])],
