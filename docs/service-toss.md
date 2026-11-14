@@ -4,7 +4,9 @@
 
 로컬 주소는 **http://127.0.0.1:8788**이에요. macOS LaunchAgent `com.angrypark.mara`가 로그인 시 시작하고 종료 시 재시작해요. Mac이 꺼져 있거나 잠자기 중일 때까지 실행되는 원격 서버는 아니에요.
 
-화면은 합성 데이터 전용이에요. 다음 주 평가 버튼으로 7일 뒤 평가·회고·지식 점검을 실행하고 기록을 저장해요. 실제 시간 기준으로는 60초마다 예정일을 확인하고 주 1회 모의 평가를 실행해요. 테스트 버튼으로 미래 날짜까지 진행했다면 그 다음 예정일 전에는 자동 실행하지 않아요.
+화면에서 초기 투자 맥락·섹터·위험 기준을 입력하고, 토스 보유를 확인한 뒤 주문 없이 제안을 생성·저장해요. [입력과 포트폴리오 평가](portfolio-evaluation.md)에 계산 기준과 자료 제한을 정리했어요. 모델이 없으면 HTML에서 설정하고, 합성 결과로 대체하지 않아요.
+
+별도 데모 영역의 다음 주 평가 버튼은 합성 데이터의 7일 뒤 평가·회고·지식 점검을 실행해요. 60초마다 예정일을 확인하는 주 1회 자동 평가는 현재 데모에만 적용돼요. 실제 사용자 평가는 명시적 생성 버튼으로 실행해요.
 
 ```sh
 cd /Users/angrypark/code/workspace/repos/mara
@@ -15,7 +17,7 @@ python3 scripts/service.py stop
 python3 scripts/service.py install
 ```
 
-상태·모의 DB는 `.local/service/`, 로그는 `.local/service/logs/`에 있어요. UI는 loopback만 수신하며 Host 확인, CSP, 동일 출처·CSRF 검사를 적용해요. 토스 주문 API나 실거래 활성화 경로는 UI와 상시 서비스에 없어요.
+상태·실제 사용자 DB·별도 모의 DB는 `.local/service/`, 로그는 `.local/service/logs/`에 있어요. UI는 loopback만 수신하며 Host 확인, CSP, 동일 출처·CSRF 검사를 적용해요. 토스 주문 API나 실거래 활성화 경로는 UI와 상시 서비스에 없어요.
 
 ## 합의한 한도
 

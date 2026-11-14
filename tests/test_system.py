@@ -95,6 +95,14 @@ class Harness(unittest.TestCase):
         self.initial(); r=self.e.run('2026-11-21',self.week(False))
         self.assertIsNone(r['performance']['modified_dietz']); self.assertIsNone(r['performance']['pnl'])
 
+    def test_unreconciled_cash_flows_have_no_performance_claim(self):
+        self.initial();mid=self.week()
+        h=copy.deepcopy(self.h);h.update(as_of='2026-11-21',cash=50000,cashflows_reconciled=False)
+        self.e.set_holdings(h)
+        r=self.e.run('2026-11-21',mid)
+        self.assertIsNone(r['performance']['modified_dietz']);self.assertIsNone(r['performance']['pnl'])
+        self.assertFalse(r['performance']['cashflows_reconciled'])
+
     def test_flow_duplicate_and_late_correction_rejected(self):
         f={'date':'2026-11-15','amount':1000,'reference':'bank-1'}
         self.e.cashflow(f)

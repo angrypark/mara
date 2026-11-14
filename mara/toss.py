@@ -91,6 +91,10 @@ class TossClient:
     def prices(self,symbols): return self.request('GET','/api/v1/prices',{'symbols':','.join(symbols)},account=False)
     def stocks(self,symbols): return self.request('GET','/api/v1/stocks',{'symbols':','.join(symbols)},account=False)
     def exchange_rate(self): return self.request('GET','/api/v1/exchange-rate',{'baseCurrency':'USD','quoteCurrency':'KRW'},account=False)
+    def sectors(self): return self.request('GET','/api/v1/sectors',account=False)
+    def sector_stocks(self,sector):
+        if not re.fullmatch(r'[A-Za-z0-9_-]{1,40}',sector): raise ValueError('Invalid sector')
+        return self.request('GET','/api/v1/sectors/'+sector+'/stocks',{'marketCountry':'US'},account=False)
     def calendar(self,us_date): return self.request('GET','/api/v1/market-calendar/US',{'date':us_date},account=False)
     def open_orders(self): return self.request('GET','/api/v1/orders',{'status':'OPEN'})
     def order(self,order_id):

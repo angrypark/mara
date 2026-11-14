@@ -1,4 +1,4 @@
-"""Loopback-only demo service. Intentionally has no broker order route or live worker."""
+"""Loopback-only portfolio setup and separate demo. No broker order route."""
 import argparse
 import copy
 import fcntl
@@ -14,6 +14,7 @@ from .agents import DemoModel
 from .engine import Engine
 from .store import Store
 from .connection import status as connection_status
+from .onboarding import PortfolioSetup,InputError
 
 
 def resource(relative):
@@ -42,12 +43,14 @@ class Application:
         self.token=json.loads(config.read_text())['token']
         db.session(self.token)  # fail closed for mismatched database/config
         db.close()
+        self.setup=PortfolioSetup(self.directory)
 
     def recover_after_restart(self):
         # Call only after holding the exclusive process flock. This DB is demo-only.
         db=Store(self.path)
         try: db.session(self.token).recover('Demo service restart under exclusive process lock',date.today().isoformat())
         finally: db.close()
+        self.setup.recover()
 
     def run_demo(self, next_week=False):
         with self.mutex:
@@ -92,7 +95,7 @@ class Application:
                     policy=json.loads(policy_path.read_text())
                     limits={key:policy.get(key) for key in ['market','max_capital_krw','max_order_krw','max_daily_krw']}
                 broker_status=connection_status(self.directory.parent/'toss')
-                return {'service':'running','mode':'demo','live_trading':False,
+                return {'service':'running','mode':'portfolio','live_trading':False,'onboarding':self.setup.state(),
                     'broker':'toss','broker_connected':broker_status['verified'],'broker_check':broker_status,'error':self.last_error,
                     'today':date.today().isoformat(),'latest':latest,'trading_limits':limits,
                     'history':[{'id':e['id'],'as_of':e['effective'],'action':e['body']['proposal']['action']}
@@ -130,8 +133,11 @@ def make_server(app,port):
                 if self.path=='/':
                     page=resource('web/dashboard.html').read_text().replace('__NONCE__',app.nonce)
                     return self.send(200,page,'text/html; charset=utf-8')
-                if self.path=='/health': return self.send(200,{'status':'ok','mode':'demo','live_trading':False})
+                if self.path=='/dashboard.js': return self.send(200,resource('web/dashboard.js').read_text(),'text/javascript; charset=utf-8')
+                if self.path=='/dashboard.css': return self.send(200,resource('web/dashboard.css').read_text(),'text/css; charset=utf-8')
+                if self.path=='/health': return self.send(200,{'status':'ok','mode':'portfolio','live_trading':False})
                 if self.path=='/api/state': return self.send(200,app.state())
+                if self.path.startswith('/api/portfolio/report/'): return self.send(200,app.setup.report(self.path.rsplit('/',1)[-1]))
                 if self.path.startswith('/api/report/'): return self.send(200,app.report(self.path.rsplit('/',1)[-1]))
                 self.send(404,{'error':'Not found'})
             except PermissionError: self.send(404,{'error':'Report unavailable'})
@@ -140,16 +146,29 @@ def make_server(app,port):
             origin='http://'+self.headers.get('Host','')
             if not self.host_ok() or self.headers.get('Origin')!=origin or self.headers.get('X-Mara-CSRF')!=app.nonce:
                 return self.send(403,{'error':'Same-origin action required'})
-            if self.path!='/api/demo-next': return self.send(404,{'error':'No such action'})
-            if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Length','0')!='0':
-                return self.send(400,{'error':'No request body expected'})
-            try: self.send(200,app.run_demo(next_week=True))
-            except Exception: self.send(500,{'error':'Demo execution failed; inspect local state'})
+            routes={'/api/setup/draft':app.setup.draft,'/api/setup/model':app.setup.save_model,
+                    '/api/setup/generate':app.setup.start,'/api/setup/holdings':lambda body:app.setup.refresh()}
+            if self.path not in routes and self.path!='/api/demo-next': return self.send(404,{'error':'No such action'})
+            try:
+                if self.headers.get('Transfer-Encoding'): raise InputError('지원하지 않는 전송 형식이에요.')
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<=length<=32768: raise InputError('입력은 32KB 이하로 보내주세요.')
+                if self.path=='/api/demo-next':
+                    if length: raise InputError('No request body expected')
+                    return self.send(200,app.run_demo(next_week=True))
+                if self.headers.get_content_type()!='application/json': raise InputError('JSON 입력이 필요해요.')
+                self.connection.settimeout(10)
+                body=json.loads(self.rfile.read(length))
+                if not isinstance(body,dict): raise InputError('입력 형식을 확인해주세요.')
+                self.send(202 if self.path=='/api/setup/generate' else 200,routes[self.path](body))
+            except InputError as exc: self.send(400,{'error':str(exc)})
+            except (ValueError,UnicodeError): self.send(400,{'error':'입력 형식을 확인해주세요.'})
+            except Exception: self.send(503,{'error':'처리하지 못했어요. 연결 설정을 확인하고 다시 시도해주세요.'})
     return ThreadingHTTPServer(('127.0.0.1',port),Handler)
 
 
 def main(argv=None):
-    parser=argparse.ArgumentParser(description='Persistent local Mara demo dashboard; no live trading')
+    parser=argparse.ArgumentParser(description='Persistent local Mara portfolio dashboard; no live trading')
     parser.add_argument('--directory',default='.local/service')
     parser.add_argument('--port',type=int,default=8788)
     args=parser.parse_args(argv)
@@ -166,7 +185,7 @@ def main(argv=None):
             except Exception: pass  # error type appears in state; no hidden fallback
             stop.wait(60)
     thread=threading.Thread(target=worker,daemon=True); thread.start()
-    print(f'Mara: http://127.0.0.1:{args.port} (demo only)',flush=True)
+    print(f'Mara: http://127.0.0.1:{args.port} (proposals only)',flush=True)
     try: server.serve_forever()
     finally: stop.set(); server.server_close(); lock.close()
 

@@ -52,6 +52,16 @@ def profile(p):
     if not isinstance(p['goal'], str) or not p['goal'].strip(): raise ValueError('Goal required')
     if not isinstance(p['base_currency'], str) or len(p['base_currency']) != 3: raise ValueError('Currency required')
     day(p['cash_need_date'])
+    if 'proposal_capital' in p: number(p['proposal_capital'], 1)
+    if 'criteria' in p:
+        c=p['criteria']
+        required(c,['risk_level','preferred_sectors','excluded_sectors','max_sector_fraction',
+                    'max_equity_fraction','min_cash_fraction','max_foreign_fraction'])
+        if c['risk_level'] not in {'conservative','balanced','growth'}: raise ValueError('Risk level required')
+        for key in ['preferred_sectors','excluded_sectors']: texts(c[key])
+        if set(c['preferred_sectors']) & set(c['excluded_sectors']): raise ValueError('Sector preference conflicts with exclusion')
+        for key in ['max_sector_fraction','max_equity_fraction','min_cash_fraction','max_foreign_fraction']:
+            number(c[key],0,1)
     return p
 
 
@@ -81,8 +91,20 @@ def market(m):
         if (day(m['as_of']) - day(quote['observed_at'])).days > 7: raise ValueError('Stale price')
         a = m['assets'][symbol]
         required(a, ['market', 'stress_loss', 'liquid', 'kind', 'expense_ratio'])
-        number(a['stress_loss'], 0, 1); number(a['expense_ratio'], 0, 1)
+        number(a['stress_loss'], 0, 1)
+        if a['expense_ratio'] is not None: number(a['expense_ratio'], 0, 1)
         if type(a['liquid']) is not bool: raise ValueError('liquid must be boolean')
+        if a.get('asset_class','unknown') not in {'equity','fixed_income','commodity','real_asset','unknown'}:
+            raise ValueError('Unknown asset classification')
+        if 'sector_complete' in a and type(a['sector_complete']) is not bool: raise ValueError('Sector completeness must be boolean')
+        if 'sector_exposures' in a:
+            if not isinstance(a['sector_exposures'],dict): raise ValueError('Sector exposures must be a mapping')
+            for weight in a['sector_exposures'].values(): number(weight,0,1)
+            for key in ['sector_source','sector_as_of','sector_valid_until']:
+                if key not in a: raise ValueError('Sector source and validity required')
+            if not a['sector_source'].startswith('https://'): raise ValueError('Sector source required')
+            if day(a['sector_as_of'])>day(m['as_of']): raise ValueError('Future sector classification')
+            day(a['sector_valid_until'])
     ids = set()
     if not isinstance(m['facts'], list): raise ValueError('facts must be list')
     for f in m['facts']:
@@ -96,14 +118,14 @@ def market(m):
     return m
 
 
-def valuation(h, m):
+def valuation(h, m, allow_empty=False):
     if h['base_currency'] != m['base_currency']: raise ValueError('Convert quotes to base currency with FX source first')
     if h['as_of'] > m['as_of']: raise ValueError('Future holdings')
     values = {s: units * m['prices'][s]['price'] for s, units in h['positions'].items() if units}
     values['CASH'] = h['cash']
     nav = sum(values.values())
-    if nav <= 0: raise ValueError('Positive investable assets required')
-    return {'nav': nav, 'weights': {s: v/nav for s,v in values.items()}, 'values': values}
+    if nav <= 0 and not allow_empty: raise ValueError('Positive investable assets required')
+    return {'nav': nav, 'weights': {s: v/nav for s,v in values.items()} if nav else {}, 'values': values}
 
 
 def weights(w):
@@ -118,6 +140,7 @@ def suitability(w, p, m, nav):
     loss = 0
     liquid = 0
     for s, weight in w.items():
+        if not weight: continue
         if s == 'CASH':
             liquid += weight * nav
             continue

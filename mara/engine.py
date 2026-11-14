@@ -5,6 +5,7 @@ from datetime import timedelta
 from . import domain as d
 from .agents import Agents, PERSONAS
 from .knowledge import Knowledge
+from .risk import evaluate
 
 
 class Engine:
@@ -35,12 +36,12 @@ class Engine:
         due = last is None or d.day(as_of) >= d.day(last['body']['next_evaluation'])
         return {'due':due,'next_evaluation':last['body']['next_evaluation'] if last else as_of}
 
-    def run(self, as_of, market_id=None, force=False):
+    def run(self, as_of, market_id=None, force=False, revision_reason=None):
         d.day(as_of)
         run_id = uuid.uuid4().hex
         self.s.lock(run_id)
         try:
-            return self._run(as_of,market_id,force,run_id)
+            return self._run(as_of,market_id,force,run_id,revision_reason)
         except Exception as exc:
             # Do not log provider exceptions, whose URLs/bodies can contain secrets.
             self.s.append('failed',{'error_type':type(exc).__name__,'retry':'Correct inputs/provider and rerun; completed state unchanged'},as_of,run_id)
@@ -48,10 +49,16 @@ class Engine:
         finally:
             self.s.unlock(run_id)
 
-    def _run(self, as_of, market_id, force, run_id):
+    def _run(self, as_of, market_id, force, run_id, revision_reason=None):
         previous = self.s.latest('completed')
-        if previous and as_of <= previous['effective']: raise ValueError('Completed dates must advance; no duplicate weekly result')
-        if not force and not self.due(as_of)['due']: raise ValueError('Weekly evaluation not due; use --force for an explicit early review')
+        if previous and previous['body']['mode'] != self.model.mode: raise ValueError('Demo and live histories must use separate users')
+        revision_of=None
+        if previous and as_of == previous['effective'] and revision_reason and revision_reason.strip():
+            revision_of=previous['id']
+            earlier=[e for e in self.s.events('completed') if e['effective']<as_of]
+            previous=earlier[-1] if earlier else None
+        elif previous and as_of <= previous['effective']: raise ValueError('Completed dates must advance; no duplicate weekly result')
+        if not force and not revision_of and not self.due(as_of)['due']: raise ValueError('Weekly evaluation not due; use --force for an explicit early review')
         pe, he = self.s.latest('profile',as_of), self.s.latest('actual',as_of)
         me = self.s.get(market_id) if market_id else self.s.latest('market',as_of,shared=True)
         if pe is None or he is None or me is None: raise ValueError('Profile, actual holdings and market snapshot required')
@@ -62,12 +69,16 @@ class Engine:
         if self.model.mode == 'live' and (m.get('synthetic') or not m['facts']):
             raise ValueError('Live analysis requires real, nonempty market evidence')
         if m['base_currency'] != p['base_currency']: raise ValueError('Market currency mismatch')
-        val = d.valuation(h,m)
+        val = d.valuation(h,m,allow_empty=p.get('proposal_capital',0)>0)
+        capital=p.get('proposal_capital',val['nav'])
+        funding={'proposal_capital':capital,'actual_nav':val['nav'],
+                 'additional_funding_needed':max(0,capital-val['nav']),
+                 'amount_outside_proposal':max(0,val['nav']-capital)}
         # Retain expired facts in immutable evidence but exclude them from current inference.
         m['facts'] = [f for f in m['facts'] if f['valid_until'] >= as_of]
         start_id = self.s.append('run_started',{'market_id':me['id'],'profile_id':pe['id'],
              'actual_id':he['id'],'previous_id':previous['id'] if previous else None,
-             'mode':self.model.mode,'as_of':as_of},as_of,run_id)
+             'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason},as_of,run_id)
         k = Knowledge(self.s)
         a = Agents(self.s,self.model,as_of,run_id)
         rebalance_due = d.day(as_of) >= d.day(h['last_rebalanced']) + timedelta(days=p['rebalance_every_days'])
@@ -94,8 +105,13 @@ class Engine:
                 outcome['modified_dietz'] = None
                 outcome['pnl'] = None
                 outcome['limitation'] = 'Actual holdings not reconfirmed: valuation only; no realized performance claim'
+            if h.get('cashflows_reconciled') is False:
+                outcome['modified_dietz']=None
+                outcome['pnl']=None
+                outcome['cashflows_reconciled']=False
+                outcome['limitation']='외부 입출금 대조가 끝나지 않아 평가액만 표시해요. 자금 납입을 투자 수익으로 해석하지 않아요.'
         common = {'as_of':as_of,'profile':p,'actual':h,'valuation':val,'market':m,'previous':prior,
-                  'anchors':anchors,'rebalance_due':rebalance_due,'performance':outcome}
+                  'anchors':anchors,'rebalance_due':rebalance_due,'performance':outcome,'funding':funding}
         def call(role, extra=None):
             payload = dict(common,knowledge=k.retrieve(as_of,role))
             payload.update(extra or {})
@@ -136,10 +152,10 @@ class Engine:
         for role in PERSONAS:
             # No peer output enters any perspective call. Separate requests, no shared conversation state.
             perspectives[role], _ = call(role)
-        checks = {r:d.suitability(x['weights'],p,m,val['nav']) for r,x in perspectives.items()}
+        checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
         validation, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks})
         proposal, _ = call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation})
-        final_check = d.suitability(proposal['weights'],p,m,val['nav'])
+        final_check = evaluate(proposal['weights'],p,m,capital,val)
         final_review, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks,
                                          'final_proposal':proposal,'final_numeric_check':final_check})
         differences = {s:proposal['weights'].get(s,0)-val['weights'].get(s,0)
@@ -149,7 +165,11 @@ class Engine:
         blocked = not final_check['passed'] or not final_review['qualitative_pass']
         if blocked:
             proposal['action'] = 'defer'
-            proposal['risks'] += final_check['errors'] + final_review['issues']
+            proposal['risks'] += final_check['errors'] + final_check['missing'] + final_review['issues']
+        if proposal['action']=='hold' and abs(capital-val['nav'])>1e-6:
+            proposal['action']='defer'
+            blocked=True
+            proposal['risks'].append('실제 운용액과 제안 기준액이 달라 단순 유지로 처리할 수 없어요.')
         proposal['eligibility'] = 'blocked' if blocked else ('review_now' if rebalance_due or not previous else 'review_at_rebalance')
         proposal['weight_changes'] = differences
         proposal['execution'] = 'Proposal only; user records actual changes separately'
@@ -157,7 +177,8 @@ class Engine:
         # Original dissent is retained regardless of how the leader summarizes it.
         report = {'run_id':run_id,'mode':self.model.mode,'as_of':as_of,'profile_id':pe['id'],
             'actual_id':he['id'],'market_id':me['id'],'previous_id':previous['id'] if previous else None,
-            'valuation':val,'performance':outcome,'reflection':reflection,
+            'valuation':val,'performance':outcome,'reflection':reflection,'funding':funding,
+            'revision_of':revision_of,'revision_reason':revision_reason,
             'perspectives':perspectives,'validation':{'numeric':checks,'critique':validation,
             'final_numeric':final_check,'final_critique':final_review}, 'proposal':proposal,
             'pruning_audit_id':audit,'anchors':anchors,'next_evaluation':(d.day(as_of)+timedelta(days=7)).isoformat(),
