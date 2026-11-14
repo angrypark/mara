@@ -1,0 +1,5 @@
+{
+  "as_of": "2026-11-14", "base_currency": "USD", "cash": 20000,
+  "positions": {"BROAD": 100, "BOND": 200},
+  "rationale": "합성 예시: 장기 분산과 현금 완충", "last_rebalanced": "2026-11-14"
+}

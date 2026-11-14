@@ -1,0 +1,9 @@
+{
+  "base_currency": "USD", "markets": ["US"],
+  "goal": "10년 뒤 주거 자금; 생활비 예비자금 보존", "horizon_months": 120,
+  "total_assets": 150000, "monthly_income": 5000, "monthly_expenses": 3000,
+  "cash_need": 15000, "cash_need_date": "2027-05-14", "max_loss_fraction": 0.25,
+  "max_position_fraction": 0.6, "contribution_amount": 1000,
+  "contribution_every_days": 30, "rebalance_every_days": 90,
+  "constraints": ["차입하지 않아요", "생활비를 위험자산에 쓰지 않아요"]
+}
