@@ -8,6 +8,16 @@ from .knowledge import Knowledge
 from .risk import evaluate
 
 
+class ContextNeedsInput(ValueError):
+    """A validated analyst request, not a provider/connection failure."""
+    message='개인 투자 맥락에 추가 확인이 필요해요. 아래 항목을 확인하고 추가 설명을 입력해주세요.'
+
+    def __init__(self,questions,output_id):
+        super().__init__(self.message)
+        self.questions=list(questions)
+        self.output_id=output_id
+
+
 class Engine:
     def __init__(self, session, model):
         self.s, self.model = session, model
@@ -144,8 +154,8 @@ class Engine:
                 self.s.append('anchor_check',{'anchors':anchors,'preserved':True,'audit_id':audit},as_of,run_id)
         else:
             audit = k.prune(as_of,run_id)
-        context, _ = call('context')
-        if context['missing']: raise ValueError('Context agent requires missing information: '+', '.join(context['missing']))
+        context, context_id = call('context')
+        if context['missing']: raise ContextNeedsInput(context['missing'],context_id)
         evidence, _ = call('evidence')
         common.update(context_analysis=context,evidence_analysis=evidence)
         perspectives = {}

@@ -141,5 +141,23 @@ test('Codex selection hides API key, saves without it, and enables generation',a
   }finally{await h.close()}
 });
 
+test('context questions survive polling and link to a saved clarification field',async()=>{
+  const questions=['추가 투자금의 출처와 투입 시점을 알려주세요.'];
+  const h=await setup(s=>{s.onboarding.job={id:'context-job',status:'needs_input',message:'개인 투자 맥락에 추가 확인이 필요해요.',questions}});
+  try{
+    assert.equal(h.$('context-requests').hidden,false);
+    assert.match(h.$('context-questions').textContent,/출처와 투입 시점/);
+    assert.doesNotMatch(h.$('generate-message').textContent,/토스 연결/);
+    assert.equal(h.$('generate').disabled,false);
+    h.$('answer-context').click();assert.equal(h.w.document.activeElement.name,'context_notes');
+    h.form.elements.namedItem('context_notes').value='다음 달 저축을 투입할 계획';
+    await h.poll();assert.equal(h.form.elements.namedItem('context_notes').value,'다음 달 저축을 투입할 계획');
+    h.$('save-draft').click();await settle();
+    assert.equal(h.calls.find(c=>c.path==='/api/setup/draft').body.context_notes,'다음 달 저축을 투입할 계획');
+    h.state.onboarding.job={id:'new-job',status:'running',message:'분석 중'};
+    await h.poll();assert.equal(h.$('context-requests').hidden,true);
+  }finally{await h.close()}
+});
+
 for(const {name,run} of cases){await run();console.log('PASS '+name)}
 console.log(cases.length+' dashboard feedback tests passed');

@@ -61,12 +61,14 @@ function generationIssues(){
 function updateJob(job){
   if(!job)return;
   if(expectedJobId&&job.id!==expectedJobId)return;
-  const signature=JSON.stringify([job.id,job.status,job.message]);
+  const signature=JSON.stringify([job.id,job.status,job.message,job.questions]);
   if(signature===lastJobSignature)return;
   if(busy.has('generate')&&job.id!==expectedJobId)return;
   lastJobSignature=signature;
-  const failed=['failed','interrupted'].includes(job.status);
-  const links=job.status==='completed'?[{target:'proposal',message:'제안과 평가 결과 보기'}]:[];
+  const needsInput=job.status==='needs_input';
+  $('context-requests').hidden=!needsInput;list('context-questions',needsInput?job.questions||[]:[]);
+  const failed=['failed','interrupted','needs_input'].includes(job.status);
+  const links=job.status==='completed'?[{target:'proposal',message:'제안과 평가 결과 보기'}]:needsInput?[{target:'context_notes',message:'추가 설명 입력하기'}]:[];
   generationFeedback(job.message,links,failed?'error':job.status==='completed'?'success':'info',failed&&job.id===expectedJobId);
 }
 function snapshot(s,force=false){if(!s)return;const old=readForm();if(!force&&form.elements.snapshot_id.value===s.id)return;rows('holdings-body',s.items.map(x=>[x.symbol,x.name,x.quantity]));text('snapshot-time',new Date(s.captured_at).toLocaleString('ko-KR')+' 조회');text('holding-exclusions',s.items.length?`미국 보유 ${s.items.length}개 · 이번 범위에서 제외한 국내·기타 보유 ${s.excluded_count}개`:`미국 주식 보유가 없어요. 범위 밖 보유 ${s.excluded_count}개`);for(const key of ['preferred_sectors','excluded_sectors']){const select=form.elements[key];select.replaceChildren(...s.sectors.map(x=>{const o=document.createElement('option');o.value=x.name;o.textContent='　'.repeat(x.depth)+x.name;o.selected=(old[key]||[]).includes(x.name);return o}))}form.elements.snapshot_id.value=s.id;form.elements.confirmed.checked=false}
@@ -98,6 +100,7 @@ async function load(){try{
   if(s.latest)text('demo-result',pretty({구분:'합성 데모',평가일:s.latest.effective,제안:s.latest.body.proposal,회고:s.latest.body.reflection}));
 }catch(e){text('service','연결 확인 필요');text('message','서비스 상태를 불러오지 못했어요. '+e.message)}}
 async function action(button,fn){if(busy.has(button.id))return;busy.add(button.id);button.disabled=true;try{await fn()}catch(e){text('message',e.message);if(button.id==='generate'||button.id==='save-draft')generationFeedback(e.message,[],'error',true);if(button.id==='save-model')text('model-message',e.message);if(button.id==='refresh-holdings')text('snapshot-time',e.message)}finally{busy.delete(button.id);button.disabled=running&&['generate','refresh-holdings','save-model'].includes(button.id);if(button.id==='generate')button.textContent=running?'포트폴리오 분석 중…':generateLabel}}
+$('answer-context').onclick=()=>focusTarget('context_notes');
 $('save-draft').onclick=()=>action($('save-draft'),async()=>{await api('/api/setup/draft',readForm());const message='입력을 이 Mac에 임시 저장했어요. 주문이나 분석은 실행하지 않았어요.';text('message',message);generationFeedback(message,[],'success')});
 $('refresh-holdings').onclick=()=>action($('refresh-holdings'),async()=>{text('message','토스 보유와 섹터 목록을 조회하고 있어요.');snapshot(await api('/api/setup/holdings',{}),true);text('message','보유를 불러왔어요. 실제 현금과 보유 확인란을 확인해주세요.')});
 $('clear-sectors').onclick=()=>{for(const key of ['preferred_sectors','excluded_sectors'])for(const o of form.elements[key].options)o.selected=false};

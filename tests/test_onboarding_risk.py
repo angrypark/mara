@@ -9,6 +9,7 @@ from datetime import date,datetime,timedelta,timezone
 from pathlib import Path
 from unittest.mock import patch
 from mara.agents import DemoModel
+from mara.engine import ContextNeedsInput
 from mara.connection import save_private
 from mara.domain import market,profile
 from mara.onboarding import PortfolioSetup,InputError
@@ -132,6 +133,58 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.app.state()['job']['status'],'interrupted')
         self.app.start(self.value);self.app.thread.join(10)
         self.assertEqual(self.app.state()['job']['status'],'completed')
+
+    def test_context_questions_are_actionable_and_answer_reaches_next_analysis(self):
+        question='추가 투자금의 출처와 투입 시점을 알려주세요.'
+        class AskOnce(TestModel):
+            def complete(model,role,guide,p,contract):
+                result=super().complete(role,guide,p,contract)
+                if role=='context' and not p['profile'].get('context_notes'):
+                    result['missing']=[question]
+                return result
+        self.app.model_factory=AskOnce
+        self.app.start(self.value);self.app.thread.join(10)
+        state=self.app.state();job=state['job']
+        self.assertEqual(job['status'],'needs_input');self.assertEqual(job['questions'],[question])
+        self.assertNotIn('토스 연결',job['message']);self.assertIsNone(state['latest'])
+        with self.app.session() as s:
+            output=s.get(job['context_output_id'])['body']
+            self.assertEqual(output['output']['missing'],[question])
+            self.assertEqual(len(s.events('agent_output')),1)
+            self.assertFalse(s.events('proposal'));self.assertFalse(s.events('broker_intent'))
+        answer='추가 자금은 별도 저축이며 다음 달에 투입할 계획이에요.'
+        self.app.start(dict(self.value,context_notes=answer));self.app.thread.join(10)
+        state=self.app.state();self.assertEqual(state['job']['status'],'completed')
+        self.assertEqual(state['draft']['context_notes'],answer)
+        with self.app.session() as s:
+            inputs=[x['body'] for x in s.events('agent_input') if x['body']['role']=='context']
+            self.assertEqual(inputs[-1]['payload']['profile']['context_notes'],answer)
+            self.assertEqual(inputs[-1]['payload']['profile']['asset_scope'],'financial_assets')
+
+    def test_old_context_stop_recovered_once_without_rewriting_records(self):
+        class Asking(TestModel):
+            def complete(model,role,guide,p,contract):
+                result=super().complete(role,guide,p,contract)
+                if role=='context':result['missing']=['필수 현금의 사용 시점을 알려주세요.']
+                return result
+        self.app.model_factory=Asking
+        self.app.job('legacy-job','running','분석 중')
+        with self.assertRaises(ContextNeedsInput):self.app.generate(self.value,self.snapshot)
+        self.app.job('legacy-job','failed','기존 일반 오류',error_type='ValueError')
+        with self.app.session() as s:original=s.latest('onboarding_job')
+        self.app.recover();state=self.app.state()
+        self.assertEqual(state['job']['status'],'needs_input')
+        self.assertEqual(state['job']['previous_job_event'],original['id'])
+        self.app.recover()
+        with self.app.session() as s:
+            self.assertEqual(s.get(original['id']),original)
+            self.assertEqual(len([r for r in s.events('onboarding_job') if r['body']['status']=='needs_input']),1)
+
+    def test_generic_error_not_reclassified_without_valid_context_result(self):
+        self.app.job('unknown','running','pending')
+        with self.app.session() as s:s.append('failed',{'error_type':'ValueError'},date.today().isoformat(),'missing-output')
+        self.app.job('unknown','failed','기존 일반 오류',error_type='ValueError')
+        self.app.recover();self.assertEqual(self.app.state()['job']['status'],'failed')
 
     def test_model_config_not_exposed_and_permissions(self):
         self.app.model_factory=None

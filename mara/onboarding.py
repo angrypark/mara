@@ -11,10 +11,10 @@ from datetime import date,datetime,timedelta,timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from . import domain as d
-from .agents import HTTPModel
+from .agents import HTTPModel,validate_output
 from .codex_model import CodexModel,CodexError,status as codex_status
 from .connection import identity,save_private
-from .engine import Engine
+from .engine import Engine,ContextNeedsInput
 from .store import Store
 from .reporting import present
 from .toss import TossClient,secret_config
@@ -25,7 +25,7 @@ FIELDS={'goal','horizon_months','total_assets','monthly_income','monthly_expense
     'max_loss_fraction','max_position_fraction','contribution_amount','contribution_every_days','rebalance_every_days',
     'constraints','capital_amount','capital_mode','cash_krw','cash_usd','last_rebalanced','rationale','symbols',
     'risk_level','preferred_sectors','excluded_sectors','max_sector_fraction','max_equity_fraction',
-    'min_cash_fraction','max_foreign_fraction','snapshot_id','confirmed','revision_reason'}
+    'min_cash_fraction','max_foreign_fraction','snapshot_id','confirmed','revision_reason','context_notes'}
 
 
 class InputError(ValueError): pass
@@ -69,6 +69,9 @@ def inputs(value,snapshot,cap,now):
     p.update({key:numeric(v.get(key),key,1) for key in ['max_loss_fraction','max_position_fraction']})
     p.update(base_currency='KRW',markets=['US'],goal=v['goal'].strip(),cash_need_date=v.get('cash_need_date'),
              constraints=[x.strip() for x in v.get('constraints','').splitlines() if x.strip()])
+    notes=v.get('context_notes','')
+    if not isinstance(notes,str):raise InputError('추가 설명은 글로 입력해주세요.')
+    p.update(asset_scope='financial_assets',context_notes=notes.strip())
     p['criteria']={key:v.get(key) for key in ['risk_level','preferred_sectors','excluded_sectors']}
     p['criteria'].update({key:numeric(v.get(key),key,1) for key in ['max_sector_fraction','max_equity_fraction','min_cash_fraction','max_foreign_fraction']})
     try:
@@ -213,6 +216,24 @@ class PortfolioSetup:
             row=s.latest('onboarding_job')
             if row and row['body']['status']=='running':
                 s.append('onboarding_job',dict(row['body'],status='interrupted',message='서비스가 재시작됐어요. 입력을 확인한 뒤 다시 생성해주세요.'),date.today().isoformat())
+            elif row and row['body']['status']=='failed' and row['body'].get('error_type')=='ValueError':
+                # Repair only the old, identifiable R1-stop case. Keep every original event.
+                failed=s.latest('failed');jobs=s.events('onboarding_job')
+                starts=[j for j in jobs if j['body']['id']==row['body']['id'] and j['body']['status']=='running']
+                if not failed or not starts or not starts[0]['seq']<failed['seq']<row['seq']:return
+                records=s.store.db.execute('SELECT * FROM events WHERE owner=? AND run_id=? AND kind IN (?,?) ORDER BY seq',
+                    (s.owner,failed['run_id'],'agent_input','agent_output')).fetchall()
+                if len(records)!=2:return
+                source,output=[s.decode(r) for r in records]
+                b=output['body']
+                if source['kind']!='agent_input' or output['kind']!='agent_output' or b.get('role')!='context' or b.get('input_id')!=source['id']:return
+                try:validate_output('context',b['output'],source['body']['payload'])
+                except (ValueError,TypeError,KeyError):return
+                if b['output']['missing']:
+                    s.append('onboarding_job',{'id':row['body']['id'],'status':'needs_input',
+                        'message':ContextNeedsInput.message,'questions':b['output']['missing'],
+                        'context_output_id':output['id'],'previous_job_event':row['id'],
+                        'reason':'Show the validated context questions previously hidden as a generic failure'},date.today().isoformat())
 
     def start(self,value):
         value=clean_draft(value)
@@ -237,6 +258,8 @@ class PortfolioSetup:
         try:
             self.generate(value,snapshot,lambda msg:self.job(jid,'running',msg))
             self.job(jid,'completed','포트폴리오 제안과 분석 리포트를 저장했어요. 주문은 전송하지 않았어요.')
+        except ContextNeedsInput as exc:
+            self.job(jid,'needs_input',exc.message,questions=exc.questions,context_output_id=exc.output_id)
         except (InputError,CodexError) as exc: self.job(jid,'failed',str(exc))
         except Exception as exc:
             self.job(jid,'failed','생성하지 못했어요. 토스 연결·모델 설정·시장 자료를 확인한 뒤 다시 시도해주세요.',error_type=type(exc).__name__)
