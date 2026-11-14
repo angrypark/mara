@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { Window } from '../.local/test-ui/node_modules/happy-dom/lib/index.js';
 
 const html=await readFile(new URL('../web/dashboard.html',import.meta.url),'utf8');
+const reportScript=await readFile(new URL('../web/report.js',import.meta.url),'utf8');
 const script=await readFile(new URL('../web/dashboard.js',import.meta.url),'utf8');
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 async function settle(){await tick();await tick();await tick()}
@@ -30,6 +31,12 @@ async function setup(change=()=>{},generation=()=>({job_id:'new-job',status:'run
     calls.push({path,body:options?.body?JSON.parse(options.body):null});
     if(path==='/api/state')return {ok:true,json:async()=>structuredClone(state)};
     if(path==='/api/setup/draft')return {ok:true,json:async()=>({saved:true})};
+    if(path==='/api/setup/model'){
+      const config=JSON.parse(options.body);
+      state.onboarding.model={provider:config.provider,model:config.model,configured:true,
+        codex:{installed:true,authenticated:true,compatible:true,version:'test-version'}};
+      return {ok:true,json:async()=>structuredClone(state.onboarding.model)};
+    }
     if(path==='/api/setup/generate'){
       const result=generation(state);
       return {ok:!result.error,json:async()=>result};
@@ -37,7 +44,7 @@ async function setup(change=()=>{},generation=()=>({job_id:'new-job',status:'run
     throw new Error('Unexpected HTTP request: '+path);
   };
   w.document.write(html.replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,''));
-  w.eval(script+'\nwindow.__testPoll=load;');await settle();
+  w.eval(reportScript);w.eval(script+'\nwindow.__testPoll=load;');await settle();
   const $=id=>w.document.getElementById(id),form=$('setup-form');
   form.elements.namedItem('confirmed').checked=true;
   return {w,state,calls,$,form,submit:async()=>{form.requestSubmit();await settle()},poll:async()=>{await w.__testPoll();await settle()},close:()=>w.happyDOM.close()};
@@ -113,6 +120,24 @@ test('network error during submit is visible and does not erase input',async()=>
     await h.submit();assert.match(h.$('generate-message').textContent,/Network unavailable/);
     assert.equal(h.form.elements.namedItem('goal').value,'Test goal');
     assert.equal(h.$('generate').disabled,false);
+  }finally{await h.close()}
+});
+
+test('Codex selection hides API key, saves without it, and enables generation',async()=>{
+  const h=await setup(s=>{s.onboarding.model={provider:'openai',configured:false,model:null}});
+  try{
+    await h.submit();assert.match(h.$('generate-issues').textContent,/분석 모델이 설정되지/);
+    h.$('model-provider').value='codex';h.$('model-provider').dispatchEvent(new h.w.Event('change'));
+    assert.equal(h.$('api-key-field').hidden,true);
+    h.$('model-key').value='must-not-send';h.$('model-id').value='';
+    h.$('save-model').click();await settle();
+    const request=h.calls.find(x=>x.path==='/api/setup/model');
+    assert.deepEqual(request.body,{provider:'codex',model:''});
+    assert.match(h.$('model-status').textContent,/Codex 실행 준비됨/);
+    assert.doesNotMatch(h.$('generate-issues').textContent,/분석 모델이 설정되지/);
+    assert.equal(h.$('generate-feedback').dataset.kind,'success');
+    assert.match(h.$('generate-prerequisite').textContent,/Codex로/);
+    await h.submit();assert.equal(h.calls.filter(x=>x.path==='/api/setup/generate').length,1);
   }finally{await h.close()}
 });
 

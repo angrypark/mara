@@ -1,0 +1,109 @@
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+from mara.agents import CONTRACTS,validate_output
+from mara.codex_model import CodexModel,CodexError,environment,run_process
+from mara.onboarding import PortfolioSetup,InputError
+
+READY={'installed':True,'compatible':True,'authenticated':True,'version':'0.169.0'}
+RESULT={'summary':'검증용 분석','constraints':[],'missing':[]}
+
+
+class CodexTests(unittest.TestCase):
+    def model(self,runner,model=''):
+        with patch('mara.codex_model.status',return_value=READY),patch('mara.codex_model.executable',return_value='/test/codex'):
+            return CodexModel(model,runner)
+
+    @staticmethod
+    def reply(command,result=RESULT):
+        path=Path(command[command.index('-o')+1])
+        path.write_text(json.dumps({'result_json':json.dumps(result)}))
+
+    def test_independent_private_calls_with_no_shell_or_credentials(self):
+        calls=[]
+        def runner(command,prompt,directory,timeout):
+            calls.append(directory)
+            self.assertEqual(command[-1],'-')
+            self.assertNotIn('private user context',str(command))
+            self.assertIn('private user context',prompt)
+            for flag in ['--no-daemon','--ignore-user-config','--ephemeral','--skip-git-repo-check']:self.assertIn(flag,command)
+            self.assertEqual(command[command.index('--sandbox')+1],'read-only')
+            self.assertNotIn('--dangerously-bypass-approvals-and-sandbox',command)
+            self.assertIn('shell_tool',command);self.assertIn('apps',command);self.assertIn('plugins',command)
+            self.assertEqual(Path(directory).stat().st_mode&0o777,0o700)
+            self.assertEqual(Path(command[command.index('--output-schema')+1]).stat().st_mode&0o777,0o600)
+            self.reply(command)
+            return json.dumps({'type':'turn.completed'})
+        model=self.model(runner)
+        for role in ['context','evidence']:
+            result=model.complete(role,'private user context',{},CONTRACTS['context'])
+            validate_output('context',result,{})
+        self.assertNotEqual(calls[0],calls[1]);self.assertTrue(all(not Path(x).exists() for x in calls))
+        self.assertEqual(model.identity['provider'],'codex-cli')
+        with patch.dict(os.environ,{'TOSS_CLIENT_SECRET':'private','MARA_API_KEY':'private','CODEX_THREAD_ID':'private'}):
+            env=environment();self.assertNotIn('TOSS_CLIENT_SECRET',env);self.assertNotIn('MARA_API_KEY',env);self.assertNotIn('CODEX_THREAD_ID',env)
+
+    def test_missing_completion_bad_json_and_tool_calls_rejected(self):
+        traces=[json.dumps({'type':'turn.failed'}),json.dumps({'type':'thread.started'}),
+                json.dumps({'type':'item.completed','item':{'type':'command_execution'}})+'\n'+json.dumps({'type':'turn.completed'})]
+        for trace in traces:
+            def runner(command,*args):self.reply(command);return trace
+            with self.assertRaises(CodexError):self.model(runner).complete('context','',{},CONTRACTS['context'])
+        def malformed(command,*args):
+            Path(command[command.index('-o')+1]).write_text('private malformed content')
+            return json.dumps({'type':'turn.completed'})
+        with self.assertRaises(CodexError) as cm:self.model(malformed).complete('context','',{},CONTRACTS['context'])
+        self.assertNotIn('private malformed',str(cm.exception))
+
+    def test_logged_out_and_unsupported_cli_fail_before_analysis(self):
+        for update in [{'installed':False},{'compatible':False},{'authenticated':False}]:
+            with patch('mara.codex_model.status',return_value=dict(READY,**update)):
+                with self.assertRaises(CodexError):CodexModel()
+
+    def test_model_argument_injection_rejected(self):
+        with self.assertRaises(CodexError):self.model(None,'--dangerously-bypass-approvals-and-sandbox')
+
+    def test_subprocess_timeout_and_safe_provider_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(CodexError,'시간이 초과'):
+                run_process([sys.executable,'-c','import time; time.sleep(5)'],'',tmp,0.05)
+            for error,expected in [('401 secret-token','로그인'),('rate_limit secret-token','사용 한도'),('private raw content','실행에 실패')]:
+                with self.assertRaisesRegex(CodexError,expected) as cm:
+                    run_process([sys.executable,'-c','import sys;sys.stderr.write(sys.argv[1]);sys.exit(1)',error],'',tmp,5)
+                self.assertNotIn('secret-token',str(cm.exception));self.assertNotIn('private raw',str(cm.exception))
+
+
+class ProviderSettingsTests(unittest.TestCase):
+    def test_codex_selection_uses_login_and_no_api_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app=PortfolioSetup(Path(tmp)/'service')
+            with patch('mara.onboarding.codex_status',return_value=READY):
+                state=app.save_model({'provider':'codex','model':''})
+                self.assertTrue(state['configured']);self.assertEqual(state['provider'],'codex')
+                self.assertNotIn('api_key',json.loads(app.model_path.read_text()))
+                with patch('mara.onboarding.CodexModel') as factory:
+                    app.analysis_model();factory.assert_called_once_with('')
+                again=PortfolioSetup(app.directory);self.assertEqual(again.model_state()['provider'],'codex')
+            with patch('mara.onboarding.codex_status',return_value=dict(READY,authenticated=False)):
+                self.assertFalse(app.model_state()['configured'])
+                with self.assertRaisesRegex(InputError,'로그인'):app.save_model({'provider':'codex','model':''})
+
+    def test_switching_keeps_api_secret_private_and_stops_during_job(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app=PortfolioSetup(Path(tmp)/'service')
+            app.save_model({'model':'api-model','api_key':'private-test-key'})
+            with patch('mara.onboarding.codex_status',return_value=READY):
+                state=app.save_model({'provider':'codex','model':'custom-model'})
+                self.assertNotIn('private-test-key',json.dumps(state))
+                self.assertNotIn('api_key',state)
+                self.assertEqual(json.loads(app.model_path.read_text())['api_key'],'private-test-key')
+            app.save_model({'provider':'openai','model':'api-model','api_key':''})
+            self.assertEqual(app.model_state()['provider'],'openai')
+            self.assertEqual(app.model_path.stat().st_mode&0o777,0o600)
+
+if __name__=='__main__':unittest.main()

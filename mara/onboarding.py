@@ -12,9 +12,11 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 from . import domain as d
 from .agents import HTTPModel
+from .codex_model import CodexModel,CodexError,status as codex_status
 from .connection import identity,save_private
 from .engine import Engine
 from .store import Store
+from .reporting import present
 from .toss import TossClient,secret_config
 
 KST=ZoneInfo('Asia/Seoul')
@@ -125,20 +127,40 @@ class PortfolioSetup:
         if self.model_path.exists():
             try:
                 c=json.loads(self.model_path.read_text())
-                return {'configured':bool(c.get('api_key') and c.get('model')),'model':c.get('model')}
+                if c.get('provider')=='codex':
+                    info=codex_status()
+                    return {'provider':'codex','configured':info['installed'] and info['compatible'] and info['authenticated'],
+                            'model':c.get('model') or '', 'codex':info}
+                return {'provider':'openai','configured':bool(c.get('api_key') and c.get('model')),'model':c.get('model')}
             except (OSError,ValueError): pass
-        return {'configured':bool(os.environ.get('MARA_API_KEY') and os.environ.get('MARA_MODEL')),'model':os.environ.get('MARA_MODEL')}
+        return {'provider':'openai','configured':bool(os.environ.get('MARA_API_KEY') and os.environ.get('MARA_MODEL')),'model':os.environ.get('MARA_MODEL')}
+
+    def analysis_model(self):
+        if self.model_factory:return self.model_factory()
+        config=json.loads(self.model_path.read_text()) if self.model_path.exists() else None
+        if config and config.get('provider')=='codex':return CodexModel(config.get('model',''))
+        return HTTPModel(config)
 
     def save_model(self,value):
-        if not isinstance(value,dict) or set(value)-{'model','api_key'}: raise InputError('모델 설정을 확인해주세요.')
+        if not isinstance(value,dict) or set(value)-{'provider','model','api_key'}: raise InputError('모델 설정을 확인해주세요.')
+        provider=value.get('provider','openai')
+        if provider not in {'openai','codex'}:raise InputError('분석 실행 방식을 선택해주세요.')
         model=value.get('model',''); key=value.get('api_key','')
-        if not isinstance(model,str) or not re.fullmatch(r'[A-Za-z0-9._:\-]{1,120}',model): raise InputError('사용할 모델 ID를 입력해주세요.')
+        if not isinstance(model,str) or (model and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:\-]{0,119}',model)) or (provider=='openai' and not model): raise InputError('사용할 모델 ID를 입력해주세요.')
         if not isinstance(key,str) or len(key)>1000 or '\n' in key: raise InputError('API 키 형식을 확인해주세요.')
         with self.guard:
             if self.thread and self.thread.is_alive(): raise InputError('분석이 끝난 뒤 모델 설정을 변경해주세요.')
+            if provider=='codex':
+                info=codex_status(refresh=True)
+                if not info['installed'] or not info['compatible']:raise InputError('지원하는 Codex CLI를 설치하거나 업데이트해주세요.')
+                if not info['authenticated']:raise InputError('Codex 로그인이 필요해요. 터미널에서 codex login을 실행해주세요.')
+                old=json.loads(self.model_path.read_text()) if self.model_path.exists() else {}
+                # Retain an existing API credential locally when switching providers; never pass it to Codex.
+                save_private(self.model_path,dict(old,provider='codex',model=model))
+                return self.model_state()
             if not key and self.model_path.exists(): key=json.loads(self.model_path.read_text()).get('api_key','')
             if not key.strip(): raise InputError('OpenAI API 키를 입력해주세요.')
-            save_private(self.model_path,{'model':model,'api_key':key.strip()})
+            save_private(self.model_path,{'provider':'openai','model':model,'api_key':key.strip()})
         return self.model_state()
 
     def draft(self,value):
@@ -171,16 +193,16 @@ class PortfolioSetup:
         with self.session() as s:
             reports=s.events('completed'); draft=s.latest('onboarding_draft'); job=s.latest('onboarding_job')
             return {'draft':draft['body'] if draft else {},'snapshot':self.public_snapshot(s.latest('onboarding_snapshot')),
-                'model':self.model_state(),'latest':reports[-1] if reports else None,
+                'model':self.model_state(),'latest':present(s,reports[-1]) if reports else None,
                 'history':[{'id':r['id'],'as_of':r['effective'],'action':r['body']['proposal']['action'],
-                            'revision_of':r['body'].get('revision_of')} for r in reversed(reports[-40:])],
+                            'revision_of':r['body'].get('revision_of'),'previous_id':r['body'].get('previous_id')} for r in reversed(reports[-40:])],
                 'job':job['body'] if job else None,'capital_limit':self.capital_limit()}
 
     def report(self,eid):
         with self.session() as s:
             row=s.get(eid)
             if row['kind']!='completed': raise PermissionError()
-            return row
+            return present(s,row)
 
     def job(self,jid,status,message,**kwargs):
         with self.session() as s: s.append('onboarding_job',dict(id=jid,status=status,message=message,**kwargs),date.today().isoformat())
@@ -214,8 +236,8 @@ class PortfolioSetup:
     def _generate(self,jid,value,snapshot):
         try:
             self.generate(value,snapshot,lambda msg:self.job(jid,'running',msg))
-            self.job(jid,'completed','초기 제안과 검증 결과를 저장했어요. 주문은 전송하지 않았어요.')
-        except InputError as exc: self.job(jid,'failed',str(exc))
+            self.job(jid,'completed','포트폴리오 제안과 분석 리포트를 저장했어요. 주문은 전송하지 않았어요.')
+        except (InputError,CodexError) as exc: self.job(jid,'failed',str(exc))
         except Exception as exc:
             self.job(jid,'failed','생성하지 못했어요. 토스 연결·모델 설정·시장 자료를 확인한 뒤 다시 시도해주세요.',error_type=type(exc).__name__)
 
@@ -294,7 +316,7 @@ class PortfolioSetup:
         if p['proposal_capital']>p['total_assets']: raise InputError('제안 운용액이 입력한 총 금융자산보다 커요. 자산과 운용액을 확인해주세요.')
         if p['cash_need']>p['proposal_capital']: raise InputError('포트폴리오 안에서 남길 현금이 운용 총액보다 커요.')
         d.profile(p); d.holdings(actual)
-        model=self.model_factory() if self.model_factory else HTTPModel(json.loads(self.model_path.read_text()) if self.model_path.exists() else None)
+        model=self.analysis_model()
         if model.mode!='live': raise InputError('실제 제안에는 합성 모델을 사용할 수 없어요.')
         original_complete=model.complete
         def complete(role,*args):

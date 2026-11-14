@@ -7,6 +7,7 @@ import urllib.request
 import urllib.error
 from datetime import date,datetime,timedelta,timezone
 from pathlib import Path
+from unittest.mock import patch
 from mara.agents import DemoModel
 from mara.connection import save_private
 from mara.domain import market,profile
@@ -219,6 +220,10 @@ class SetupHttpTests(unittest.TestCase):
                     ('/api/setup/draft',{'goal':'x'*40000},{}),('/api/trade',{},{}),('/api/setup/model',{'model':'x'}, {})]:
                     with self.assertRaises(urllib.error.HTTPError):post(path,body,headers)
                 with urllib.request.urlopen(base+'/dashboard.js') as r:self.assertEqual(r.status,200)
+                # A running API keeps serving its matching frontend during an on-disk deployment.
+                with patch('mara.service.resource',side_effect=RuntimeError('new files being deployed')):
+                    for asset in ['/','/dashboard.js','/report.js','/dashboard.css']:
+                        with urllib.request.urlopen(base+asset) as r:self.assertEqual(r.status,200)
                 with urllib.request.urlopen(base+'/api/state') as r:
                     state=json.load(r);self.assertFalse(state['live_trading']);self.assertIsNone(state['onboarding']['latest'])
             finally:server.shutdown();server.server_close();t.join()

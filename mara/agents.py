@@ -10,8 +10,10 @@ from .domain import dumps, required, texts, weights
 PERSONAS = ('buffett','marks','bogle')
 CONTRACTS = {
  'context': {'summary':'string','constraints':['string'],'missing':['string']},
- 'evidence': {'facts':['fact id'],'changes':['string'],'uncertainties':['string']},
+ 'evidence': {'summary':'string','facts':['fact id'],'drivers':['string'],
+     'changes':['string'],'portfolio_implications':['string'],'uncertainties':['string']},
  'perspective': {'thesis':'string','weights':{'CASH':1.0},'evidence_ids':['fact id'],
+     'decision_basis':['string'],'changes_since_previous':['string'],
      'assumptions':['string'],'risks':['string'],'falsifiers':['string'],'next_checks':['string']},
  'validation': {'issues':['string'],'unsupported_claims':['string'],'qualitative_pass':True,'reason':'string'},
  'leader': {'action':'hold|adjust|defer','weights':{'CASH':1.0},'rationale':'string',
@@ -78,10 +80,15 @@ class DemoModel:
     identity = {'mode':'demo','model':'synthetic-fixture-v1'}
     def complete(self, role, guide, p, contract):
         if role == 'context': return {'summary':'DEMO: supplied context','constraints':p['profile']['constraints'],'missing':[]}
-        if role == 'evidence': return {'facts':[x['id'] for x in p['market']['facts']], 'changes':['DEMO: compare supplied snapshots'], 'uncertainties':['Synthetic fixture, not live research']}
+        if role == 'evidence': return {'summary':'모의 시장 자료를 비교하는 동작 예시예요. 실제 시황 분석이 아니에요.',
+            'facts':[x['id'] for x in p['market']['facts']], 'drivers':['합성 자료의 가격과 위험 가정을 확인해요.'],
+            'changes':['DEMO: compare supplied snapshots'], 'portfolio_implications':['실제 자금 운용 판단에 사용하지 않아요.'],
+            'uncertainties':['Synthetic fixture, not live research']}
         if role in PERSONAS:
             return {'thesis':'DEMO '+role, 'weights':p['valuation']['weights'],
                     'evidence_ids':[f['id'] for f in p['market']['facts']],
+                    'decision_basis':['DEMO: 현재 비중을 그대로 반환하는 연결 예시예요.'],
+                    'changes_since_previous':['DEMO: 이전 판단 비교 표시 예시예요.'] if p.get('previous') else [],
                     'assumptions':['Fixture only'], 'risks':['No real analysis'],
                     'falsifiers':['New verified evidence'], 'next_checks':['Check next observation']}
         if role == 'validation': return {'issues':[], 'unsupported_claims':[], 'qualitative_pass':True,'reason':'DEMO fixture'}

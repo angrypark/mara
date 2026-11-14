@@ -30,6 +30,7 @@ class Store:
           owner TEXT NOT NULL, kind TEXT NOT NULL, effective TEXT NOT NULL,
           recorded TEXT NOT NULL, run_id TEXT, body TEXT NOT NULL, digest TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS events_lookup ON events(owner,kind,effective,seq);
+        CREATE INDEX IF NOT EXISTS events_run ON events(owner,run_id,kind,seq);
         CREATE TABLE IF NOT EXISTS locks(owner TEXT PRIMARY KEY, run_id TEXT NOT NULL);
         CREATE TRIGGER IF NOT EXISTS events_no_update BEFORE UPDATE ON events
           BEGIN SELECT RAISE(ABORT,'immutable event'); END;
