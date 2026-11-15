@@ -37,6 +37,32 @@ def market():
  'assets':{'AAPL':{'kind':'STOCK','asset_class':'equity','market':'US','currency':'USD','stress_loss':.5,'liquid':False,'expense_ratio':0}},'facts':[]}
 
 class SourceTests(unittest.TestCase):
+ def test_issuer_metrics_preserve_units_dates_and_missing_fields(self):
+  import html
+  graph=[{'alternateName':'ITOT','name':'Fixture','category':'Equity','additionalProperty':[
+   {'name':'Expense Ratio:','value':'0.03'},{'name':'Benchmark Index','value':'Index'},
+   {'name':'NAV as of','value':'100','valueReference':{'value':'Nov 13, 2026'}}]},
+   {'@id':'x#fund-description','description':'Broad equity'},
+   {'@id':'x#holdings','mainEntity':{'contentUrl':src.FUNDS['ITOT']+'/latest-holdings.csv'}}]
+  component={'componentId':'keyFundFacts','dataPoints':{
+   'thirtyDayMedianBidAskSpread':{'label':'Spread','formattedValue':'0.01%','formattedAsOfDate':'Nov 13, 2026'},
+   'thirtyDayAverageVolume':{'label':'Volume','formattedValue':'1,500','formattedAsOfDate':'Nov 13, 2026'}}}
+  def page():return '<script type="application/ld+json">'+json.dumps({'@graph':graph})+'</script><walrus-render-on-client componentprops="'+html.escape(json.dumps(component),quote=True)+'"></walrus-render-on-client>'
+  r=src.fund_profile(page(),'ITOT',ASOF);self.assertEqual(r['issuer_metrics']['thirtyDayMedianBidAskSpread']['value'],.0001)
+  self.assertEqual(r['issuer_metrics']['thirtyDayAverageVolume']['value'],1500)
+  component['dataPoints']['thirtyDayMedianBidAskSpread']['formattedValue']='0.01'
+  component['dataPoints']['thirtyDayAverageVolume']['formattedAsOfDate']='Nov 16, 2026'
+  r=src.fund_profile(page(),'ITOT',ASOF);self.assertFalse(r['issuer_metrics'])
+  self.assertIn('thirtyDayMedianBidAskSpread',r['missing_issuer_metrics'])
+
+ def test_diagnostics_separate_source_time_identity_and_unit_failures(self):
+  from mara.research import safe_code
+  for date,expected in [('2026-11-16','future_observation'),('2025-01-01','stale_observation')]:
+   try:src.dated(date,ASOF,10)
+   except ValueError as e:self.assertEqual(safe_code(e),expected)
+  self.assertEqual(safe_code(src.EvidenceError('currency_mismatch')),'currency_mismatch')
+  self.assertEqual(safe_code(KeyError('provider secret')),'source_structure_changed')
+
  def test_annual_ytd_units_restatements_and_future_are_separate(self):
   v=financial();rows=v['facts']['us-gaap']['Revenues']['units']['USD']
   rows.extend([observation(60,end='2026-09-30',start='2026-01-01',filed='2026-11-01',form='10-Q'),observation(102,filed='2026-03-01'),observation(999,filed='2026-12-01')])
@@ -71,6 +97,15 @@ class SourceTests(unittest.TestCase):
   self.assertAlmostEqual(src.orderbook(raw,ASOF,NOW)['spread_fraction'],1/99.5)
   for change in ({'asks':[]},{'bids':[{'price':'101','volume':'2'}]},{'timestamp':'2026-01-01T00:00:00+00:00'},{'timestamp':'2026-11-15T23:59:59+00:00'}):
    with self.assertRaises(ValueError):src.orderbook(dict(raw,**change),ASOF,NOW)
+ def test_empty_provider_book_is_not_parse_failure_or_executable_quote(self):
+  raw={'timestamp':None,'currency':'USD','asks':[],'bids':[]}
+  value=src.orderbook(raw,ASOF,NOW)
+  self.assertEqual(value['availability'],'no_quote');self.assertNotIn('spread_fraction',value)
+  with tempfile.TemporaryDirectory() as tmp:
+   r=Research(tmp,NOW);r.record('orderbook','AAA',lambda:value,'https://developers.tossinvest.com/docs/market-data')
+   self.assertEqual(r.calls[-1]['status'],'skipped');self.assertEqual(r.calls[-1]['reason'],'quote_not_observed');self.assertFalse(r.facts)
+  with self.assertRaises((ValueError,TypeError)):
+   src.orderbook(dict(raw,asks=[{'price':'100','volume':'1'}]),ASOF,NOW)
  def test_macro_observation_is_not_publication_or_riskfree_daily_return(self):
   csv='Date,3 Mo,2 Yr,10 Yr,30 Yr\n11/13/2026,4.0,4.1,4.3,4.7\n11/16/2026,9,9,9,9\n'
   out=src.treasury(csv,ASOF);self.assertEqual(out['observations'][0]['date'],'2026-11-13')
@@ -96,7 +131,7 @@ class SourceTests(unittest.TestCase):
    from mara.decision import assessment
    self.assertTrue(assessment({'AAPL':1},m)['blockers'])
    self.assertTrue(all(c['status'] in ('failed','skipped') for c in m['research']['calls']));self.assertNotIn('secret text',json.dumps(m))
-   r.used_chars=44000
+   r.used_chars=64000
    r.record('fed','US',lambda:{'items':[],'limits':'x'},src.FED)
    self.assertEqual(r.calls[-1]['status'],'skipped')
  def test_malformed_feed_is_local_failure_and_raw_is_preserved(self):

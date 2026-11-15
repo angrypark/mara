@@ -6,6 +6,7 @@ import os
 import plistlib
 import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -32,7 +33,15 @@ def main():
             if old.get('Label')!=LABEL: raise ValueError('Unrelated LaunchAgent exists')
             subprocess.run(['launchctl','bootout',TARGET],capture_output=True)
         PLIST.write_bytes(plistlib.dumps(obj)); PLIST.chmod(0o600)
-        subprocess.run(['launchctl','bootstrap',DOMAIN,str(PLIST)],check=True)
+        # bootout can return before launchd finishes removing the old job.
+        # Retry that transient bootstrap error, bounded to three seconds.
+        command=['launchctl','bootstrap',DOMAIN,str(PLIST)]
+        for attempt in range(7):
+            loaded=subprocess.run(command,capture_output=True,text=True)
+            if loaded.returncode==0:break
+            if loaded.returncode!=5 or attempt==6:
+                raise subprocess.CalledProcessError(loaded.returncode,command,output=loaded.stdout,stderr=loaded.stderr)
+            time.sleep(.5)
     elif args.action=='restart': subprocess.run(['launchctl','kickstart','-k',TARGET],check=True)
     elif args.action=='stop': subprocess.run(['launchctl','bootout',TARGET],check=True)
     else:

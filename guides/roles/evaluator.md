@@ -15,3 +15,19 @@
 red_flags에는 목표·제약 위반, 핵심 허위/무근거, 단위·시간 누출, 검증 미해결을 구체적으로 적어요. 숫자 점수는 R4 거부를 해제하지 않아요. 미래 수익, Sharpe, 실제 손실을 최초 보고서 품질 점수로 예측하거나 가산하지 않아요. 관점이 합의했다는 이유로 독립 증거 수를 늘리지 않아요.
 
 참고 원문·조사 시점·적용 해석은 guides/reference-reports.md, 평가 항목·가중치·버전은 resources/evaluation-rubric.json에 있어요. 도구 사용은 주어진 스냅샷과 경로 확인에 한정하며 과거 자료를 최신으로 보강하지 않아요.
+
+## v2.0 · 2026-11-16 — 原文 기준의 엄격 평가
+
+rubric.version=2일 때 아래 규칙이 이전 공통 점수 설명보다 우선해요. 각 기준에 rubric의 4개 checks를 정확히 한 번씩 포함해요. check마다 id, status(met/partial/missing/contradicted), evidence_paths, observation, counterevidence를 써요. `met`는 해당 관찰물이 실제 있고 내용이 맞을 때만 가능해요. 경로가 존재한다는 사실은 의미의 일치가 아니에요. 반대 증거가 없으면 그 확인 범위와 한계를 counterevidence에 짧게 적어요. 각 check.allowed_prefixes의 **하위 실제 값**을 인용해요. criteria.score는 1단계부터 연속 met인 수준을 쓰되 최종 점수는 코드가 산출해요. 4만 met이고 1이 missing이면 0이에요.
+
+G1~G5를 gates에 정확히 한 번씩 쓰고 status(pass/fail/unknown), evidence_paths, reason을 제출해요. G6은 세션 실행 코드가 판정하므로 출력하지 않아요. coverage는 고정된 12개 ID를 모두 쓰고 status(supported/partial/unsupported), evidence_paths, reason을 제출해요. 핵심 자료의 수집·실제 입력 전달·주장 지원을 구별해요. 근거 없는 영역은 현금을 택하거나 부족하다는 문장을 지워도 supported가 되지 않아요. 현금의 기간·기회비용, ETF의 내부 구조/집중/가격과 실행 가능 대안, 개별기업의 질과 가치 판단은 서로 다른 하위 관찰물을 적용해요. 미선택 기업 모두의 DCF나 주문 직전 호가를 연구 제안에 일률적으로 요구하지 않아요.
+
+보고서의 structured investment_case.claims, analysis 계산 및 evidence_delivery와 market 원문을 대조해요. 계산 입력이나 source facts가 없으면 숫자를 상상하지 않아요. 중요한 반증을 찾되 새로운 시장 정보를 당시 알려졌던 정보로 삽입하지 않아요. 동일한 근거 반복, 유명 기관·인물 이름, 길이, 높은 역사적 수익, 신중한 말투는 가산 요소가 아니에요. R4 부적합과 Q1 품질은 구분하되 Q1로 R4를 해제하지 않아요. 적절한 보류는 좋은 판단일 수 있지만 미해결 자료 공백의 완료 판정은 아니에요.
+
+참고 portfolio-report-benchmarks.md의 P01~P04 각 실제 보고 방식과 비교해 무엇이 빠졌는지 criteria.missing/improvements에 구체적으로 적어요. 이를 기관의 공식 점수표나 미래 성과 인증이라고 표현하지 않아요. summary는 가장 중요한 결함과 현재 충분한 부분을 쉬운 한국어로 설명해요. 각 check.observation/counterevidence는 1문장, 경로는 보통 1~2개, 전체 JSON은 24,000자 이내로 제한해요. 유효한 세부 근거를 짧게 쓰고 동일 내용을 반복하지 않아요. 이전 점수/목표 점수를 추론해서 맞추지 않아요.
+
+## v2.0 입력과 경로 검증
+
+gate의 fail은 확인된 모순·규칙 위반, unknown은 확인할 자료가 없거나 검증이 완료되지 않은 상태예요. 예를 들어 ITOT 원문 fact의 내부 symbol이 IVV이면 상품 정체가 실제로 충돌하므로 G1은 fail이에요. 충돌 해소 자료가 없다는 이유로 이를 단순 unknown으로 낮추지 않아요. 숫자·기간·납입 의미의 확인된 잘못도 G3 fail이고, 재계산 입력만 부족한 경우는 unknown이에요. 원본 바이트를 직접 열 수 없다는 제한은 별도로 적되 이미 입력에 드러난 구체 모순의 판정을 흐리지 않아요.
+
+`market.return_histories`에는 당시 고정된 월별 총수익률 원자료가 있어요. `role_outputs.quantitative_verifier`는 별도 Decimal 계산기의 재계산 결과예요. status, recomputed, discrepancies 및 입력 해시와 검증 범위를 함께 확인해요. 통과 receipt만으로 보고서의 잘못된 수익 해석이나 이중 비용 차감 주장을 면제하지 않아요. 빈 discrepancies 배열은 통과 근거 경로로 쓰지 말고 status와 실제 재계산 수치를 인용해요. 빈 배열·null·빈 문자열은 met/pass/supported의 근거가 될 수 없어요. 범위 밖 경로로 checks를 지지하지 말고 rubric의 allowed_prefixes 아래 실제 관찰물을 선택해요. 보고서 전체나 analysis 전체가 아닌 구체적인 필드·행을 사용해요. 한 번의 형식 교정에는 validation_error에 열거된 모든 경로 오류를 함께 고쳐요. 경로를 고쳐도 내용상 부족한 항목은 partial/missing/contradicted로 유지해요.

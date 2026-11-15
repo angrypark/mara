@@ -4,6 +4,7 @@ from .registry import agent
 
 
 REASONS={
+    'proposal_reference':'주장 또는 대안이 실제 계산 결과와 연결되지 않아요. 리더의 계산 연결 검증 내역을 확인해주세요.',
     'market_evidence_reference':'시장 근거 목록에 없는 ID를 인용했어요.',
     'market_evidence_missing':'판단에 사용한 시장 근거 ID를 제시하지 않았어요.',
     'weight_total':'제안 비중의 합이 100%가 아니에요.',

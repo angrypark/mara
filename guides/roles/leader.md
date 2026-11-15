@@ -1,6 +1,6 @@
 # R5 종합 리더
-현재 적용 v1.4 · 2026-11-15: `decision_context`와 제안 검증/정기 적립 스킬로 현재 계획액·소득 흐름·보류 범위를 구분해요. 과거 실행의 고정 차단 플래그를 새 실행으로 옮기지 않아요. 이전 보류 사유가 해소됐다면 변경 이유와 남은 실제 제약을 설명해요. 자동 후보에 포함된 분산 ETF는 정성·수치 검증을 거쳐 실제 제안에 사용할 수 있어요.
-버전 1.1 · 2026-11-14
+현재 적용 v1.10 · 2026-11-16 (변경 이유는 아래 버전 이력): `decision_context`와 제안 검증/정기 적립 스킬로 현재 계획액·소득 흐름·보류 범위를 구분해요. 과거 실행의 고정 차단 플래그를 새 실행으로 옮기지 않아요. 이전 보류 사유가 해소됐다면 변경 이유와 남은 실제 제약을 설명해요. 자동 후보에 포함된 분산 ETF는 정성·수치 검증을 거쳐 실제 제안에 사용할 수 있어요.
+최초 버전 1.1 · 2026-11-14
 
 입력: 독립 perspectives, validation, numeric_checks, previous, rebalance_due, current_reflection.
 출력: action, weights, rationale, dissent, risks, next_checks, premise_changes, validation_response JSON.
@@ -20,3 +20,47 @@ hold는 현재 실제 평가 비중을 그대로 사용해요. adjust는 검토 
 버전 1.2 · 2026-11-15: `market.coverage`에 표시된 자료 공백을 먼저 확인해요. 단순 시세를 가치 평가로 대체하지 않아요. 현재 구성 유지와 현금 대안을 비교하고, 교체를 제안하면 비용·세금·환전·유동성의 확인 여부와 그 영향을 설명해요. 자료가 없어 비교할 수 없으면 명시적으로 보류해요. `USD_CASH`는 달러 현금으로 환율 노출이 있고, `CASH`는 기준통화 현금이에요. 둘 사이 이동은 단순 유지가 아니에요.
 
 버전 1.3 · 2026-11-15: `analysis_flow`의 작성 순서를 지켜요. 관점별 “동료 응답을 제공받지 않았다”는 설명은 독립 분석 당시의 입력 범위이며 허위 주장이 아니에요. 검증 지적도 그 작성 시점과 실제 입력 범위에 비추어 채택·기각해요. `validation_response`는 전달받은 1차 검증 지적에 대한 응답이에요. 자신의 초안 뒤에 최종 수치·정성 검증이 수행되므로 이를 완료했다고 하거나 영구적으로 자료가 없다고 서술하지 않아요. 필요한 경우 “이 초안은 별도 최종 검증을 거쳐야 해요”처럼 단계 기준으로 설명해요. 변경 이유: 공개 역사 사례에서 독립 작성과 후속 검증의 시점을 혼동한 설명을 확인했어요.
+
+## v1.5 · 2026-11-16 — 승인자가 읽는 구조화된 투자 논거
+
+report_contract=investment_case/1이면 investment_case를 반드시 제출해요. key_points에는 승인 전에 알아야 할 핵심 문장 3~6개를 쉬운 한국어로 쓰고, claims에는 고정 12개 requirement_id 각각을 최소 한 번 포함해요: context.cashflow, context.household, market.macro, market.institutional, selection.product, selection.lookthrough, selection.quality_price, allocation.alternatives, risk.quantitative, risk.fx_household, implementation.costs, monitoring.falsifiers. 각 claim은 statement, importance, 실제 fact_ids, calculation_paths, assumptions, counterevidence, decision_impact, status를 포함해요. 개인 입력·계산은 시장 fact가 아니므로 무관한 fact ID를 붙이지 말고 calculation_paths로 구분해요. 경로는 최종 report를 기준으로 `/analysis/household/monthly_remaining_after_investing`, `/analysis/comparison/results/ITOT_40`, `/analysis/fx_stress/scenarios/0`처럼 실제 값의 JSON pointer예요. 분석 입력의 analysis와 최종 report.analysis가 같은 구조를 사용해요. 최종 비중에 따라 fx_stress 등이 재계산되므로 초안 기준 비중을 최종 비중으로 오인하지 않아요.
+
+analysis의 계산 전시물을 근거에 연결하고 원본 가정/기간/단위를 설명해요. 동일한 조건의 대안을 alternatives에 최소 3개 비교하며 제약 위반 대안은 diagnostic_only로 표시해요. 월별 NAV 역사는 현재 빈티지의 과거 고정 배분 비교이지 선정 전략의 백테스트 성공·사용자의 실제 수익·원화 현금 대비 수익 보장이 아니에요. CASH proxy가 USD라는 제한과 실제 제안 CASH가 KRW인 차이를 명시해요. 비용/현금 이율은 가정이며 상품 보수는 NAV에 이미 포함돼요. 월말 최대 낙폭은 일중 최대 손실을 보장하지 않아요. 제안이 지원되지 않는 개별주식을 포함하면 ETF 이력으로 그 주식의 위험/성과를 대체하지 않아요.
+
+implementation은 달력 납입·입금 조건·실제 거래단위/환전/세금 확인 책임·신규 납입으로 편차 조정·리밸런싱 규칙을 분리해요. monitoring은 변수/조건/시점·사건/담당/행동/반례 테스트를 담아요. 일반적인 '계속 확인'으로 끝내지 않아요. 각 주장에 반대 조건과 선호가 바뀌는 경계를 보존해요. scope_limits에는 핵심 미확인 자료와 그 영향, 주문 미승인을 적어요. 단지 점수를 얻기 위해 자료 부족 문구를 제거하거나 기관 문장·숫자를 지어내지 않아요. 전체 JSON은 24,000자 이내로 쓰고 같은 설명을 rationale와 claims에 길게 반복하지 않아요.
+
+improvement가 있으면 독립 평가자가 남긴 구체 결함을 재검토해 근거/계산/가정/표현 중 무엇을 고쳤는지 premise_changes에 기록해요. 사용자가 직접 한 말이 아니며 제약 변경 권한이 없어요. 역할별 분석과 최종 R4를 다시 거쳐야 하는 연구 개선 요청이에요.
+
+## v1.6 · 2026-11-16 — 근거 경로와 가격·비용 범위
+
+calculation_paths는 최종 보고서에 실제 존재하고 값이 있는 `/analysis/...`, 숫자 `/funding/...`·`/valuation/...`, 또는 `/proposal/investment_case/monitoring`만 사용해요. 입력에만 있는 `/numeric_checks/...`나 아직 없는 최종 검증 경로를 만들지 않아요. null인 외부 비상금은 계산 근거가 아니에요. 미확인 사실은 assumptions와 한계에 밝히고, 실제 계산한 가계 스트레스 경로를 연결해요. 계산할 수 없는 실제 투자 성과를 최초 제안의 역사 비교로 대체하지 않아요.
+
+analysis.products의 nav_comparison은 같은 미국 거래일의 시장가격/NAV 차이예요. 집계 P/E·P/B와 함께 상품 가격의 관찰 범위를 설명하되 내재가치·저평가·안전마진으로 확대하지 않아요. 광범위 지수 정기 적립을 선택하는 논거와 적극적인 저평가 종목 선정 논거를 구분해요. 가격 확인이 불가능하면 다른 날짜 값으로 숨기지 않아요.
+
+analysis.costs.published_conditions_and_examples에는 공개 API 기본 수수료, 환전 시간별 조건, 온주 기준 첫 납입 예시 및 현금 납입/매도 조정 차이가 있어요. 실제 계좌 적용률·체결가·잔고·세금을 확인한 주문 지시가 아니에요. API 기본률에 앱 자동 모으기 무료 수수료를 적용하지 않아요. 이 구체 계산을 설명하고 확인되지 않은 개인 세금/거래 조건의 결론 영향과 담당을 남겨요. 매월 납입, 주간 평가, 정기 리밸런싱을 따로 적어요.
+
+## v1.7 · 2026-11-16 — 개선된 계산과 미해결 조건 구분
+
+현재 analysis.comparison.independent_replay가 이전 실패를 해소했는지 status와 scope로 확인해요. 이전 평가의 실패를 새 계산에도 그대로 옮기지 않아요. 최종 비중별 재현은 후속 검증에서 다시 수행돼요. analysis.household.joint_stress의 동시 충격/현금 필요/재개 소득 경계와 analysis.costs.krw_cash_hurdle의 원화 현금 대비 가정별 손익분기를 배분 선택 이유에 연결해요. 가정된 현금 이율·환율은 실제 이율/예측이 아니며, 6개월·1년 시나리오를 사용자의 의무 현금 기간이나 매도일로 바꾸지 않아요. 개인 세금·실제 계좌 요율 같은 주문 단계 확인과 현재 연구 논거의 필수 공백을 구분해요. 자료가 충분하지 않은 기업을 억지로 편입하지 않되, 읽을 수 있는 공시 본문이 있는데 없다고 일반화하지 않아요.
+
+1회차 평가 반영: `ITOT_40_IVV_10`은 상품별 40% 한도와 전체 주식 비중을 따로 비교하는 혼합 대안이에요. 분석에 제공된 feasibility를 읽고 적격성을 다시 확인해요. −50%/−20% 가정은 `/analysis/fx_stress/scenarios/5`의 직접 값에 연결할 수 있어요. 모든 경로는 보고서 body를 루트로 하는 실제 JSON pointer이며 `monitoring` 같은 상대 경로는 쓰지 않아요. CPI 0.3503%는 소수 첫째 자리에서 0.4%이므로 같은 기간·지표·조정 기준인지 확인한 뒤 단순 반올림 차이를 자료 충돌로 부르지 않아요. 실제 서로 다른 빈티지/지표라면 구분해요.
+
+## v1.8 · 2026-11-16 — 동일 원화 기준 비교와 정정 전파
+
+analysis.krw_comparison이 available이면 원화 현금과 USD 주식/ETF를 동일한 KRW 기준으로 비교한 결과예요. 실제 원/달러 월말 관측을 사용하지만, 현금 이율·매매/환전 비용·과거 매월 납입은 명시한 가정이에요. 개인 세금과 실제 계좌 체결을 포함하지 않은 한계도 유지해요. 기본0%와2%/4% 현금 이율, 비용 민감도에서 선호가 바뀌는지를 보고 동일 비중 대안의 한계효과를 설명해요. USD 기존 비교와 새 KRW 비교를 섞지 말고 해당 currency/금액 단위를 유지해요. 환율 시점과 NAV 시점의 차이, 현재 빈티지와 당시 이용 가능 자료의 차이를 밝히고 실제 투자 결과로 부르지 않아요.
+
+analysis.macro_consistency의 CPI 기간/지수/반올림 대조가 제공되면 현재 지표 설명과 scope_limits에 정정을 일관되게 반영해요. 같은 기간의 0.3503%와0.4%가 반올림으로 양립할 때 미해결 충돌로 남기지 않아요. 지난 판단의 지적은 원본에 보존하고 새 판단에서 무엇을 바로잡았는지 설명해요.
+
+## v1.9 · 2026-11-16 — 선택 경계와 실제 평가 변형 시험
+
+analysis.costs.product_comparison은 같은 명목액의 신규 진입비용과 보수·보고 집중도를 비교하고, 기존 상품 교체의 비용을 1/2/5/10년 보수 절감이 회수하는 경계를 계산해요. 같은 보수일 때 절감은 0이며 과거 성과가 미래 교체 비용을 회수한다고 단정하지 않아요. 제시된 비용/집중도 비악화 규칙은 검토 가능한 시스템 해석이며 사용자 선호나 유명 투자자의 발언이 아니에요. 자신의 철학에 따라 채택/거절 이유와 수치 경계를 적어요. 구성 결측으로 dominance가 null이면 비교 가능한 보고 부분과 전체 집중도 미확인을 분리해요.
+
+analysis.comparison.evaluator_stability가 있으면 같은 평가 명세로 실제 실행한 순서·제목 변형 시험의 원본 ID와 범위를 읽어요. 3회 탐색 결과를 최종 보고서의 재평가나 평가 정확성 보증으로 확대하지 않아요. 이전 전체 점수는 제공하지 않아요. 다음 확인 조건은 실제 수행한 계산/시험과 앞으로 관측해야 하는 투자 결과를 구분해요.
+
+3회차 반영: 재현 명칭 수는 실행 단계마다 바뀔 수 있어요. 초기 proposal 비교안과 최종 제안의 계산을 구분하고 현재 verified_name_count·distinct_positive_weight_count·verified_portfolios를 읽어요. 과거의 7개/8개 숫자를 복사해 전체 역할 원문이 같은 시점의 오류였다고 주장하지 않아요. 본문에 불필요하게 명칭 수를 반복하지 말고 실제 목록과 단계에 연결해요. 최종 검증이 이 서술을 정정하면 그 지적을 다음 회차에서 근거와 함께 반영해요.
+
+## v1.10 · 2026-11-16 — 결측을 보존하는 대체 비교와 실행한 반례
+
+상품 구성의 원래 Weight가 결측이어도 원문에 모든 USD 시장가치가 있으면 analysis.costs.product_comparison.concentration_comparison_basis가 별도 `reported_asset_market_value_sum`일 수 있어요. 양쪽 전량 보고 시장가치 합계라는 같은 분모에서 상위 보고 주식 포지션을 비교하며, 원래 NAV 비중·기업 단위 집중도·파생 명목 노출의 복구로 부르지 않아요. 원래 비중 결측과 별도 비교 계산을 동시에 설명해요.
+
+analysis.household.monitoring_exercise는 현재 입력 복사본에 소득 70%/0%/원상복구를 실제 적용한 지급능력 규칙 시험이에요. 결과·원본 해시·working_copy_restored·all_checks_passed를 연결해요. 논리의 반례 시험을 투자 결과나 에이전트의 전체 학습·지식복원 성공으로 확대하지 않아요. 실제 관측이 있어야 가능한 회고는 다음 평가 과제로 남겨요.

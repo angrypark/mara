@@ -85,6 +85,256 @@
           "maxLength": 4000
         }
       }
+    },
+    "investment_case": {
+      "type": "object",
+      "properties": {
+        "key_points": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "maxItems": 6,
+          "minItems": 3
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "requirement_id": {
+                "enum": [
+                  "context.cashflow",
+                  "context.household",
+                  "market.macro",
+                  "market.institutional",
+                  "selection.product",
+                  "selection.lookthrough",
+                  "selection.quality_price",
+                  "allocation.alternatives",
+                  "risk.quantitative",
+                  "risk.fx_household",
+                  "implementation.costs",
+                  "monitoring.falsifiers"
+                ]
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 800
+              },
+              "importance": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 250
+              },
+              "fact_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "maxItems": 8,
+                "minItems": 0
+              },
+              "calculation_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 240
+                },
+                "maxItems": 6,
+                "minItems": 0
+              },
+              "assumptions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                },
+                "maxItems": 4,
+                "minItems": 0
+              },
+              "counterevidence": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "decision_impact": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "status": {
+                "enum": [
+                  "supported",
+                  "conditional",
+                  "unresolved"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "requirement_id",
+              "statement",
+              "importance",
+              "fact_ids",
+              "calculation_paths",
+              "assumptions",
+              "counterevidence",
+              "decision_impact",
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 18,
+          "minItems": 12
+        },
+        "alternatives": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "weights": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "comparison_path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "decision": {
+                "enum": [
+                  "preferred",
+                  "rejected",
+                  "conditional",
+                  "diagnostic_only"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 700
+              },
+              "change_condition": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "name",
+              "weights",
+              "comparison_path",
+              "decision",
+              "reason",
+              "change_condition"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 8,
+          "minItems": 3
+        },
+        "implementation": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 700
+          },
+          "maxItems": 8,
+          "minItems": 3
+        },
+        "monitoring": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "variable": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "condition": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              "check_at": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 150
+              },
+              "owner": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "action": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 350
+              },
+              "counterexample_test": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 350
+              }
+            },
+            "required": [
+              "variable",
+              "condition",
+              "check_at",
+              "owner",
+              "action",
+              "counterexample_test"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 10,
+          "minItems": 3
+        },
+        "scope_limits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "maxItems": 8,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "key_points",
+        "claims",
+        "alternatives",
+        "implementation",
+        "monitoring",
+        "scope_limits"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [

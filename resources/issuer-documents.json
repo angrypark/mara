@@ -1,9 +1,45 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "reviewed_on": "2026-11-16",
   "policy": "공식 IR에서 확인한 보조 원문. 등록되지 않은 발행사는 SEC 본문 실패 시 명시적으로 공백을 반환해요. 후속 검토에서 URL·문서 시점·발행사 관계를 재확인해요.",
   "documents": {
-    "MSFT": {"url": "https://www.microsoft.com/investor/reports/ar26/index.html", "title": "Microsoft 2026 Annual Report", "kind": "issuer_annual_report", "verified_on": "2026-11-16"},
-    "AAPL": {"url": "https://www.apple.com/newsroom/2026/11/apple-reports-fourth-quarter-results/", "title": "Apple fiscal 2026 fourth quarter results", "kind": "issuer_earnings_release_not_full_10K", "verified_on": "2026-11-16"}
+    "MSFT": {
+      "url": "https://www.microsoft.com/investor/reports/ar26/index.html",
+      "title": "Microsoft 2026 Annual Report",
+      "kind": "issuer_annual_report",
+      "verified_on": "2026-11-16"
+    },
+    "AAPL": {
+      "url": "https://www.apple.com/newsroom/2026/11/apple-reports-fourth-quarter-results/",
+      "title": "Apple fiscal 2026 fourth quarter results",
+      "kind": "issuer_earnings_release_not_full_10K",
+      "verified_on": "2026-11-16"
+    },
+    "BKNG": {
+      "url": "https://d18rn0p25nwr6d.cloudfront.net/CIK-0001075531/031e5c54-ace2-4378-9b7e-3a126c47ad9b.html",
+      "title": "Booking Holdings fiscal 2025 Form 10-K",
+      "kind": "issuer_linked_10K_html_mirror",
+      "verified_on": "2026-11-16",
+      "filing_accession": "0001075531-26-000009",
+      "required_text": [
+        "Booking Holdings Inc.",
+        "December 31, 2025"
+      ],
+      "verification_source": "https://ir.bookingholdings.com/financials/sec-filings/sec-filings-details/default.aspx?FilingId=19162743"
+    },
+    "CTAS": {
+      "url": "https://materials.proxyvote.com/Approved/172908/20260831/10K_641275.PDF",
+      "title": "Cintas fiscal 2026 Form 10-K",
+      "kind": "issuer_shareholder_10K_pdf",
+      "verified_on": "2026-11-16",
+      "filing_accession": "0000723254-26-000028",
+      "required_text": [
+        "Cintas Corporation",
+        "May 31, 2026",
+        "CTAS"
+      ],
+      "verification_source": "https://www.sec.gov/Archives/edgar/data/723254/000072325426000028/ctas-20260531.htm",
+      "verification_scope": "Cover company, ticker, fiscal period and sections compared with SEC original; PDF pages 1-3. Shareholder distribution copy, not an independent source."
+    }
   }
 }

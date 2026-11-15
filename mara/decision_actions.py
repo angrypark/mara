@@ -5,6 +5,7 @@ from datetime import date
 from .dialogue import DialogueError
 from .workbench import run_events
 from .engine import Engine
+from .output_validation import AgentOutputError
 from .evaluation import evaluate_report
 
 
@@ -78,6 +79,8 @@ class DecisionActions:
                         revision_reason=req['amendment']['change']['summary'],amendment=req['amendment'])
                     result['new_run_id']=r['run_id']
                 result.update(status='completed',message='독립 평가를 저장했어요.' if req['action']=='evaluate' else '변경에 따른 새 판단과 후속 검증을 저장했어요. 원본과 비교해 확인해주세요.')
+            except AgentOutputError as exc:
+                result.update(error_type=type(exc).__name__,message=exc.message,output_validation=exc.details)
             except Exception as exc:
                 result.update(error_type=type(exc).__name__,message='후속 분석이 끝나지 못했어요. 원본 제안은 보존됐어요. 실행 상태와 추가 확인 항목을 확인해주세요.')
             s.append('decision_action_result',result,date.today().isoformat(),run_id)

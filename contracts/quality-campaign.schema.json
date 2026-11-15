@@ -1,0 +1,287 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "mara.quality-campaign/1.0.0"
+    },
+    "campaign_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "G6": {
+      "enum": [
+        "pass",
+        "unknown"
+      ]
+    },
+    "completed_improvements": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "required_improvements": {
+      "const": 5
+    },
+    "strict_quality_pass": {
+      "type": "boolean"
+    },
+    "checkpoint": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "rounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "round",
+          "completed_id",
+          "run_id",
+          "evaluation_event_id",
+          "evaluator_input_id",
+          "evaluator_output_id",
+          "evaluator_input_hash",
+          "evaluator_output_hash",
+          "rubric_hash",
+          "score"
+        ],
+        "properties": {
+          "round": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "evaluator_input_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "evaluator_output_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "score": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "maximum": {
+                "const": 100
+              },
+              "band": {
+                "enum": [
+                  "strong",
+                  "needs_improvement",
+                  "major_gaps"
+                ]
+              },
+              "proposal_blocked": {
+                "type": "boolean"
+              },
+              "critical_findings": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "assessment": {
+                "enum": [
+                  "critical_review",
+                  "quality_review"
+                ]
+              },
+              "scored_weight": {
+                "const": 100
+              },
+              "rule": {
+                "type": "string",
+                "minLength": 1
+              },
+              "strict_pass": {
+                "type": "boolean"
+              },
+              "criterion_levels": {
+                "type": "object"
+              },
+              "gates": {
+                "type": "object"
+              },
+              "coverage_complete": {
+                "type": "boolean"
+              },
+              "deterministic_findings": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "maxItems": 50,
+                "minItems": 0
+              }
+            },
+            "required": [
+              "total",
+              "maximum",
+              "band",
+              "proposal_blocked",
+              "critical_findings",
+              "assessment",
+              "scored_weight",
+              "rule"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "maxItems": 6,
+      "minItems": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "campaign_id",
+    "G6",
+    "completed_improvements",
+    "required_improvements",
+    "strict_quality_pass",
+    "checkpoint",
+    "rounds"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:quality-campaign:1.0.0",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "G6": {
+            "const": "pass"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "completed_improvements": {
+            "const": 5
+          },
+          "rounds": {
+            "minItems": 6,
+            "maxItems": 6,
+            "allOf": [
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "round": {
+                      "const": 0
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "round": {
+                      "const": 1
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "round": {
+                      "const": 2
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "round": {
+                      "const": 3
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "round": {
+                      "const": 4
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "round": {
+                      "const": 5
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "strict_quality_pass": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "G6": {
+            "const": "pass"
+          }
+        }
+      }
+    }
+  ]
+}

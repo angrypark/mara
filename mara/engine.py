@@ -12,7 +12,7 @@ from .output_validation import AgentOutputError
 from .research import compact_market
 from .decision import semantics,decision_findings
 from .contracts import validate,schema
-from .context_budget import previous_for_role
+from .context_budget import previous_for_role, improvement_for_role
 
 
 class ContextNeedsInput(ValueError):
@@ -59,14 +59,16 @@ class Engine:
         due = last is None or d.day(as_of) >= d.day(last['body']['next_evaluation'])
         return {'due':due,'next_evaluation':last['body']['next_evaluation'] if last else as_of}
 
-    def run(self, as_of, market_id=None, force=False, revision_reason=None, amendment=None):
+    def run(self, as_of, market_id=None, force=False, revision_reason=None, amendment=None, improvement=None, evaluate_after=True):
         d.day(as_of)
         run_id = uuid.uuid4().hex
+        self.s.append('execution_intent',{'campaign_id':(improvement or {}).get('campaign_id'),'run_id':run_id,'kind':'portfolio_decision'},as_of,run_id)
         self.s.lock(run_id)
         try:
-            result=self._run(as_of,market_id,force,run_id,revision_reason,amendment)
+            result=self._run(as_of,market_id,force,run_id,revision_reason,amendment,improvement)
             from .evaluation import evaluate_report
-            try:evaluate_report(self.s,self.model,result['event_id'])
+            try:
+                if evaluate_after:evaluate_report(self.s,self.model,result['event_id'])
             except Exception:pass  # evaluation_status reports failure; completed proposal remains.
             return result
         except Exception as exc:
@@ -78,11 +80,16 @@ class Engine:
         finally:
             self.s.unlock(run_id)
 
-    def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None):
+    def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None, improvement=None):
         previous = self.s.latest('completed')
         if previous and previous['body']['mode'] != self.model.mode: raise ValueError('Demo and live histories must use separate users')
         revision_of=None
         frozen=None
+        if improvement:
+            frozen=self.s.get(improvement['parent_completed_id'])
+            if not previous or previous['id']!=frozen['id']:raise ValueError('A newer report exists; improvement branch must not replace it')
+            if frozen['kind']!='completed' or frozen['effective']!=as_of:raise ValueError('Invalid improvement basis')
+            market_id=improvement.get('market_id',frozen['body']['market_id'])
         if amendment:
             frozen=self.s.get(amendment['completed_id'])
             if not previous or previous['id']!=frozen['id']:raise ValueError('A newer report exists; apply to latest report')
@@ -105,7 +112,7 @@ class Engine:
             # Carry only evidence actually read in that run, never today's library contents.
             ids={f['id'] for f in m['facts']}
             for event in self.s.events('research_evidence'):
-                if event['run_id']==frozen['run_id'] and event['body']['fact']['id'] not in ids:
+                if event['run_id']==frozen['run_id'] and event['seq']<=frozen['seq'] and event['body']['fact']['id'] not in ids:
                     fact=event['body']['fact'];m['facts'].append(copy.deepcopy(fact));ids.add(fact['id'])
                     self.s.append('research_evidence',event['body'],as_of,run_id)
         saved_answers=answers(self.s,as_of)
@@ -119,9 +126,10 @@ class Engine:
         if m['base_currency'] != p['base_currency']: raise ValueError('Market currency mismatch')
         val = d.valuation(h,m,allow_empty=p.get('proposal_capital',0)>0)
         capital=p.get('proposal_capital',val['nav'])
+        future_funded=p.get('funding_source')=='future_income'
         funding={'proposal_capital':capital,'actual_nav':val['nav'],
-                 'additional_funding_needed':max(0,capital-val['nav']),
-                 'amount_outside_proposal':max(0,val['nav']-capital),
+                 'additional_funding_needed':capital if future_funded else max(0,capital-val['nav']),
+                 'amount_outside_proposal':val['nav'] if future_funded else max(0,val['nav']-capital),
                  'source':p.get('funding_source','undecided'),
                  'availability':'conditional_on_deposit' if capital>val['nav'] or p.get('funding_source')=='future_income' else 'reported_holdings',
                  'monthly_contribution_is_future_flow':True}
@@ -132,7 +140,7 @@ class Engine:
         start_id = self.s.append('run_started',{'market_id':me['id'],'profile_id':pe['id'],
              'actual_id':he['id'],'previous_id':previous['id'] if previous else None,
              'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason,
-             'agent_registry':catalogue(),'amendment':amendment},as_of,run_id)
+             'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement},as_of,run_id)
         k = Knowledge(self.s)
         a = Agents(self.s,self.model,as_of,run_id,self.research_library)
         rebalance_due = d.day(as_of) >= d.day(h['last_rebalanced']) + timedelta(days=p['rebalance_every_days'])
@@ -171,15 +179,30 @@ class Engine:
                 outcome['pnl']=None
                 outcome['cashflows_reconciled']=False
                 outcome['limitation']='외부 입출금 대조가 끝나지 않아 평가액만 표시해요. 자금 납입을 투자 수익으로 해석하지 않아요.'
-        common = {'as_of':as_of,'profile':p,'actual':h,'valuation':val,'market':m,'previous':prior,
+        from .analysis_pack import build as base_analysis
+        stability=self.s.latest('quality_stability_result',as_of)
+        stability_receipt=None
+        if stability:
+            from .evaluation import evaluator_fingerprint
+            if stability['body'].get('evaluator_spec_hash')==evaluator_fingerprint(self.s,self.model,as_of):
+                stability_receipt=dict(stability['body'],source_event_id=stability['id'])
+        def build_analysis(*args):
+            result=base_analysis(*args)
+            if stability_receipt:result['comparison']['evaluator_stability']=copy.deepcopy(stability_receipt)
+            return result
+        analysis=build_analysis(p,h,m,val,capital)
+        common = {'analysis':analysis,'report_contract':'investment_case/1' if self.model.mode=='live' and m.get('return_histories') else None,
+                  'improvement':improvement,'as_of':as_of,'profile':p,'actual':h,'valuation':val,'market':m,'previous':prior,
                   'decision_context':semantics(p,m),
                   'anchors':anchors,'rebalance_due':rebalance_due,'performance':outcome,'funding':funding,
-                  'frozen_revision':bool(frozen),
+                  'frozen_revision':bool(frozen) and not (improvement or {}).get('allow_supplemental_research',False),
                   'analysis_flow':{'perspectives':'independent; no current peer outputs',
                     'leader':'after perspective validation; before final proposal validation',
                     'final_validation':'after leader; assess each statement against its original stage'}}
         def call(role, extra=None):
             payload = dict(common,knowledge=k.retrieve(as_of,role))
+            if improvement and role not in ('leader','validation'):
+                payload['improvement']=improvement_for_role(improvement,role,frozen['body'])
             if frozen:
                 recorded=[e['body']['payload'] for e in self.s.events('agent_input') if e['run_id']==frozen['run_id'] and e['body']['role']==role]
                 payload['knowledge']=copy.deepcopy(recorded[-1].get('knowledge',{})) if recorded else {}
@@ -245,7 +268,18 @@ class Engine:
         checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
         validation, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks})
         checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
-        proposal, _ = call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation})
+        proposal, proposal_id = call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation})
+        from .report_references import errors as reference_errors
+        for reference_attempt in (1,2):
+            common['analysis']=build_analysis(p,h,m,val,capital,proposal['weights'])
+            errors=reference_errors(proposal,common['analysis'],funding,val)
+            self.s.append('proposal_reference_validation',{'output_id':proposal_id,'attempt':reference_attempt,
+                'status':'failed' if errors else 'passed','errors':errors},as_of,run_id)
+            if not errors:break
+            if reference_attempt==2:raise AgentOutputError('leader','proposal_reference',proposal_id)
+            proposal,proposal_id=call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation,
+                'reference_feedback':{'errors':errors,'previous_output':proposal,
+                    'instruction':'계산 연결을 실제 report body 기준으로 교정해 전체 JSON을 다시 작성해요. evaluator가 평가 입력에서 쓰는 /report 접두사는 저자 calculation_paths에 붙이지 않아요. /input도 존재하지 않아요. 다른 값에 억지로 연결하거나 자료 공백을 숨기지 말고 주장의 범위와 반대 근거를 유지해요.'}})
         final_check = evaluate(proposal['weights'],p,m,capital,val)
         final_review, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks,
                                          'final_proposal':proposal,'final_numeric_check':final_check})
@@ -279,15 +313,30 @@ class Engine:
             'rule':'첫 납입은 같은 달의 정기 납입과 중복하지 않아요. 실제 입금 후 기존 편차와 비용을 재검토할 목표 배분이며 주문 지시가 아니에요.'}
         validate(proposal['decision_status'],schema('decision'))
         proposal['market_changes'] = evidence['changes']
+        # Record facts actually present in each accepted input, not just collected.
+        delivery=[]
+        for event in self.s.events('agent_validation'):
+            if event['run_id']==run_id and event['body']['status']=='accepted':
+                inp=self.s.get(event['body']['input_id'])
+                body=inp['body'];facts=body['payload'].get('market',{}).get('facts',[])
+                delivery.append({'role':body['role'],'input_id':inp['id'],'output_id':event['body']['output_id'],
+                    'stage':body['payload'].get('analysis_stage'), 'fact_ids':[f['id'] for f in facts],
+                    'guide_hash':body['guide_hash'],'input_hash':__import__('hashlib').sha256(d.dumps(body['payload']).encode()).hexdigest(),
+                    'provider':body['provider']})
+        analysis=build_analysis(p,h,m,val,capital,proposal['weights'])
+        analysis['source_ids']={'profile_id':pe['id'],'actual_id':he['id'],'market_id':me['id']}
         # Original dissent is retained regardless of how the leader summarizes it.
         report = {'run_id':run_id,'mode':self.model.mode,'as_of':as_of,'profile_id':pe['id'],
             'actual_id':he['id'],'market_id':me['id'],'previous_id':previous['id'] if previous else None,
             'valuation':val,'performance':outcome,'reflection':reflection,'funding':funding,
             'revision_of':revision_of,'revision_reason':revision_reason,'amendment':amendment,
+            'analysis':analysis,'evidence_delivery':delivery,'improvement':improvement,
             'perspectives':perspectives,'validation':{'numeric':checks,'critique':validation,
             'final_numeric':final_check,'final_critique':final_review}, 'proposal':proposal,
             'pruning_audit_id':audit,'anchors':anchors,'next_evaluation':(d.day(as_of)+timedelta(days=7)).isoformat(),
             'rebalance_due':rebalance_due,'next_rebalance':(d.day(h['last_rebalanced'])+timedelta(days=p['rebalance_every_days'])).isoformat()}
+        from .analysis_pack import coverage_ledger
+        report['coverage_ledger']=coverage_ledger(report,m)
         with self.s.store.transaction():
             proposal_id = self.s.append('proposal',proposal,as_of,run_id)
             report['proposal_id'] = proposal_id

@@ -21,9 +21,14 @@ from .contracts import validate,schema
 from .registry import resource
 from .decision import POLICY
 from . import commentary_sources as commentary
+from . import fund_history,policy_sources,fx_history
 
 VERSION='mara.research/1.0.0'
 TOOLS=[
+ {'id':'fx_history','label':'원화·달러 월말 환율 이력','roles':['evidence','marks','bogle','validation','leader'],'provides':'FRED/연준 H.10 일별 원/달러의 월말 마지막 유효 관측. 원화 배분 비교와 실제 계좌 환율을 구분'},
+ {'id':'release_notes','label':'검증된 공식 발표 보충','roles':['evidence','marks','validation'],'provides':'원문을 직접 대조한 발표 수치·결측 사유와 읽은 범위. 유효 기간 이후 자동 제외'},
+ {'id':'fed_statement','label':'FOMC 정책 성명 본문','roles':['evidence','marks','validation','leader'],'provides':'공식 목록의 최신 성명 날짜·정책 본문·반대 의견. RSS 제목과 구분'},
+ {'id':'fund_history','label':'ETF 월별 NAV 총수익률','roles':['bogle','marks','validation','leader'],'provides':'운용사 원본 XLS 월별 배당 재투자 NAV 총수익률. 비용 포함 정의·기간을 검증하고 별도 계산에 사용'},
  {'id':'sec_filings','label':'SEC 공시 목록','roles':['evidence','buffett','marks','validation'],'provides':'최근 공시 종류·공시일·원문 링크; 본문 미수집'},
  {'id':'sec_financials','label':'SEC 기업 재무','roles':['buffett','marks','validation'],'provides':'최대 3개 연간 기간의 매출·이익·영업현금·설비투자, 최근 현금·부채·자산·자본'},
  {'id':'treasury','label':'미국 국채 금리','roles':['evidence','marks','validation'],'provides':'최근 6거래일 만기별 par 금리와 장단기 차이'},
@@ -36,7 +41,7 @@ TOOLS=[
  {'id':'institutional_reports','label':'금융기관 주간 논평','roles':['evidence','marks','validation'],'provides':'BlackRock·Schwab 원문 HTML과 날짜·제목·도입부 발췌; 기관 전망'},
  {'id':'financial_news','label':'금융 언론 뉴스 탐색','roles':['evidence','marks','validation'],'provides':'CNBC 공식 RSS 최근 제목·발표시각·기사 링크; 본문 미검토'},
 ]
-ALLOWED={'www.sec.gov','data.sec.gov','www.ishares.com','www.federalreserve.gov','api.bls.gov','home.treasury.gov','www.blackrock.com','www.schwab.com','www.cnbc.com','www.microsoft.com','www.apple.com'}
+ALLOWED={'fred.stlouisfed.org','d18rn0p25nwr6d.cloudfront.net','materials.proxyvote.com','www.bls.gov','www.sec.gov','data.sec.gov','www.ishares.com','www.federalreserve.gov','api.bls.gov','home.treasury.gov','www.blackrock.com','www.schwab.com','www.cnbc.com','www.microsoft.com','www.apple.com'}
 
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
@@ -80,8 +85,12 @@ class PublicArchive:
             time.sleep(max(0,.55-(time.monotonic()-self.last_sec)));self.last_sec=time.monotonic()
         if self.transport:raw=self.transport(url)
         else:
-            req=urllib.request.Request(url,headers={'User-Agent':'MaraResearch/1.0 personal investment research'})
-            with urllib.request.build_opener(NoRedirect).open(req,timeout=10) as response:raw=response.read(8_000_001)
+            # FRED's CSV endpoint accepts urllib's standard client header; the
+            # custom research header repeatedly stalls this endpoint. SEC retains
+            # the explicit application identity on all requests.
+            headers={} if u.hostname=='fred.stlouisfed.org' else {'User-Agent':'MaraResearch/1.0 personal investment research'}
+            req=urllib.request.Request(url,headers=headers)
+            with urllib.request.build_opener(NoRedirect).open(req,timeout=30 if u.hostname=='fred.stlouisfed.org' else 10) as response:raw=response.read(8_000_001)
         if len(raw)>8_000_000:raise ValueError('Research response too large')
         meta=self.preserve(raw,url)
         # Cache is replaceable; original content-addressed responses are not.
@@ -90,6 +99,10 @@ class PublicArchive:
 
 
 def safe_code(exc):
+    if isinstance(exc,src.EvidenceError):return exc.code
+    if isinstance(exc,(json.JSONDecodeError,src.ET.ParseError)):return 'source_format_changed'
+    if isinstance(exc,(KeyError,TypeError,AttributeError)):return 'source_structure_changed'
+    if isinstance(exc,StopIteration):return 'required_source_field_missing'
     if isinstance(exc,TimeoutError):return 'time_budget_or_timeout'
     if isinstance(exc,urllib.error.HTTPError):return 'http_'+str(exc.code)
     if isinstance(exc,urllib.error.URLError):return 'network_unavailable'
@@ -100,7 +113,7 @@ class Research:
     def __init__(self,root,now=None,transport=None):
         self.archive=PublicArchive(root,now,transport);self.now=self.archive.now
         self.as_of=self.now.date().isoformat();self.calls=[];self.facts=[];self.records=[]
-        self.urls={};self.used_chars=0
+        self.urls={};self.used_chars=0;self.constituents={}
 
     def fetch(self,url):
         raw,meta=self.archive.get(url);self.records.append(meta);self.urls[url]=meta
@@ -114,6 +127,10 @@ class Research:
                 call.update(status='skipped',reason='collection_time_budget');return None
             value=fn()
             if not isinstance(value,dict):raise ValueError('Research output must be an object')
+            if tool=='orderbook' and value.get('availability')=='no_quote':
+                call.update(status='skipped',reason='quote_not_observed');return None
+            if tool=='fund_holdings':
+                self.constituents[target]=value.pop('constituents',[])
             if tool=='sec_financials':
                 # Lossless table encoding avoids repeating six field names on every
                 # observation; periods, accessions and forms remain in the fact.
@@ -122,9 +139,9 @@ class Research:
                 for series in value['metrics'].values():
                     for entry in series:entry['observations']=[[row.get(k) for k in columns] for row in entry['observations']]
             text=d.dumps(value)
-            if tool=='sec_financials' and self.used_chars+len(text)>36000:
+            if tool=='sec_financials' and self.used_chars+len(text)>52000:
                 call.update(status='skipped',reason='financial_evidence_budget');return None
-            if self.used_chars+len(text)>44000:
+            if self.used_chars+len(text)>64000:
                 call.update(status='skipped',reason='active_evidence_budget');return None
             fact_id='research-'+tool+'-'+re.sub('[^A-Za-z0-9_-]','-',target)
             published=value.get('latest_filed') or value.get('observed_at') or self.as_of
@@ -146,6 +163,25 @@ class Research:
         finally:
             call['raw_refs']=copy.deepcopy(self.records[start:]);self.calls.append(call)
 
+    def release_notes(self):
+        notes=json.loads(resource('resources/official-release-notes.json').read_text())['notes']
+        for note in notes:
+            if not note['verified_on']<=self.as_of<=note['valid_until']:continue
+            def read(n=note):
+                self.records.append(self.archive.preserve(d.dumps(n),n['source']))
+                return dict(n,observed_at=n['published_at'],retrieval_method='manually verified official text extract; not complete HTML')
+            self.record('release_notes',note['id'],read,note['source'],(d.day(note['valid_until'])-d.day(self.as_of)).days)
+
+    def exchange_history(self,market):
+        history={};url=fx_history.url(self.as_of)
+        def summary():
+            history.update(fx_history.parse(self.fetch(url).encode(),self.as_of))
+            return {**{k:v for k,v in history.items() if k!='observations'},
+                'start':history['observations'][0]['date'],'end':history['observations'][-1]['date'],
+                'observation_count':len(history['observations']),'latest_months':history['observations'][-3:]}
+        if self.record('fx_history','DEXKOUS',summary,url,14):
+            history['raw_refs']=copy.deepcopy(self.calls[-1]['raw_refs']);market['fx_history']=history
+
     def enrich(self,market,symbols,broker=None,progress=lambda msg:None):
         self.as_of=market['as_of']
         if self.as_of!=self.now.astimezone().date().isoformat() and self.as_of!=self.now.date().isoformat():
@@ -162,6 +198,13 @@ class Research:
             url='https://api.bls.gov/publicAPI/v1/timeseries/data/'+series
             self.record('bls',series,lambda u=url,s=series:src.bls(json.loads(self.fetch(u)),s,self.as_of),url)
         self.record('fed','US',lambda:src.fed_news(self.fetch(src.FED),self.as_of),src.FED,14)
+        def policy_statement():
+            url=policy_sources.discover_statement(self.fetch,self.as_of)
+            result=policy_sources.statement(self.fetch(url),url,self.as_of);result['document_url']=url
+            return result
+        self.record('fed_statement','US',policy_statement,'https://www.federalreserve.gov/newsevents/pressreleases/'+self.as_of[:4]+'-press-fomc.htm',14)
+        self.release_notes()
+        if market['base_currency']=='KRW':self.exchange_history(market)
         progress('금융기관 주간 리포트와 공식 금융 뉴스 피드를 확인하고 있어요.')
         for name,config in commentary.REPORTS.items():
             url=config['url']
@@ -183,8 +226,21 @@ class Research:
             mapping=current
             identity_mode='current_SEC_ticker_map'
         except (OSError,ValueError,KeyError,TypeError,AttributeError):pass
+        market['return_histories']={}
         for symbol in funds:
             progress('ETF 운용사 상품·구성 확인 중: '+symbol)
+            history_url=fund_history.export_url(symbol)
+            history={}
+            def history_summary(u=history_url,s=symbol):
+                history.update(fund_history.monthly_returns(self.fetch(u),s,self.as_of))
+                from .portfolio_comparison import metrics
+                result={k:v for k,v in history.items() if k!='observations'}
+                result.update(start=history['observations'][0]['date'],observations=len(history['observations']),
+                    summary={k:v for k,v in metrics([x['return'] for x in history['observations']]).items() if k!='unit_wealth_path'})
+                return result
+            if self.record('fund_history',symbol,history_summary,history_url,14):
+                history['raw_refs']=copy.deepcopy(self.calls[-1]['raw_refs'])
+                market['return_histories'][symbol]=history
             url=src.FUNDS[symbol]
             profile=self.record('fund_profile',symbol,lambda u=url,s=symbol:src.fund_profile(self.fetch(u),s,self.as_of),url)
             if profile:
@@ -236,11 +292,13 @@ class Research:
         manifest={'schema_version':VERSION,'owner_role':'evidence','tools':TOOLS,'calls':self.calls,
             'selection':{'company_symbols':selected,'fund_symbols':funds,'not_deeply_collected':[s for s in all_symbols if s not in selected+funds],
                 'reason':'보유 우선, 이후 입력/자동 후보 순서. 기업 최대 8개와 지원 ETF. 전체 시장 조사 아님.', 'sec_identity_mode':identity_mode,'sec_seed_as_of':seed['retrieved_at']},
-            'budget':{'max_companies':8,'max_http_requests':48,'max_seconds_before_new_request':150,'max_fact_characters':44000,'fact_characters':self.used_chars},
+            'budget':{'max_companies':8,'max_http_requests':48,'max_seconds_before_new_request':150,'max_fact_characters':64000,'fact_characters':self.used_chars},
             'collected_at':self.now.isoformat(),'raw_policy':'원문 sha256 파일 보존. 활성 요약/pruning과 별개.'}
         validate(manifest,schema('research'))
         market['facts'].extend(self.facts);market['research']=manifest
-        missing+=['공시 본문·경쟁우위·정상화 가치 및 부채 만기 검토','산업·지정학·기업 뉴스의 포괄 수집','세금·환전·계좌별 총 거래 비용','동일 통화 배당 재투자 총수익률·위험 지표','ETF 구성과 토스 제외 섹터의 분류 대조','주문 시점의 유동성·체결 가능성']
+        market['fund_constituents']={s:rows for s,rows in self.constituents.items() if any(c['tool']=='fund_holdings' and c['target']==s and c['status']=='collected' for c in self.calls)}
+        missing+=['공시 본문·경쟁우위·정상화 가치 및 부채 만기 검토','산업·지정학·기업 뉴스의 포괄 수집','세금·환전·계좌별 총 거래 비용','ETF 구성과 토스 제외 섹터의 분류 대조','주문 시점의 유동성·체결 가능성']
+        if len(market['return_histories'])!=len(funds):missing.append('일부 ETF 월별 NAV 총수익률 이력 미확인')
         market['coverage']={'status':'partial' if self.facts else 'limited',
             'available':market.get('coverage',{}).get('available',['기존 스냅샷 가격·자산 정보'])+available,'missing':missing,
             'research_fact_count':len(self.facts),'proposal_policy':POLICY,
@@ -252,6 +310,9 @@ class Research:
 def compact_market(market,role,historical=False):
     """Model-only projection; full facts, manifest and raw responses stay frozen."""
     m=copy.deepcopy(market)
+    m.pop('fund_constituents',None)
+    m.pop('return_histories',None)  # full series stay in immutable market; roles receive reproducible summaries
+    m.pop('fx_history',None)
     if 'research' not in m:return m
     r=m['research']
     # Complete per-call provenance stays in the stored market/workbench.

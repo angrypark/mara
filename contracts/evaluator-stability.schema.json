@@ -1,0 +1,94 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "mara.evaluator-stability/1.0"
+    },
+    "base_completed_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluator_spec_hash": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64
+    },
+    "cases": {
+      "const": 3
+    },
+    "valid_outputs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "total_score_range": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "gate_invariance": {
+      "type": "boolean"
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "acceptance": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "recorded_at": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "base_completed_id",
+    "evaluator_spec_hash",
+    "cases",
+    "valid_outputs",
+    "total_score_range",
+    "gate_invariance",
+    "passed",
+    "acceptance",
+    "scope"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:evaluator-stability:1.0",
+  "if": {
+    "properties": {
+      "passed": {
+        "const": true
+      }
+    },
+    "required": [
+      "passed"
+    ]
+  },
+  "then": {
+    "properties": {
+      "valid_outputs": {
+        "const": 3
+      },
+      "total_score_range": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 5
+      },
+      "gate_invariance": {
+        "const": true
+      }
+    }
+  }
+}

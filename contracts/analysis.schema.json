@@ -1,0 +1,535 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "mara.analysis/1.0.0"
+    },
+    "as_of": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 10
+    },
+    "selected_weights": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "household": {
+      "type": "object",
+      "properties": {
+        "joint_stress": {
+          "type": "object",
+          "required": [
+            "scope",
+            "scenarios",
+            "liquidity_basis",
+            "limitations"
+          ],
+          "properties": {
+            "scope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "liquidity_basis": {
+              "type": "string",
+              "minLength": 1
+            },
+            "limitations": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scenarios": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "income_fraction_assumption",
+                  "mortgage_rate_increase_assumption",
+                  "cash_needed_if_contributions_paused",
+                  "gap_against_reported_account_cash_only",
+                  "income_needed_to_resume_planned_contribution"
+                ],
+                "properties": {
+                  "income_fraction_assumption": {
+                    "type": "number"
+                  },
+                  "mortgage_rate_increase_assumption": {
+                    "type": "number"
+                  },
+                  "cash_needed_if_contributions_paused": {
+                    "type": "number"
+                  },
+                  "gap_against_reported_account_cash_only": {
+                    "type": "number"
+                  },
+                  "income_needed_to_resume_planned_contribution": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "required": [
+        "available"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        }
+      },
+      "if": {
+        "properties": {
+          "available": {
+            "const": true
+          }
+        },
+        "required": [
+          "available"
+        ]
+      },
+      "then": {
+        "required": [
+          "start",
+          "end",
+          "observations",
+          "currency",
+          "frequency",
+          "results",
+          "assumptions",
+          "amount_unit",
+          "cash_proxy_warning",
+          "feasibility",
+          "sensitivity",
+          "limitations"
+        ],
+        "properties": {
+          "start": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10
+          },
+          "end": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10
+          },
+          "observations": {
+            "type": "integer",
+            "minimum": 36
+          },
+          "currency": {
+            "const": "USD"
+          },
+          "frequency": {
+            "const": "monthly"
+          },
+          "results": {
+            "type": "object",
+            "minProperties": 2,
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "annualized_return",
+                "annualized_volatility",
+                "month_end_max_drawdown",
+                "ending_wealth",
+                "contributed",
+                "profit",
+                "transaction_cost_paid"
+              ],
+              "properties": {
+                "annualized_return": {
+                  "type": "number"
+                },
+                "annualized_volatility": {
+                  "type": "number"
+                },
+                "month_end_max_drawdown": {
+                  "type": "number"
+                },
+                "ending_wealth": {
+                  "type": "number"
+                },
+                "contributed": {
+                  "type": "number"
+                },
+                "profit": {
+                  "type": "number"
+                },
+                "transaction_cost_paid": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "assumptions": {
+            "type": "object"
+          },
+          "amount_unit": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "cash_proxy_warning": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "feasibility": {
+            "type": "object"
+          },
+          "sensitivity": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "assumptions",
+                "result"
+              ],
+              "properties": {
+                "result": {
+                  "type": "object",
+                  "required": [
+                    "annualized_return",
+                    "annualized_volatility",
+                    "month_end_max_drawdown",
+                    "ending_wealth",
+                    "contributed",
+                    "profit",
+                    "transaction_cost_paid"
+                  ],
+                  "properties": {
+                    "annualized_return": {
+                      "type": "number"
+                    },
+                    "annualized_volatility": {
+                      "type": "number"
+                    },
+                    "month_end_max_drawdown": {
+                      "type": "number"
+                    },
+                    "ending_wealth": {
+                      "type": "number"
+                    },
+                    "contributed": {
+                      "type": "number"
+                    },
+                    "profit": {
+                      "type": "number"
+                    },
+                    "transaction_cost_paid": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            },
+            "maxItems": 10,
+            "minItems": 0
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1200
+            },
+            "maxItems": 10,
+            "minItems": 0
+          }
+        }
+      }
+    },
+    "products": {
+      "type": "object"
+    },
+    "costs": {
+      "type": "object"
+    },
+    "fx_stress": {
+      "type": "object",
+      "required": [
+        "limitation",
+        "scenarios",
+        "base_currency"
+      ],
+      "properties": {
+        "limitation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200
+        },
+        "base_currency": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 3
+        },
+        "scenarios": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "equity_return_assumption",
+              "foreign_currency_return_in_base_assumption",
+              "portfolio_change_fraction",
+              "loss_on_proposal_capital"
+            ],
+            "properties": {
+              "equity_return_assumption": {
+                "type": "number"
+              },
+              "foreign_currency_return_in_base_assumption": {
+                "type": "number"
+              },
+              "portfolio_change_fraction": {
+                "type": "number"
+              },
+              "loss_on_proposal_capital": {
+                "type": "number"
+              }
+            }
+          },
+          "maxItems": 20,
+          "minItems": 0
+        }
+      }
+    },
+    "lookthrough": {
+      "type": "object",
+      "required": [
+        "available",
+        "missing_assets"
+      ]
+    },
+    "source_market_as_of": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 10
+    },
+    "source_ids": {
+      "type": "object"
+    },
+    "reproduction": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "krw_comparison": {
+      "type": "object",
+      "required": [
+        "available"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        }
+      },
+      "if": {
+        "properties": {
+          "available": {
+            "const": true
+          }
+        },
+        "required": [
+          "available"
+        ]
+      },
+      "then": {
+        "required": [
+          "start",
+          "end",
+          "observations",
+          "currency",
+          "frequency",
+          "results",
+          "assumptions",
+          "amount_unit",
+          "sensitivity",
+          "limitations",
+          "cash_scope",
+          "conversion_formula",
+          "cost_scope",
+          "independent_replay"
+        ],
+        "properties": {
+          "start": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10
+          },
+          "end": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10
+          },
+          "observations": {
+            "type": "integer",
+            "minimum": 36
+          },
+          "currency": {
+            "const": "KRW"
+          },
+          "frequency": {
+            "const": "monthly"
+          },
+          "results": {
+            "type": "object",
+            "minProperties": 2,
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "annualized_return",
+                "annualized_volatility",
+                "month_end_max_drawdown",
+                "ending_wealth",
+                "contributed",
+                "profit",
+                "transaction_cost_paid"
+              ],
+              "properties": {
+                "annualized_return": {
+                  "type": "number"
+                },
+                "annualized_volatility": {
+                  "type": "number"
+                },
+                "month_end_max_drawdown": {
+                  "type": "number"
+                },
+                "ending_wealth": {
+                  "type": "number"
+                },
+                "contributed": {
+                  "type": "number"
+                },
+                "profit": {
+                  "type": "number"
+                },
+                "transaction_cost_paid": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "assumptions": {
+            "type": "object"
+          },
+          "amount_unit": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "cash_proxy_warning": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "feasibility": {
+            "type": "object"
+          },
+          "sensitivity": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object"
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1200
+            },
+            "maxItems": 10,
+            "minItems": 0
+          },
+          "cash_scope": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "conversion_formula": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "cost_scope": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "independent_replay": {
+            "type": "object",
+            "required": [
+              "status",
+              "input_hash",
+              "implementation_hash",
+              "scope"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "passed",
+                  "failed"
+                ]
+              },
+              "input_hash": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64
+              },
+              "implementation_hash": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64
+              },
+              "scope": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "macro_consistency": {
+      "type": "object",
+      "required": [
+        "available"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "as_of",
+    "selected_weights",
+    "household",
+    "comparison",
+    "products",
+    "costs",
+    "fx_stress",
+    "lookthrough",
+    "source_market_as_of",
+    "reproduction"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:analysis:1.0.0"
+}

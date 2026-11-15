@@ -13,18 +13,25 @@ def present(session,row):
         (session.owner,r['run_id'],'run_started')).fetchone()
     registry=session.decode(started)['body'].get('agent_registry',[]) if started else []
     analyses={};provenance={};memory=[]
-    rejected={e['body']['output_id'] for e in session.events('agent_validation')
-              if e['run_id']==r['run_id'] and e['body']['status']=='rejected'}
-    events=session.store.db.execute('SELECT * FROM events WHERE owner=? AND run_id=? AND kind=? ORDER BY seq',
-        (session.owner,r['run_id'],'agent_output')).fetchall()
+    accepted={e['body']['output_id'] for e in session.events('agent_validation')
+              if e['run_id']==r['run_id'] and e['seq']<=result['seq'] and e['body']['status']=='accepted'}
+    events=session.store.db.execute('SELECT * FROM events WHERE owner=? AND run_id=? AND kind=? AND seq<=? ORDER BY seq',
+        (session.owner,r['run_id'],'agent_output',result['seq'])).fetchall()
     for event in events:
         event=session.decode(event);body=event['body'];role=body['role']
-        analyses[role]=body['output']
+        if event['id'] in accepted:analyses[role]=body['output']
         source=session.get(body['input_id'])['body']
         provenance.setdefault(role,[]).append({'output_id':event['id'],'input_id':body['input_id'],
             'guide_hash':source['guide_hash'],'provider':source['provider']})
-        if role=='memory' and event['id'] not in rejected:memory.append(body['output'])
+        if role=='memory' and event['id'] in accepted:memory.append(body['output'])
     facts=[f for f in market['facts'] if f['valid_until']>=r['as_of']]
+    expired_count=len(market['facts'])-len(facts)
+    seen={f['id'] for f in facts}
+    for event in session.events('research_evidence'):
+        fact=event['body']['fact']
+        if event['run_id']==r['run_id'] and event['seq']<=result['seq'] and fact['id'] not in seen and fact['known_at']<=r['as_of'] and fact['published_at']<=r['as_of']<=fact['valid_until']:
+            facts.append(copy.deepcopy(fact));seen.add(fact['id'])
+    evaluations=[e for e in session.events('report_evaluation') if e['body']['completed_id']==row['id']]
     prices=[]
     for symbol,quote in market['prices'].items():
         before=prior_market['prices'].get(symbol) if prior_market and prior_market['base_currency']==market['base_currency'] else None
@@ -35,10 +42,17 @@ def present(session,row):
     result['view']={'version':1,'kind':'revision' if r.get('revision_of') else 'weekly' if previous else 'initial',
         'base_currency':profile['base_currency'],'context':analyses.get('context'),
         'market_analysis':analyses.get('evidence'),'sources':facts,'prices':prices,
-        'expired_source_count':len(market['facts'])-len(facts),'agent_records':provenance,'agent_registry':registry,
+        'expired_source_count':expired_count,'agent_records':provenance,'agent_registry':registry,
         'memory':memory,'pruning':session.get(r['pruning_audit_id'])['body'],
+        'quality_evaluation':evaluations[-1]['body'] if evaluations else None,
+        'evaluation_stability':stability_receipt(session,row['id'],evaluations[-1]['body'].get('evaluator_spec_hash') if evaluations else None),
         'criteria':{key:profile.get(key) for key in ['goal','horizon_months','cash_need','max_loss_fraction','max_position_fraction','criteria']},
         'previous':{'id':previous['id'],'as_of':previous['effective'],
             'proposal':previous['body']['proposal'],'valuation':previous['body']['valuation'],
             'perspectives':previous['body']['perspectives'],'funding':previous['body'].get('funding')} if previous else None}
     return result
+
+
+def stability_receipt(session,completed_id,spec_hash):
+    if not completed_id or not spec_hash:return None
+    return next((dict(e['body'],source_event_id=e['id'],recorded_at=e['recorded']) for e in reversed(session.events('quality_stability_result')) if e['body'].get('base_completed_id')==completed_id and e['body'].get('evaluator_spec_hash')==spec_hash),None)

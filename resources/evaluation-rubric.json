@@ -1,64 +1,589 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "frozen_on": "2026-11-16",
   "scale": {
-    "0": "근거 없음 또는 모순",
-    "1": "언급만 있음",
-    "2": "핵심 일부와 중대한 공백",
-    "3": "주요 근거·대안·한계 연결",
-    "4": "가정·대안·민감도·반증까지 재현 가능"
+    "0": "첫 필수 관찰 항목을 충족하지 못함",
+    "1": "1단계 관찰 항목 충족",
+    "2": "1~2단계 관찰 항목 모두 충족",
+    "3": "1~3단계 관찰 항목 모두 충족",
+    "4": "1~4단계 관찰 항목 모두 충족. 내용·반증·재현 확인 필요"
   },
   "criteria": [
     {
       "id": "suitability",
       "label": "목표·가계 적합성",
       "weight": 15,
-      "requirement": "가계 자산과 투자금 구분, 납입 여력, 기간·손실 허용"
+      "requirement": "가계 자산과 투자금 구분, 납입 여력, 기간·손실 허용",
+      "checks": [
+        {
+          "id": "suitability.1",
+          "level": 1,
+          "requirement": "목표·기간·감당할 손실과 현금 필요를 입력대로 연결한다.",
+          "allowed_prefixes": [
+            "/profile/",
+            "/report/proposal/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02"
+          ]
+        },
+        {
+          "id": "suitability.2",
+          "level": 2,
+          "requirement": "가계 자산·부채, 실제 보유, 제안 기준액과 미래 납입을 분리하고 납입 여력 산식을 보인다.",
+          "allowed_prefixes": [
+            "/report/analysis/household/",
+            "/report/funding/",
+            "/report/proposal/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02"
+          ]
+        },
+        {
+          "id": "suitability.3",
+          "level": 3,
+          "requirement": "입금 조건·비상 현금·기간·제약과 선택 비중의 적합성을 계산과 개인 입력으로 확인한다.",
+          "allowed_prefixes": [
+            "/report/analysis/",
+            "/report/validation/",
+            "/report/proposal/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02"
+          ]
+        },
+        {
+          "id": "suitability.4",
+          "level": 4,
+          "requirement": "소득 중단·예상 인출 시 유동성 및 가능 납입과 판단 변경 조건을 비교한다.",
+          "allowed_prefixes": [
+            "/report/analysis/household/",
+            "/report/proposal/investment_case/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02"
+          ]
+        }
+      ]
     },
     {
       "id": "evidence",
       "label": "근거의 충분성과 시점",
       "weight": 15,
-      "requirement": "중심 주장에 맞는 1차 근거, 시점·단위·공백의 영향"
+      "requirement": "중심 주장에 맞는 1차 근거, 시점·단위·공백의 영향",
+      "checks": [
+        {
+          "id": "evidence.1",
+          "level": 1,
+          "requirement": "중심 판단과 관련된 실제 원문 사실을 인용한다. 링크 제목만으로는 충족하지 않는다.",
+          "allowed_prefixes": [
+            "/market/facts/",
+            "/role_outputs/evidence/",
+            "/report/proposal/investment_case/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "evidence.2",
+          "level": 2,
+          "requirement": "기업·상품 정체, 시점·기간·통화·단위와 원문을 대조하고 사실/가정/읽지 않은 범위를 분리한다.",
+          "allowed_prefixes": [
+            "/market/facts/",
+            "/report/analysis/",
+            "/report/proposal/investment_case/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "evidence.3",
+          "level": 3,
+          "requirement": "각 핵심 주장을 지원하는 근거가 실제 역할에 전달됐고 중요한 반대 증거도 검토됐다.",
+          "allowed_prefixes": [
+            "/report/evidence_delivery/",
+            "/report/proposal/investment_case/",
+            "/report/validation/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "evidence.4",
+          "level": 4,
+          "requirement": "중요한 한 가지 이상을 다른 자료·정의와 교차 확인하고 충돌/재작성/가정 변경이 결론에 미치는 영향을 검증한다.",
+          "allowed_prefixes": [
+            "/report/proposal/investment_case/",
+            "/report/analysis/",
+            "/market/facts/",
+            "/role_outputs/quantitative_verifier/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        }
+      ]
     },
     {
       "id": "selection",
       "label": "자산의 질·가격·선정",
       "weight": 15,
-      "requirement": "개별주식: 사업·재무·가치 범위. ETF: 목적·보수·내부구성·대안. 대상에 맞춰 평가"
+      "requirement": "개별주식: 사업·재무·가치 범위. ETF: 목적·보수·내부구성·대안. 대상에 맞춰 평가",
+      "checks": [
+        {
+          "id": "selection.1",
+          "level": 1,
+          "requirement": "자산 유형에 맞는 상품/사업 선정 이유를 설명한다.",
+          "allowed_prefixes": [
+            "/report/proposal/",
+            "/report/perspectives/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03"
+          ]
+        },
+        {
+          "id": "selection.2",
+          "level": 2,
+          "requirement": "ETF는 구조/보수/구성/가격과 거래구조, 주식은 사업의 질/재무/가치 가정, 현금은 통화/용도/기간/기회비용을 제시한다.",
+          "allowed_prefixes": [
+            "/report/proposal/investment_case/",
+            "/market/facts/",
+            "/report/perspectives/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03"
+          ]
+        },
+        {
+          "id": "selection.3",
+          "level": 3,
+          "requirement": "질·가격·비용·주요 반증을 재현 가능한 근거로 검토하고 실행 가능한 대안과 조사 범위를 명시한다.",
+          "allowed_prefixes": [
+            "/report/proposal/investment_case/",
+            "/report/analysis/",
+            "/report/perspectives/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03"
+          ]
+        },
+        {
+          "id": "selection.4",
+          "level": 4,
+          "requirement": "핵심 가정 민감도와 반대 사례로 선호가 바뀌는 경계를 보이며 탈락 대안에도 같은 잣대를 적용한다.",
+          "allowed_prefixes": [
+            "/report/proposal/investment_case/",
+            "/report/analysis/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03"
+          ]
+        }
+      ]
     },
     {
       "id": "allocation",
       "label": "배분·대안·기회비용",
       "weight": 15,
-      "requirement": "비중 근거, 대안과 현금 기회비용, 목표 달성 trade-off"
+      "requirement": "비중 근거, 대안과 현금 기회비용, 목표 달성 trade-off",
+      "checks": [
+        {
+          "id": "allocation.1",
+          "level": 1,
+          "requirement": "제안 비중·기준액을 정확히 제시한다.",
+          "allowed_prefixes": [
+            "/report/proposal/",
+            "/report/funding/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "allocation.2",
+          "level": 2,
+          "requirement": "각 비중의 역할과 실제→제안 차이를 목표 및 납입 계획에 연결한다.",
+          "allowed_prefixes": [
+            "/report/proposal/",
+            "/report/funding/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "allocation.3",
+          "level": 3,
+          "requirement": "현금/유지와 단순 대안을 동일 조건으로 비교하고 기회비용·위험·개인 목표에 따라 선택한다.",
+          "allowed_prefixes": [
+            "/report/analysis/comparison/",
+            "/report/proposal/investment_case/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "allocation.4",
+          "level": 4,
+          "requirement": "비중·납입·리밸런싱 변화의 한계효과와 trade-off 및 결론 변경 경계를 비교한다.",
+          "allowed_prefixes": [
+            "/report/analysis/",
+            "/report/proposal/investment_case/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        }
+      ]
     },
     {
       "id": "risk",
       "label": "위험·스트레스·집중",
       "weight": 15,
-      "requirement": "종목·섹터·환율·가계 위험, 손실 시나리오와 가정 한계"
+      "requirement": "종목·섹터·환율·가계 위험, 손실 시나리오와 가정 한계",
+      "checks": [
+        {
+          "id": "risk.1",
+          "level": 1,
+          "requirement": "선정 자산과 가계에 관련된 구체 위험을 명시한다.",
+          "allowed_prefixes": [
+            "/report/proposal/",
+            "/report/validation/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "risk.2",
+          "level": 2,
+          "requirement": "중복·집중·환율·유동성의 알려진 충격과 미확인 사항을 분리한다.",
+          "allowed_prefixes": [
+            "/report/analysis/",
+            "/report/validation/",
+            "/report/proposal/investment_case/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "risk.3",
+          "level": 3,
+          "requirement": "look-through 집중, FX 및 가계 스트레스 손실 규모·조건·자료 한계를 계산하고 개인 제약에 대조한다.",
+          "allowed_prefixes": [
+            "/report/analysis/",
+            "/report/validation/",
+            "/report/proposal/investment_case/",
+            "/role_outputs/quantitative_verifier/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "risk.4",
+          "level": 4,
+          "requirement": "복합·역방향 충격과 손실 후 현금 필요/납입 중단/회복 조건을 비교하고 추정 불안정성과 판단 영향을 검토한다.",
+          "allowed_prefixes": [
+            "/report/analysis/",
+            "/report/proposal/investment_case/",
+            "/role_outputs/quantitative_verifier/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        }
+      ]
     },
     {
       "id": "implementation",
       "label": "비용·납입·실행 계획",
       "weight": 10,
-      "requirement": "비용·환전·세금의 확인과 공백, 월납입·리밸런싱 분리"
+      "requirement": "비용·환전·세금의 확인과 공백, 월납입·리밸런싱 분리",
+      "checks": [
+        {
+          "id": "implementation.1",
+          "level": 1,
+          "requirement": "정기 납입과 주간 평가·리밸런싱을 분리한다.",
+          "allowed_prefixes": [
+            "/report/proposal/",
+            "/profile/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03"
+          ]
+        },
+        {
+          "id": "implementation.2",
+          "level": 2,
+          "requirement": "입금·수량·거래단위·환전·비용·세금의 확인/미확인과 담당을 명시한다.",
+          "allowed_prefixes": [
+            "/report/proposal/investment_case/",
+            "/report/analysis/costs/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03"
+          ]
+        },
+        {
+          "id": "implementation.3",
+          "level": 3,
+          "requirement": "달력 납입·입금 전 조건·재조정 규칙과 비용 포함/별도/미확인 구분을 실행 가능한 계획으로 연결한다.",
+          "allowed_prefixes": [
+            "/report/proposal/investment_case/",
+            "/report/proposal/monthly_allocation/",
+            "/report/analysis/costs/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03"
+          ]
+        },
+        {
+          "id": "implementation.4",
+          "level": 4,
+          "requirement": "비용·환전·시차·현금흐름 변화의 민감도 또는 손익분기와 신규 납입 조정/매도 조정 차이를 계산한다.",
+          "allowed_prefixes": [
+            "/report/analysis/",
+            "/report/proposal/investment_case/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03"
+          ]
+        }
+      ]
     },
     {
       "id": "monitoring",
       "label": "반증·재평가·이견",
       "weight": 10,
-      "requirement": "유지·변경 조건, 반대 관점, 다음 확인, 성과와 과정 구분"
+      "requirement": "유지·변경 조건, 반대 관점, 다음 확인, 성과와 과정 구분",
+      "checks": [
+        {
+          "id": "monitoring.1",
+          "level": 1,
+          "requirement": "다음 확인 항목과 반대 관점을 보존한다.",
+          "allowed_prefixes": [
+            "/report/proposal/",
+            "/report/perspectives/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "monitoring.2",
+          "level": 2,
+          "requirement": "중요 지표/시점/사건 및 이견의 채택·기각 이유를 명시한다.",
+          "allowed_prefixes": [
+            "/report/proposal/investment_case/",
+            "/report/proposal/dissent/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "monitoring.3",
+          "level": 3,
+          "requirement": "반증 변수·확인 시점/사건·담당·유지/변경/보류 행동을 이견 및 가정과 연결한다.",
+          "allowed_prefixes": [
+            "/report/proposal/investment_case/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        },
+        {
+          "id": "monitoring.4",
+          "level": 4,
+          "requirement": "사전 조건을 바꾸는 반례를 시험하고 가정 변경/성과/과정 평가 및 실패 가설 학습·복원 경로를 구분한다.",
+          "allowed_prefixes": [
+            "/report/proposal/investment_case/",
+            "/report/reflection/",
+            "/report/improvement/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P02",
+            "P04"
+          ]
+        }
+      ]
     },
     {
       "id": "traceability",
       "label": "추적성과 전달",
       "weight": 5,
-      "requirement": "결론에서 원본 근거·계산·가정·버전으로 추적"
+      "requirement": "결론에서 원본 근거·계산·가정·버전으로 추적",
+      "checks": [
+        {
+          "id": "traceability.1",
+          "level": 1,
+          "requirement": "실제로 읽은 출처와 계산/개인 입력을 식별한다.",
+          "allowed_prefixes": [
+            "/market/facts/",
+            "/report/proposal/investment_case/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03",
+            "P04"
+          ]
+        },
+        {
+          "id": "traceability.2",
+          "level": 2,
+          "requirement": "입출력·근거·가이드 버전을 추적하며 조사하지 않은 범위를 밝힌다.",
+          "allowed_prefixes": [
+            "/report/evidence_delivery/",
+            "/report/analysis/",
+            "/report/proposal/investment_case/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03",
+            "P04"
+          ]
+        },
+        {
+          "id": "traceability.3",
+          "level": 3,
+          "requirement": "결론→claim→fact/계산/가정→원문·당시 시점과 채택/기각 변경을 일관되게 추적한다.",
+          "allowed_prefixes": [
+            "/report/proposal/investment_case/",
+            "/report/evidence_delivery/",
+            "/report/analysis/",
+            "/role_outputs/quantitative_verifier/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03",
+            "P04"
+          ]
+        },
+        {
+          "id": "traceability.4",
+          "level": 4,
+          "requirement": "제3자가 고정 입력으로 핵심 계산·공백 판정·이견/수정 diff를 재현하며 문체·순서 변화 평가 안정성을 확인한다.",
+          "allowed_prefixes": [
+            "/report/analysis/",
+            "/report/improvement/",
+            "/report/proposal/investment_case/",
+            "/role_outputs/quantitative_verifier/"
+          ],
+          "reference_ids": [
+            "P01",
+            "P03",
+            "P04"
+          ]
+        }
+      ]
     }
   ],
   "applicability": "모든 8개 기준은 모든 제안에 적용. selection 세부 요구만 자산 유형에 따라 적용. 필요한 근거 누락은 N/A로 면제하지 않고 0~2점과 missing에 표시. 실제 미래성과는 평가 범위 밖이며 가중치 없음. 총점 분모 항상 100.",
-  "origin": "Mara 자체 기준; 기관의 공식 채점표 아님",
-  "references": "guides/reference-reports.md"
+  "origin": "Mara 자체 엄격 수용 기준. 기관의 공식 인증/채점표 또는 미래 성과 보증 아님",
+  "references": "guides/reference-reports.md",
+  "gates": [
+    {
+      "id": "G1",
+      "requirement": "자료 정체·시점·단위·원문 무결성"
+    },
+    {
+      "id": "G2",
+      "requirement": "실제 전달된 자료가 핵심 주장과 반대 근거를 충분히 지원"
+    },
+    {
+      "id": "G3",
+      "requirement": "독립 계산·동일 조건 비교·수익/납입/비용/월말 낙폭의 올바른 해석"
+    },
+    {
+      "id": "G4",
+      "requirement": "가계/실제/제안/미래 납입 분리·현재 제약·최종 R4·주문 미승인"
+    },
+    {
+      "id": "G5",
+      "requirement": "고정 coverage의 핵심 자료 공백이 실제 해결·전달·재검증됨"
+    }
+  ],
+  "session_gate": {
+    "id": "G6",
+    "requirement": "baseline과 수정 후 독립 평가 5회. 실행 코드가 호출·기준·원본 ID와 완료 이력으로 판정. 모델은 판정하지 않음"
+  },
+  "acceptance": {
+    "min_total": 85,
+    "min_each": 3,
+    "required_gates": [
+      "G1",
+      "G2",
+      "G3",
+      "G4",
+      "G5"
+    ],
+    "unresolved_critical": 0,
+    "scoring": "각 항목은 1부터 연속 met인 가장 높은 단계. partial/missing/contradicted에서 승급 중단. gates와 총점은 별도."
+  },
+  "coverage_ids": [
+    "context.cashflow",
+    "context.household",
+    "market.macro",
+    "market.institutional",
+    "selection.product",
+    "selection.lookthrough",
+    "selection.quality_price",
+    "allocation.alternatives",
+    "risk.quantitative",
+    "risk.fx_household",
+    "implementation.costs",
+    "monitoring.falsifiers"
+  ],
+  "conditional_policy": "예정 입금/비용 민감도 등 명시 가정으로 지지되는 조건부 계획과, 결정에 필요한 자료가 없어서 미입증인 상태를 구분. 후자는 G2/G5 pass가 아님."
 }

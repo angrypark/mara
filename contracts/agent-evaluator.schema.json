@@ -87,6 +87,57 @@
               "maxLength": 4000
             },
             "maxItems": 20
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "status": {
+                  "enum": [
+                    "met",
+                    "partial",
+                    "missing",
+                    "contradicted"
+                  ]
+                },
+                "evidence_paths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  },
+                  "maxItems": 6,
+                  "minItems": 0
+                },
+                "observation": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 650
+                },
+                "counterevidence": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 650
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "evidence_paths",
+                "observation",
+                "counterevidence"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 4,
+            "minItems": 4
           }
         }
       }
@@ -112,6 +163,109 @@
           "maxLength": 4000
         }
       }
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "enum": [
+              "G1",
+              "G2",
+              "G3",
+              "G4",
+              "G5"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "unknown"
+            ]
+          },
+          "evidence_paths": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "maxItems": 6,
+            "minItems": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 650
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "evidence_paths",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 5,
+      "minItems": 5
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "enum": [
+              "context.cashflow",
+              "context.household",
+              "market.macro",
+              "market.institutional",
+              "selection.product",
+              "selection.lookthrough",
+              "selection.quality_price",
+              "allocation.alternatives",
+              "risk.quantitative",
+              "risk.fx_household",
+              "implementation.costs",
+              "monitoring.falsifiers"
+            ]
+          },
+          "status": {
+            "enum": [
+              "supported",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "evidence_paths": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "maxItems": 6,
+            "minItems": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 450
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "evidence_paths",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 12,
+      "minItems": 12
     }
   }
 }

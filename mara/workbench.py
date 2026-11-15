@@ -2,7 +2,7 @@
 import copy
 from .registry import catalogue
 from .contracts import validate_workbench, validate, schema, output_schema, ContractError
-from .reporting import present
+from .reporting import present,stability_receipt
 from .agents import validate_output
 from .output_validation import issue_code, REASONS
 
@@ -143,6 +143,12 @@ def project(s,run_id):
         if rejection_code is not None:
             summary=REASONS[rejection_code]+(' 응답을 교정하고 있어요.' if status=='running' else ' 이 응답은 채택되지 않았어요.')
             rendered=[{'key':'contract_error','title':'출력 검증 실패','kind':'text','value':summary}]
+        if role=='leader':
+            references=[e for e in ev if e['kind']=='proposal_reference_validation']
+            if references:
+                rendered.append({'key':'proposal_reference_validation','title':'주장·대안의 계산 연결 검증','kind':'object','value':[e['body'] for e in references]})
+                if references[-1]['body']['status']=='failed' and state=='failed':
+                    status='failed';summary=REASONS['proposal_reference']+' 이 응답은 채택되지 않았어요.'
         if role=='leader' and completed:
             final=report['body']['proposal']
             rendered.insert(0,{'key':'final_decision','title':'최종 검증을 반영한 결과 · 에이전트 초안과 구분','kind':'object',
@@ -243,8 +249,13 @@ def project(s,run_id):
         lineage={'amendment':amendment,'base_weights':old,'new_weights':new,
             'weight_changes':{k:new.get(k,0)-old.get(k,0) for k in set(old)|set(new)} if completed else None,
             'change_response':(target['output'] or {}).get('change_response') if target else None}
+    from .quality_campaign import projection as quality_projection
+    quality=quality_projection(s,completed['id'] if completed else None,run_id)
+    stability=report['view'].get('evaluation_stability') if report else None
     return validate_workbench({'schema_version':'mara.workbench/1.2.0',
         'run':{'id':run_id,'as_of':as_of,'status':state,'mode':basis['mode'],'report_id':completed['id'] if completed else None,
             'previous_id':basis.get('previous_id'),'revision_of':basis.get('revision_of'),'message':message},
         'components':components,'edges':edges,'sources':sources,'portfolio':portfolio,'extensions':{'projection_corrections':corrections,
+            'quality_campaign':quality,'evaluation_stability':stability,'analysis':report['body'].get('analysis') if report else None,
+            'coverage_ledger':report['body'].get('coverage_ledger',[]) if report else [],
             'flow':flow,'evaluation':evaluation,'decision_actions':actions,'lineage':lineage}})

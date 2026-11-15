@@ -75,14 +75,66 @@ window.MaraWorkbench=(()=>{
       box.append(button('원본 판단과 비교',async()=>{runId=lineage.amendment.base_run_id;signature='';await refresh()}));root.append(box)}
     for(const a of (doc.extensions?.decision_actions||[]).slice(-3)){const box=el('div','wb-action-note');box.append(el('span','',a.result.message||(a.action==='revise'?'대화 변경의 후속 분석·검증 중…':'독립 품질 평가 중…')));if(a.result.new_run_id)box.append(button('새 판단 열기',async()=>{runId=a.result.new_run_id;signature='';await refresh()}));root.append(box)}
   }
+  function evidenceStatus(value){return ({pass:'충족',fail:'실패',unknown:'미확인',met:'충족',partial:'일부',missing:'누락',contradicted:'반박됨',supported:'지원됨',unsupported:'미입증',conditional:'조건부',unresolved:'미해결'})[value]||value}
+  function calculationView(path){
+    const roots={analysis:doc.extensions?.analysis,funding:doc.portfolio?.funding,valuation:doc.portfolio?.actual,proposal:doc.portfolio?.proposal};
+    let value=roots;for(const part of path.slice(1).split('/')){const key=part.replace(/~1/g,'/').replace(/~0/g,'~');value=value&&Object.hasOwn(value,key)?value[key]:undefined}
+    const box=el('details');box.append(el('summary','','계산값 확인'),el('p','hint',path),value===undefined?el('p','notice','이 원본 보고서에는 해당 계산 경로가 없어요.'):objectView(value));return box;
+  }
+  function reportCase(root){
+    const c=doc.portfolio?.proposal?.investment_case;if(!c)return;
+    const lead=el('section','wb-block');lead.append(el('h4','','승인 전에 읽을 핵심 판단'),list(c.key_points));root.append(lead);
+    const claims=el('details','wb-block');claims.append(el('summary','','핵심 주장 · 근거와 반대 조건 '+c.claims.length+'개'));
+    for(const claim of c.claims){const box=el('details','wb-quality-item');box.append(el('summary','',evidenceStatus(claim.status)+' · '+claim.statement),el('p','',claim.importance),el('p','','반대 근거: '+claim.counterevidence),el('p','','판단에 미치는 영향: '+claim.decision_impact),list(claim.assumptions),sourceButtons(claim.fact_ids));for(const path of claim.calculation_paths)box.append(calculationView(path));claims.append(box)}root.append(claims);
+    const alternatives=el('details','wb-block');alternatives.append(el('summary','','대안별 선택 이유와 판단 변경 조건'));
+    for(const option of c.alternatives||[]){const box=el('article','wb-tool-call');box.append(el('h5','',option.name),chip(({preferred:'선택',rejected:'채택하지 않음',conditional:'조건부',diagnostic_only:'제약 비교용'})[option.decision]||option.decision),el('p','',Object.entries(option.weights).map(([s,w])=>symbols(s)+' '+pct(w)).join(' · ')),el('p','',option.reason),el('p','','판단 변경 조건: '+option.change_condition),el('p','hint','계산 근거 '+option.comparison_path));alternatives.append(box)}root.append(alternatives);
+    const plan=el('details','wb-block');plan.append(el('summary','','실행 조건과 반증 계획'),list(c.implementation));for(const m of c.monitoring){plan.append(el('h5','',m.variable),el('p','',m.condition+' → '+m.action),el('p','hint',m.check_at+' · 담당 '+m.owner),el('p','','반례 확인: '+m.counterexample_test))}plan.append(list(c.scope_limits));root.append(plan);
+  }
+  function krwComparisonView(root,c){
+    if(!c?.available){if(c?.reason)root.append(el('p','notice','원화 비교 자료: '+c.reason));return;}
+    const section=el('section','wb-block');section.append(el('h4','','원화 기준 대안 비교'),el('p','hint',c.start+' ~ '+c.end+' · '+c.observations+'개월 · 월말 NAV × USD/KRW'),el('p','notice',c.cash_scope),el('p','hint',c.amount_unit));
+    const select=el('select');select.setAttribute('aria-label','원화 비교 지표');for(const [key,label] of [['annualized_return','시간가중 연환산 수익률'],['annualized_volatility','월별 연환산 변동성'],['month_end_max_drawdown','월말 최대 낙폭'],['ending_wealth','납입 포함 평가액 · KRW'],['profit','납입을 뺀 손익 · KRW']]){const o=el('option','',label);o.value=key;select.append(o)}
+    const chart=el('div');function redraw(){chart.replaceChildren();const metric=select.value,rows=Object.entries(c.results),max=Math.max(.001,...rows.map(([,r])=>Math.abs(r[metric])));for(const [name,r] of rows){const line=el('div','allocation-line');line.append(el('span','bar-label',name),bar(Math.abs(r[metric])/max),el('b','bar-value',['ending_wealth','profit'].includes(metric)?r[metric].toLocaleString('ko-KR',{maximumFractionDigits:0})+' KRW':pct(r[metric])));chart.append(line)}}select.addEventListener('change',redraw);section.append(select,chart);redraw();
+    section.append(el('p','hint','지표 절댓값을 같은 축으로 비교해요. 현재 전략을 과거에 적용한 가상 비교이며 미래 목표액·실제 수익이 아니에요.'),el('p','', '별도 계산 재현: '+({passed:'일치',failed:'불일치'}[c.independent_replay?.status]||'미확인')));
+    const detail=el('details');detail.append(el('summary','','원화 계산의 가정·비용·민감도'),el('p','',c.cost_scope),el('p','',c.fx_source_limits),objectView(c.assumptions),objectView(c.sensitivity),objectView(c.independent_replay),list(c.limitations));section.append(detail);root.append(section);
+  }
+  function quantitativeView(root){
+    const a=doc.extensions?.analysis;if(!a)return;
+    krwComparisonView(root,a.krw_comparison);
+    const section=el('section','wb-block');section.append(el('h4','','같은 조건에서 배분 대안 비교'));
+    const c=a.comparison;
+    if(!c?.available||!c.results||!Array.isArray(c.sensitivity)){section.append(el('p','notice',c?.reason||'검증된 공통 수익률 자료가 없어요.'));root.append(section)}else{
+    section.append(el('p','hint',c.start+' ~ '+c.end+' · '+c.observations+'개월 · 월별 NAV 총수익률 · USD'),el('p','hint',c.amount_unit),el('p','notice',c.cash_proxy_warning));
+    const choice=el('select');choice.setAttribute('aria-label','비교 지표');for(const [key,label] of [['annualized_return','시간가중 연환산 수익률'],['annualized_volatility','월별 수익률의 연환산 변동성'],['month_end_max_drawdown','월말 최대 낙폭'],['ending_wealth','납입 포함 평가액 · 정규화 USD'],['profit','납입을 뺀 손익 · 정규화 USD']]){const o=el('option','',label);o.value=key;choice.append(o)}
+    const chart=el('div');function redraw(){chart.replaceChildren();const metric=choice.value,rows=Object.entries(c.results),max=Math.max(.001,...rows.map(([,v])=>Math.abs(v[metric])));for(const [name,v] of rows){const row=el('div','allocation-line'),value=v[metric];row.append(el('span','bar-label',name),bar(Math.abs(value)/max),el('b','bar-value',['ending_wealth','profit'].includes(metric)?value.toLocaleString('ko-KR',{maximumFractionDigits:1}):pct(value)));chart.append(row)}chart.append(el('p','hint','막대는 선택한 지표의 절댓값을 같은 축으로 비교해요. 수익률이 높은 대안이 적합한 대안이라는 뜻은 아니에요.'))}choice.addEventListener('change',redraw);section.append(choice,chart);redraw();
+    const detail=el('details');detail.append(el('summary','','가정·비용·리밸런싱 민감도와 제약 확인'),objectView(c.assumptions));for(const [name,v] of Object.entries(c.results)){detail.append(el('h5','',name),el('p','','납입 '+v.contributed.toFixed(1)+' · 평가액 '+v.ending_wealth.toFixed(1)+' · 손익 '+v.profit.toFixed(1)+' · 계좌 거래비용 '+v.transaction_cost_paid.toFixed(2)),objectView(c.feasibility?.[name]||{}))}detail.append(objectView(c.sensitivity),list(c.limitations));section.append(detail);root.append(section);
+    }
+    const risk=el('details','wb-block');risk.append(el('summary','','환율·가계 복합 충격과 내부 집중'),el('p','hint',a.fx_stress?.limitation||''));for(const x of a.fx_stress?.scenarios||[]){risk.append(el('p','','주식 '+pct(x.equity_return_assumption)+' / 환율 '+pct(x.foreign_currency_return_in_base_assumption)+' → 제안액 변화 '+pct(x.portfolio_change_fraction)+' · 손실 '+x.loss_on_proposal_capital.toLocaleString('ko-KR')+' '+a.fx_stress.base_currency))}const joint=a.household?.joint_stress;if(joint && Array.isArray(joint.scenarios)){risk.append(el('h5','','소득·자산 동시 충격과 납입 재개'),el('p','hint',joint.scope));for(const row of joint.scenarios.filter(x=>x && [x.income_fraction_assumption,x.mortgage_rate_increase_assumption,x.cash_needed_if_contributions_paused,x.gap_against_reported_account_cash_only,x.income_needed_to_resume_planned_contribution].every(Number.isFinite)))risk.append(el('p','','소득 '+pct(row.income_fraction_assumption)+' 유지 / 가정 금리 +'+pct(row.mortgage_rate_increase_assumption)+' · 납입 중단 시 6개월 필요 현금 '+row.cash_needed_if_contributions_paused.toLocaleString('ko-KR')+' · 보고 계좌 현금만으로 부족한 금액 '+row.gap_against_reported_account_cash_only.toLocaleString('ko-KR')+' · 예정 납입 재개에 필요한 월 소득 '+row.income_needed_to_resume_planned_contribution.toLocaleString('ko-KR')+' '+a.fx_stress.base_currency));risk.append(el('p','hint',joint.liquidity_basis),el('p','hint',joint.limitations))}risk.append(objectView(a.lookthrough||{}),objectView(a.household||{}));root.append(risk);
+    if(a.costs){const costs=el('details','wb-block');costs.append(el('summary','','납입 비용·환전 조건·거래 수량 예시'),objectView(a.costs));root.append(costs)}
+  }
+  function coverageView(root,q){
+    const rows=doc.extensions?.coverage_ledger||[];if(!rows.length)return;
+    const box=el('details','wb-block');box.append(el('summary','','자료 충분성 · 고정 '+rows.length+'개 요구'));
+    for(const row of rows){if(!Array.isArray(row.input_ids)||!Array.isArray(row.claim_ids)||!Array.isArray(row.fact_ids)||!Array.isArray(row.missing_causes)){box.append(el('p','notice','자료 충분성 기록의 형식을 확인해야 해요. 원본 판단은 보존돼요.'));continue}const verdict=q?.output.coverage?.find(x=>x.id===row.id);const entry=el('details');entry.append(el('summary','',row.id+' · '+(row.retrieved?'수집됨':'수집 미완료')+' / '+(row.delivered?'전달됨':'전달 미확인')+' / '+(verdict?evidenceStatus(verdict.status):'독립 검토 대기')),el('p','',verdict?.reason||row.next_action),el('p','hint','담당 '+row.owner+' · 입력 '+row.input_ids.length+'건 · 연결 주장 '+row.claim_ids.length+'개'),list(row.missing_causes),sourceButtons(row.fact_ids));box.append(entry)}root.append(box);
+  }
+  function campaignView(root){
+    const c=doc.extensions?.quality_campaign;if(!c)return;const box=el('details','wb-block');box.open=true;box.append(el('summary','','독립 평가와 개선 '+c.completed_improvements+' / '+c.required_improvements+'회'),el('p','hint','기준 보고서 평가 후 개선·새 판단·독립 평가를 반복해요. 실행 5회 완료와 보고서 엄격 기준 통과는 별개예요.'));
+    if(c.checkpoint?.status==='running')box.append(el('p','notice',(c.checkpoint.round?'개선 '+c.checkpoint.round+'회':'기준 보고서')+' · '+(c.checkpoint.stage==='generation'?'판단 생성':'독립 평가')+' 진행 중이에요. 완료한 기록부터 표시해요.'));
+    if(c.checkpoint?.status==='failed')box.append(el('p','notice','현재 단계가 중단됐어요. 원본과 완료한 회차를 보존했으며 재개 시 여기서 이어가요.'));
+    for(const r of c.rounds){const row=el('details');row.append(el('summary','',(r.round?'개선 '+r.round+'회':'기준 보고서')+' · '+r.score.total+'점 · '+(r.score.strict_pass?'엄격 기준 충족':'미충족')),list(r.changes),el('p','hint','독립 응답 '+r.evaluator_output_id+' · '+r.recorded_at),button('이 회차 판단 열기',async()=>{runId=r.run_id;signature='';await refresh()}));box.append(row)}box.append(el('p','',c.G6==='pass'?'G6 · 서로 다른 평가 호출로 5회 개선 완료':'G6 · 5회 평가 이력을 확인하는 중이에요.'));root.append(box);
+  }
   function qualityView(root){
+    campaignView(root);
     const q=doc.extensions?.evaluation,c=doc.components.find(x=>x.id==='evaluator');
-    root.append(el('h4','','독립 보고서 품질 평가'));
+    root.append(el('h4','','독립 보고서 품질 평가'));coverageView(root,q);
     if(!q){root.append(el('p','hint',c?.status==='running'?'평가자가 당시 근거와 보고서를 대조하고 있어요.':c?.status==='failed'?'평가가 완료되지 못했어요. 제안 원본은 보존되어 있어요.':'아직 이 제안의 독립 품질 평가가 없어요.'));if(doc.run.status==='completed'){const b=button('이 제안 독립 평가하기',()=>decisionAction('evaluate'));b.disabled=c?.status==='running';root.append(b)}return}
     if(c?.status==='failed')root.append(el('p','error','최근 평가가 중단됐어요. 아래는 이전에 저장된 평가예요.'),button('평가 다시 실행',()=>decisionAction('evaluate')));
     const heading=el('div','wb-score-heading');heading.append(el('b','wb-score',q.score.total+' / 100'),el('div','',q.output.summary));root.append(heading,el('p','hint','기준 v'+q.rubric.version+' · 자료 기준 '+q.as_of+' · 평가 '+q.evaluated_at+' · 보고서 품질이며 미래 수익 점수가 아니에요.'));
+    if(q.score.gates){const gates=el('div','wb-block'),labels={G1:'자료 무결성',G2:'핵심 주장과 반대 근거',G3:'독립 계산',G4:'개인 적합성과 권한',G5:'필수 자료 공백 해소'};gates.append(el('strong','',q.score.strict_pass?'보고서 엄격 기준 충족':'보고서 엄격 기준 미충족'));for(const [id,state] of Object.entries(q.score.gates)){const review=q.output.gates.find(x=>x.id===id);gates.append(el('p','',id+' '+labels[id]+' · '+evidenceStatus(state)+' · '+(review?.reason||'')));if(review&&review.status!==state)gates.append(el('p','notice','평가자 판단 '+evidenceStatus(review.status)+' 이후 코드 검사가 '+evidenceStatus(state)+'으로 판정했어요. 아래 계산·근거 지적을 함께 확인하세요.'))}gates.append(list(q.score.deterministic_findings||[]),el('p','hint','85점 이상·모든 기준 3단계 이상·필수 gate 충족·중요 결함 0개를 함께 확인해요. 5회 실행 완료 여부와는 별개예요.'));root.append(gates)}
+    const stability=doc.extensions?.evaluation_stability;if(stability){const check=el('details','wb-block');check.append(el('summary','','이 보고서의 후속 표현·순서 시험 · '+(stability.passed?'사전 조건 충족':'사전 조건 미충족')),el('p','',stability.valid_outputs+'/'+stability.cases+'개 유효 응답 · 점수 범위 '+(stability.total_score_range==null?'미확인':stability.total_score_range.toFixed(1))+'점 · gate 판정 '+(stability.gate_invariance?'동일':'다름/미확인')),el('p','hint','이 보고서를 고정해 별도로 실행한 후속 시험이에요. 원래 평가 점수·gate를 수정하지 않으며 투자 성과·정확성 보증이 아니에요.'),el('p','hint',stability.scope),objectView(stability));root.append(check)}
     if(q.output.red_flags.length){const box=el('div','notice');box.append(el('strong','','먼저 해결할 결함'),list(q.output.red_flags));root.append(box)}
     const chart=el('div','wb-quality-grid');for(const criterion of q.rubric.criteria){const r=q.output.criteria.find(x=>x.id===criterion.id),item=el('details','wb-quality-item');const summary=el('summary');summary.append(el('span','',criterion.label),el('b','',r.score+' / 4'),bar(r.score/4));item.append(summary,el('p','',r.reason),el('p','hint','가중치 '+criterion.weight+'점 · '+criterion.requirement));
+      for(const check of (r.checks||[])){const atom=el('details');atom.append(el('summary','',check.id+' · '+evidenceStatus(check.status)),el('p','',check.observation),el('p','hint',check.counterevidence),list(check.evidence_paths));item.append(atom)}
       if(r.missing.length)item.append(el('h5','','부족한 근거'),list(r.missing));if(r.improvements.length)item.append(el('h5','','개선할 내용'),list(r.improvements));item.append(el('h5','','평가에 사용한 근거'));
       r.evidence_paths.forEach((path,index)=>{const detail=el('details');let value=c?.inputs;for(const part of path.slice(1).split('/'))value=value?.[part.replace(/~1/g,'/').replace(/~0/g,'~')];detail.append(el('summary','','근거 '+(index+1)+' 펼치기'),el('p','hint',path),objectView(value));item.append(detail)});chart.append(item)}root.append(chart,el('p','hint',q.score.rule));
     const references=el('details','wb-block');references.append(el('summary','','평가 기준에 참고한 공개 보고서'));
@@ -151,8 +203,8 @@ window.MaraWorkbench=(()=>{
   }
   function researchTools(root,value){
     const labels={collected:'수집됨',failed:'조회 실패',skipped:'이번 범위에서 제외'};
-    const reasons={active_evidence_budget:'분석 자료 크기 한도',financial_evidence_budget:'재무 자료 크기 한도',collection_time_budget:'수집 시간 한도',time_budget_or_timeout:'응답 대기 시간 초과',SEC_identifier_unavailable:'SEC 기업 식별자 미확인',SEC_identity_source_failed:'SEC 기업 식별 확인에 실패해 재무 조회 제외',fund_profile_unavailable:'상품 정보를 확인하지 못해 구성 조회 제외',unsupported_or_invalid_data:'지원 형식·단위·시점 조건 미충족',network_unavailable:'외부 연결 실패',http_403:'공급자 접근 거부',http_429:'공급자 요청 한도 초과'};
-    root.append(el('p','hint','기업 자료는 보유 우선으로 최대 8개를 검토해요. ITOT·IVV는 분산 대안 비교용이며 자동으로 편입하지 않아요. 수집 성공과 투자 판단 완료는 달라요.'));
+    const reasons={future_observation:'기준일 뒤의 관측이라 현재 판단에서 제외했어요.',stale_observation:'허용 기간보다 오래된 관측이에요.',identity_mismatch:'요청한 종목과 공급자의 기업 식별이 일치하지 않아요.',currency_mismatch:'요청한 기준통화와 다른 값이에요.',observation_timezone_missing:'관측 시각의 시간대를 확인할 수 없어요.',insufficient_observations:'계산에 필요한 관측 수가 부족해요.',source_format_changed:'공급자 문서 형식이 달라 파서 보완이 필요해요.',source_structure_changed:'공급자 응답의 필수 필드나 타입이 달라졌어요.',required_source_field_missing:'필요한 원문 항목이 없어요.',quote_not_observed:'공급자 응답에 호가가 없어요. 최근 거래량·운용사 스프레드로 사전 검토하고 주문 직전 호가는 별도로 확인해요.',active_evidence_budget:'분석 자료 크기 한도',financial_evidence_budget:'재무 자료 크기 한도',collection_time_budget:'수집 시간 한도',time_budget_or_timeout:'응답 대기 시간 초과',SEC_identifier_unavailable:'SEC 기업 식별자 미확인',SEC_identity_source_failed:'SEC 기업 식별 확인에 실패해 재무 조회 제외',fund_profile_unavailable:'상품 정보를 확인하지 못해 구성 조회 제외',unsupported_or_invalid_data:'지원 형식·단위·시점 조건 미충족',network_unavailable:'외부 연결 실패',http_403:'공급자 접근 거부',http_429:'공급자 요청 한도 초과'};
+    root.append(el('p','hint','기본 기업 수집은 보유 우선 최대 8개예요. 에이전트는 별도 조사 도구로 후보를 더 수집하고 페이지별로 읽을 수 있어요. 역할의 추가 기업 조사 기록에서 실제 범위를 확인하세요. ITOT·IVV는 분산 대안 비교용이며 수집 성공이 편입 결정을 뜻하지 않아요.'));
     for(const tool of value.tools||[]){
       const calls=(value.calls||[]).filter(c=>c.tool===tool.id),ok=calls.filter(c=>c.status==='collected').length;
       const detail=el('details','wb-tool');detail.open=!!calls.some(c=>c.status==='failed');
@@ -181,11 +233,12 @@ window.MaraWorkbench=(()=>{
     }if(!doc.sources.length)root.append(el('p','empty','저장된 근거가 없어요.'));
   }
   function overview(root){
-    qualityView(root);
+    reportCase(root);
     const p=doc.portfolio;
     const finished=doc.components.filter(c=>['completed','blocked','needs_input'].includes(c.status)).length;
     const strip=el('div','wb-progress');strip.append(el('span','',finished+' / '+doc.components.length+' 역할 기록'),bar(finished/doc.components.length));root.append(strip);
-    if(!p){root.append(el('p','wb-summary',doc.run.message),el('p','hint','아직 종합된 제안이 없어요. 왼쪽 역할을 선택하면 완료한 분석과 추가 확인을 볼 수 있어요.'));return}
+    if(!p){qualityView(root);root.append(el('p','wb-summary',doc.run.message),el('p','hint','아직 종합된 제안이 없어요. 왼쪽 역할을 선택하면 완료한 분석과 추가 확인을 볼 수 있어요.'));return}
+    quantitativeView(root);qualityView(root);
     const pr=p.proposal,capital=p.funding?.proposal_capital??p.actual.nav;
     const decision=el('div','wb-summary');decision.append(chip(actions[pr.action]||pr.action,pr.action),el('p','',pr.rationale));root.append(decision);
     if(pr.decision_status){const detail=el('details','wb-block');detail.open=pr.action==='defer';detail.append(el('summary','','판단 상태와 남은 확인'));decisionStatus(detail,pr.decision_status);root.append(detail)}
@@ -196,9 +249,10 @@ window.MaraWorkbench=(()=>{
     root.append(el('h4','','실제 보유와 제안 비중'));for(const s of [...new Set(maps.flatMap(w=>Object.keys(w||{})))]){const row=el('div','allocation-row');row.append(el('b','allocation-symbol',symbols(s)));const group=el('div');maps.forEach((w,i)=>{const line=el('div','allocation-line');line.append(el('span','bar-label',names[i]),bar(w?.[s]||0,['actual','proposal','previous'][i]),el('b','bar-value',w?pct(w[s]||0):'비교 없음'));group.append(line)});row.append(group);root.append(row)}
     const perspectives=doc.components.filter(c=>c.kind==='perspective'&&c.output?.weights);root.append(el('h4','','관점별 차이'));const scroll=el('div','scroll'),table=el('table','wb-comparison'),head=el('tr');head.append(el('th','','자산'));for(const c of perspectives)head.append(el('th','',c.label));table.append(head);
     for(const s of [...new Set(perspectives.flatMap(c=>Object.keys(c.output.weights)))]){const tr=el('tr');tr.append(el('th','',symbols(s)));for(const c of perspectives){const td=el('td');td.append(el('b','',pct(c.output.weights[s]||0)),bar(c.output.weights[s]||0));tr.append(td)}table.append(tr)}scroll.append(table);root.append(scroll);
-    const risk=p.validation.final_numeric,h=risk.historical||{},rm=risk.metrics||{};root.append(el('h4','','위험 평가와 미확인 항목'));
-    const riskCards=el('div','metrics');for(const [label,v] of [['가정한 시나리오 손실',pct(risk.scenario_loss_fraction)],['최대 종목 비중',pct(rm.max_position_fraction)],['연환산 변동성',pct(h.annualized_volatility)],['과거 최대 낙폭',pct(h.max_drawdown)],['Sharpe ratio',h.sharpe==null?'미확인':h.sharpe.toFixed(2)],['정성 검증',p.validation.final_critique.qualitative_pass?'조건 충족':'추가 확인']]){const box=el('div','metric');box.append(el('span','label',label),el('b','',v));riskCards.append(box)}root.append(riskCards,el('p','hint','시나리오 손실은 가정이에요. 과거 지표는 현재 비중을 재현한 가상 통계이며 실제 성과가 아니에요.'));
-    for(const [title,values] of [['검증 결과',[...(risk.errors||[]),...(risk.missing||[]),...(risk.warnings||[])]],['남은 의견 차이',pr.dissent],['다음 확인',pr.next_checks]]){root.append(el('h4','',title),list(values||[]))}
+    const risk=p.validation.final_numeric,h=risk.historical||{},rm=risk.metrics||{},monthlyRisk=h.status!=='available'&&doc.extensions?.analysis?.comparison?.available?doc.extensions.analysis.comparison.results?.proposal:null;root.append(el('h4','','위험 평가와 미확인 항목'));
+    const riskCards=el('div','metrics');for(const [label,v] of [['가정한 시나리오 손실',pct(risk.scenario_loss_fraction)],['최대 종목 비중',pct(rm.max_position_fraction)],[monthlyRisk?'월별 NAV 연환산 변동성':'연환산 변동성',pct(monthlyRisk?.annualized_volatility??h.annualized_volatility)],[monthlyRisk?'월말 최대 낙폭':'과거 최대 낙폭',pct(monthlyRisk?.month_end_max_drawdown??h.max_drawdown)],['Sharpe ratio',h.sharpe==null?'미확인':h.sharpe.toFixed(2)],['정성 검증',p.validation.final_critique.qualitative_pass?'조건 충족':'추가 확인']]){const box=el('div','metric');box.append(el('span','label',label),el('b','',v));riskCards.append(box)}root.append(riskCards,el('p','hint','시나리오 손실은 가정이에요. 과거 지표는 현재 비중을 재현한 가상 통계이며 실제 성과가 아니에요.'));
+    for(const [title,values] of [['검증 결과',[...(risk.errors||[]),...(risk.missing||[]),...(risk.warnings||[])].map(message=>monthlyRisk&&/변동성.*자료 부족/.test(message)?'일별 시세 기준: '+message+' · 월별 NAV 통계는 위에서 별도 계산했어요.':message)],['남은 의견 차이',pr.dissent],['다음 확인',pr.next_checks]]){root.append(el('h4','',title),list(values||[]))}
+    if(monthlyRisk)root.append(el('p','notice','표시한 과거 변동성·낙폭은 위 USD 월별 NAV 가상 비교의 값이에요. 실제 원화 계좌 성과·일중 손실과 다르며, 무위험 수익률을 확인하지 않은 Sharpe는 계산하지 않아요.'));
     const perf=p.performance;root.append(el('h4','','결과와 다음 평가'),el('p','',perf?(perf.limitation||'확인된 기간 수익률: '+pct(perf.modified_dietz)):'최초 평가예요. 아직 비교할 실제 투자 결과가 없어요.'),el('p','hint','다음 평가 '+p.next_evaluation+' · 리밸런싱 검토 '+p.next_rebalance));
     root.append(button('리더에게 판단 근거 묻기',()=>choose('leader')));
   }
@@ -253,6 +307,6 @@ window.MaraWorkbench=(()=>{
     try{const body={run_id:runId,agent_id:selected,request_id,message};if(current().source_output_id)body.source_output_id=current().source_output_id;await api('/api/dialogue/'+scope,body);if(ticket!==epoch||k!==key())return;$('wb-question').value='';drafts.delete(k);chatSignature='';await loadChat()}
     catch(e){if(ticket===epoch){$('wb-chat-status').textContent=e.message;$('wb-send').disabled=false}}
   };
-  setInterval(()=>{if(!$('report-panel').hidden){loadChat();if(doc?.run.status==='running'||doc?.extensions?.decision_actions?.some(a=>a.result.status==='running')||doc?.components.some(c=>c.status==='running'))refresh()}},3000);
+  setInterval(()=>{if(!$('report-panel').hidden){loadChat();if(doc?.run.status==='running'||doc?.extensions?.quality_campaign?.checkpoint?.status==='running'||doc?.extensions?.decision_actions?.some(a=>a.result.status==='running')||doc?.components.some(c=>c.status==='running'))refresh()}},3000);
   return {refresh,openReport,render,choose,setTab,validateDocument};
 })();

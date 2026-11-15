@@ -5,6 +5,7 @@ setup(
     name='mara', version='1.2.0',
     description='User-scoped, evidence-preserving investment deliberation',
     python_requires='>=3.9', packages=['mara'],
+    install_requires=['pypdf>=6.21.4,<7'],
     entry_points={'console_scripts':['mara=mara.cli:main']},
     data_files=[('share/mara/guides',glob('guides/*.md')),
                 ('share/mara/guides/roles',glob('guides/roles/*.md')),

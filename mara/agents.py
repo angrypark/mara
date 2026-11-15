@@ -50,6 +50,15 @@ def validate_output(role, obj, payload):
             raise ValueError('Clarification questions must match missing context with unique IDs')
         if any(len({o['id'] for o in q['options']})!=len(q['options']) for q in qs):
             raise ValueError('Clarification options must have unique IDs')
+    if kind=='leader' and payload.get('report_contract')=='investment_case/1':
+        case=obj.get('investment_case')
+        if not case:raise ValueError('Structured investment_case required')
+        from .evaluation import rubric
+        ids=[c['requirement_id'] for c in case['claims']]
+        if set(ids)!=set(rubric()['coverage_ids']):raise ValueError('All fixed coverage requirements must have material claims')
+        if len({c['id'] for c in case['claims']})!=len(case['claims']):raise ValueError('Unique material claim IDs required')
+        allowed={f['id'] for f in payload['market']['facts']}
+        if any(not set(c['fact_ids'])<=allowed for c in case['claims']):raise ValueError('Invented evidence ID')
     if kind == 'leader' and obj['action'] not in {'hold','adjust','defer'}: raise ValueError('Invalid action')
     if kind=='validation' and 'findings' in obj:
         blocked=any(x['blocks_proposal'] for x in obj['findings'])
@@ -101,10 +110,16 @@ class DemoModel:
     def complete(self, role, guide, p, contract):
         if contract.get('$id')=='urn:mara:research-plan:1.0.0':return {'reason':'Synthetic fixture does not fetch public data','calls':[]}
         if role=='evaluator' and contract.get('$id')=='urn:mara:agent-evaluator:1.0.0':
-            return {'summary':'합성 평가 연결 예시예요. 실제 보고서 품질 점수가 아니에요.',
+            result={'summary':'합성 평가 연결 예시예요. 실제 보고서 품질 점수가 아니에요.',
                 'criteria':[{'id':c['id'],'score':0,'reason':'Synthetic fixture only','evidence_paths':[],
                     'missing':['No real evaluation'],'improvements':['Use live evaluator']} for c in p['rubric']['criteria']],
                 'red_flags':['Synthetic fixture only']}
+            if p['rubric']['version'].startswith('2.'):
+                for row,c in zip(result['criteria'],p['rubric']['criteria']):
+                    row['checks']=[{'id':x['id'],'status':'missing','evidence_paths':[], 'observation':'Synthetic fixture only','counterevidence':'No real evaluation'} for x in c['checks']]
+                result['gates']=[{'id':x['id'],'status':'unknown','evidence_paths':[],'reason':'Synthetic fixture only'} for x in p['rubric']['gates']]
+                result['coverage']=[{'id':x,'status':'unsupported','evidence_paths':[],'reason':'Synthetic fixture only'} for x in p['rubric']['coverage_ids']]
+            return result
         if contract.get('$id')=='urn:mara:dialogue-answer:1.0.0':
             return {'answer':'합성 대화 예시예요. '+role+' 역할에 전달된 질문: '+p['question']+'\n이 실행의 판단 근거와 반대 조건을 함께 확인할 수 있어요. 실제 모델 응답이나 투자 분석이 아니에요.',
                 'evidence_ids':[f['id'] for f in p['sources'][:2]],'uncertainties':['합성 데이터로 화면과 저장 흐름만 확인해요.'],
@@ -137,11 +152,14 @@ class Agents:
         self.s, self.model, self.as_of, self.run_id = session, model, as_of, run_id
         self.research_library=research_library
         self.research_facts=[]
+        self.guide_cache={}
 
     def guide(self, role):
+        if role in self.guide_cache:return self.guide_cache[role]
         overrides = [e for e in self.s.events('guide',self.as_of) if e['body']['role'] == role]
-        if overrides: return overrides[-1]['body']['text']
-        return resource(agent(role)['guide']).read_text()
+        value=overrides[-1]['body']['text'] if overrides else resource(agent(role)['guide']).read_text()
+        self.guide_cache[role]=value
+        return value
 
     def call(self, role, payload):
         guide = self.guide(role)
@@ -149,6 +167,8 @@ class Agents:
         guide += '\n'+skill_guide
         if payload.get('market',{}).get('research'):
             guide += '\n'+resource('guides/roles/research-tools.md').read_text()
+        if payload.get('analysis'):
+            guide += '\n'+resource('guides/roles/analysis-exhibits.md').read_text()
         guide += '\n공통 기억 규칙: needs_revalidation=true인 보호 지식은 재검토 대상으로 보존한 기록이에요. 현재 사실로 확정하지 말고 적용 조건과 반증을 확인해요.'
         guide += '\n공통 인용 규칙 v1.1: evidence_ids와 facts에는 input.market.facts에 있는 id만 그대로 사용해요. actual.evidence_id, snapshot_id, 사용자 답변/프로필/이전 실행의 원본 이벤트 ID는 시장 fact ID가 아니므로 넣지 않아요. 개인 맥락은 판단 설명에서 입력 항목으로 구분해 서술해요. 자료 밖 주장은 불확실성으로 남기고 ID를 만들어내거나 단지 인용을 통과하려고 무관한 자료를 붙이지 않아요.'
         payload=copy.deepcopy(payload)
@@ -202,7 +222,7 @@ class Agents:
                 if role=='evaluator':
                     # The evaluator already has this payload and its own rejected
                     # paths. Keep precise repair diagnostics private to this call.
-                    current['output_feedback']['validation_error']=str(exc)[:1000]
+                    current['output_feedback']['validation_error']=str(exc)[:5000]
                 continue
             self.s.append('agent_validation',{'role':role,'input_id':iid,'output_id':oid,
                 'status':'accepted','code':None,'attempt':attempt},self.as_of,self.run_id)

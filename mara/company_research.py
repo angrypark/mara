@@ -13,23 +13,12 @@ from .research import PublicArchive,safe_code
 from . import research_sources as src
 from .registry import resource
 from .domain import dumps,day
+from .document_text import FilingText,extract,excerpts
 
 
 def symbol(value):
     if not isinstance(value,str) or not re.fullmatch(r'[A-Z0-9][A-Z0-9.\-]{0,14}',value):raise ValueError('Invalid symbol')
     return value.replace('.','-')
-
-
-class FilingText(HTMLParser):
-    def __init__(self):super().__init__();self.hidden=0;self.parts=[]
-    def handle_starttag(self,t,a):
-        if t in ('script','style','ix:header'):self.hidden+=1
-        if t in ('p','div','tr','h1','h2','h3','br'):self.parts.append('\n')
-    def handle_endtag(self,t):
-        if t in ('script','style','ix:header'):self.hidden=max(0,self.hidden-1)
-    def handle_data(self,s):
-        if not self.hidden:self.parts.append(s)
-    def text(self):return re.sub(r'[ \t]+',' ',''.join(self.parts))
 
 
 def quality(fin):
@@ -149,16 +138,15 @@ class CompanyLibrary:
         except (OSError,ValueError):
             fallback=json.loads(resource('resources/issuer-documents.json').read_text())['documents'].get(symbol(ticker))
             if not fallback or not 0<=(day(as_of)-day(fallback['verified_on'])).days<=180:raise ValueError('SEC document unavailable; no current verified issuer fallback') from None
+            if fallback.get('filing_accession') and fallback['filing_accession']!=filing['accession']:raise ValueError('Issuer fallback is for a different annual filing')
             raw,meta=self.archive().get(fallback['url'])
-        p=FilingText();p.feed(raw.decode('utf-8',errors='replace'));text=p.text()
-        hits=[];terms=[x.strip() for x in query.split('|') if x.strip()][:6]
-        for term in terms:
-            for match in list(re.finditer(re.escape(term),text,re.I))[:3]:
-                start=max(0,match.start()-250);end=min(len(text),match.end()+1400)
-                hits.append({'query':term,'start':start,'end':end,'excerpt':text[start:end]})
-                if len(hits)>=5:break
-            if len(hits)>=5:break
+        text,format_info=extract(raw)
+        normalized=re.sub(r'\s+',' ',text).casefold()
+        if fallback and any(term.casefold() not in normalized for term in fallback.get('required_text',[])):
+            raise ValueError('Issuer fallback identity or reporting period mismatch')
+        hits,terms,mode=excerpts(text,query)
         return {'symbol':ticker,'filing':filing,'issuer_fallback':fallback,'raw_ref':meta,'hits':hits,'text_length':len(text),
+            'document_format':format_info,'query_terms':terms,'query_mode':mode,
             'limits':'키워드 주변 발췌이며 문서 전체 독해 아님. SEC 발행사 진술을 독립 검증 사실과 구분. 위치는 추출된 텍스트 문자 기준.'}
 
 
@@ -219,6 +207,8 @@ class ResearchTools:
                     if company.get('symbol')==symbol(args['symbol']) and company.get('quote'):quotes.append(company['quote'])
             if not any(q['currency']=='USD' and q['price']==a.get('price') and q['observed_at']==a.get('price_as_of') for q in quotes):raise ValueError('Valuation price must match cited company USD quote')
             result=owner_value(a,{f['id'] for f in market['facts']},self.as_of)
+            result['symbol']=symbol(args['symbol'])
+            result['identity_basis']='validated company dossier and matching USD quote/source_ids'
         else:raise ValueError('Unknown research tool')
         # Receipts and discovery results are not financial evidence.
         fact=None
@@ -249,8 +239,17 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
     from .contracts import validate
     runner=ResearchTools(library,s,run_id,as_of);transcript=[];collected=0
     for round_no in range(4):
+        prior_review=(payload.get('improvement') or {}).get('feedback',{})
+        analysis=payload.get('analysis',{});comparison=analysis.get('comparison',{})
         request={'role':role,'as_of':as_of,'question':payload.get('question'),
             'objective':payload.get('profile',{}).get('goal'),'available_symbols':list(payload['market'].get('assets',{})),
+            'prior_review':{k:copy.deepcopy(prior_review[k]) for k in ('criteria','gates','coverage','deterministic_findings','instruction') if k in prior_review},
+            'available_analysis':{'comparison_available':comparison.get('available',False),
+                'independent_replay':copy.deepcopy(comparison.get('independent_replay',{})),
+                'comparison_period':{k:comparison[k] for k in ('start','end','observations','currency','frequency') if k in comparison},
+                'products':list(analysis.get('products',{})),
+                'published_costs_available':analysis.get('costs',{}).get('published_conditions_and_examples',{}).get('available',False),
+                'rule':'이미 전달 가능한 계산과 부족한 자료를 구분. 원문을 읽어야 하는 주장은 적합한 기업/본문 도구로 확인.'},
             'market_prices':{'currency':payload['market'].get('base_currency'),'quotes':payload['market'].get('prices',{}),
                 'rule':'기준통화 환산 가격. USD 가치 계산에는 company 도구의 원래 USD quote를 사용.'},
             'existing_evidence':[{'id':f['id'],'topic':f['topic']} for f in payload['market']['facts']],

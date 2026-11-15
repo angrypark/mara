@@ -135,7 +135,8 @@ class FlowTests(unittest.TestCase):
         inp=next(e['body']['payload'] for e in self.s.events('agent_input') if e['body']['role']=='evaluator')
         out=copy.deepcopy(current['output'])
         for row in out['criteria']:row.update(score=4,evidence_paths=['/report/proposal/rationale'])
-        self.assertEqual(score(out,inp)['total'],100)
+        self.assertEqual(score(out,inp)['total'],0)  # Claimed levels cannot override missing atomic evidence.
+        self.assertFalse(score(out,inp)['strict_pass'])
         inp['report']['proposal']['eligibility']='blocked';self.assertTrue(score(out,inp)['proposal_blocked'])
         out['criteria'][0]['evidence_paths']=['/report/invented'];self.assertRaises(ContractError,score,out,inp)
         out['criteria'][0]['evidence_paths']=['/profile']
@@ -149,6 +150,20 @@ class FlowTests(unittest.TestCase):
             out=research_loop(self.s,model,'buffett','guide',p,self.r['run_id'],DAY,lib)
         self.assertEqual(out['research_access']['status'],'frozen_snapshot')
         self.assertRaises(ValueError,lib.collect,['AAPL'],DAY)
+
+    def test_research_planner_receives_actual_prior_review_and_available_exhibits(self):
+        lib=CompanyLibrary(Path(self.tmp.name)/'library',today=DAY)
+        feedback={'coverage':[{'id':'selection.quality_price','reason':'Need dilution basis'}],'instruction':'Resolve evidence, not score'}
+        class Planner(DemoModel):
+            mode='live'
+            def complete(inner,role,guide,p,contract):
+                self.assertEqual(p['prior_review'],feedback)
+                self.assertTrue(p['available_analysis']['comparison_available'])
+                self.assertNotIn('previous_proposal',p)
+                return {'calls':[],'reason':'Synthetic planner verifies delivered feedback'}
+        p={'market':self.market,'profile':self.profile,'improvement':{'feedback':feedback,'previous_proposal':{'private':'not sent to planning'}},'analysis':{'comparison':{'available':True}}}
+        out=research_loop(self.s,Planner(),'buffett','guide',p,self.r['run_id'],DAY,lib)
+        self.assertEqual(out['research_access']['calls'],0)
 
     def test_evaluator_repairs_whole_object_reference_with_specific_feedback(self):
         payload=next(e['body']['payload'] for e in self.s.events('agent_input') if e['body']['role']=='evaluator')

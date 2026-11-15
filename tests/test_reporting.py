@@ -35,6 +35,28 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(present(self.s,row)['body'],row['body']);self.assertNotIn('view',row['body']);self.assertNotIn('view',self.s.get(row['id'])['body'])
         self.assertIsNone(view['prices'][0]['price_change'])
 
+    def test_printable_includes_only_research_available_before_completion_and_latest_quality(self):
+        original=self.s.get(self.first['event_id']);fact=dict(self.m['facts'][0],id='late-source')
+        self.s.append('research_evidence',{'role':'buffett','fact':fact},'2026-11-14',original['run_id'])
+        self.assertNotIn('late-source',{f['id'] for f in present(self.s,original)['view']['sources']})
+        eid=self.s.append('completed',copy.deepcopy(original['body']),'2026-11-14',original['run_id'])
+        view=present(self.s,self.s.get(eid))['view'];self.assertIn('late-source',{f['id'] for f in view['sources']})
+        self.assertEqual(view['expired_source_count'],0)
+        self.assertIsNone(view['quality_evaluation'])
+        self.assertIsNotNone(present(self.s,original)['view']['quality_evaluation'])
+
+    def test_later_outputs_and_unvalidated_outputs_do_not_rewrite_completed_view(self):
+        original=self.s.get(self.first['event_id']);before=present(self.s,original)['view']
+        prior=next(e for e in self.s.events('agent_output') if e['body']['role']=='evidence')
+        body=copy.deepcopy(prior['body']);body['output']['summary']='LATER UNVALIDATED'
+        oid=self.s.append('agent_output',body,'2026-11-14',original['run_id'])
+        self.assertEqual(present(self.s,original)['view'],before)
+        eid=self.s.append('completed',copy.deepcopy(original['body']),'2026-11-14',original['run_id'])
+        self.assertNotEqual(present(self.s,self.s.get(eid))['view']['market_analysis']['summary'],'LATER UNVALIDATED')
+        self.s.append('agent_validation',{'output_id':oid,'status':'accepted'},'2026-11-14',original['run_id'])
+        self.assertEqual(present(self.s,original)['view'],before)
+        self.assertNotEqual(present(self.s,self.s.get(eid))['view']['market_analysis']['summary'],'LATER UNVALIDATED')
+
     def test_weekly_price_lineage_and_unreconciled_return_remains_missing(self):
         m=copy.deepcopy(self.m);m['as_of']='2026-11-21';m['prices']['BROAD']['price']=440
         for q in m['prices'].values():q.update(observed_at='2026-11-20',known_at='2026-11-21')

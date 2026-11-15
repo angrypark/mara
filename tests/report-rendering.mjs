@@ -88,5 +88,15 @@ test('dashboard navigation, stored history and print preserve the setup draft',a
     h.w.dispatchEvent(new h.w.Event('afterprint'));assert.ok(closed.every(x=>!x.open));
   }finally{await h.close()}
 });
+test('printable structured claims quality gates and historical units remain visible',async()=>{
+  const h=setup();try{
+    const r=structuredClone(fixture.weekly);r.body.proposal.investment_case={key_points:['Synthetic decision summary'],alternatives:[{name:'Alternative A',decision:'rejected',weights:{CASH:1},reason:'Synthetic reason',change_condition:'Synthetic boundary'}],claims:[{statement:'Synthetic claim',status:'conditional',assumptions:['Synthetic assumption'],counterevidence:'Synthetic countercase',decision_impact:'Synthetic impact',fact_ids:[r.view.sources[0].id]}]};
+    r.view.quality_evaluation={score:{strict_pass:false,total:50,gates:{G3:'fail'}},rubric:{version:'2.0.0'},output:{summary:'Synthetic independent failure'}};
+    r.body.analysis={comparison:{available:true,start:'2020-01-31',end:'2022-12-31',observations:36,amount_unit:'Normalized USD only',cash_proxy_warning:'USD proxy, not KRW account',results:{fixture:{annualized_return:.02,annualized_volatility:.1,month_end_max_drawdown:.3,contributed:100,ending_wealth:110,profit:10}},limitations:['Synthetic history, not prediction']}};
+    h.render(r);const t=h.$('structured-report').textContent;
+    assert.match(t,/Synthetic decision summary/);assert.match(t,/Synthetic countercase/);assert.match(t,/채택하지 않음/);assert.match(t,/기준통화 현금 100.0%/);assert.match(t,/주장 상태: 조건부/);assert.match(t,/Synthetic assumption/);assert.match(t,/엄격 기준 미충족/);assert.match(t,/G3 · 실패/);assert.match(t,/USD proxy, not KRW account/);assert.match(t,/월말 최대 낙폭 30.0%/);
+    delete r.view.quality_evaluation.score.strict_pass;r.view.quality_evaluation.rubric.version='1.0.0';h.render(r);assert.match(h.$('structured-report').textContent,/엄격 기준 미평가/);assert.doesNotMatch(h.$('structured-report').textContent,/엄격 기준 미충족/);h.render(fixture.initial);assert.doesNotMatch(h.$('structured-report').textContent,/Synthetic claim/);
+  }finally{await h.close()}
+});
 for(const {name,run} of cases){await run();console.log('PASS '+name)}
 console.log(cases.length+' report rendering tests passed');

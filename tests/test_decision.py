@@ -127,6 +127,12 @@ class DecisionTests(unittest.TestCase):
             doc=project(s,r['run_id']);self.assertEqual(doc['schema_version'],'mara.workbench/1.2.0')
             self.assertTrue(all(row['body']['skills'] for row in s.events('agent_input')))
             self.assertFalse(any('perspectives' in row['body']['payload'] for row in s.events('agent_input') if row['body']['role'] in ('buffett','marks','bogle')))
+            e.set_holdings({'as_of':ASOF,'base_currency':'USD','cash':2000,'positions':{},'rationale':'Separate existing cash','last_rebalanced':ASOF})
+            updated=e.run(ASOF,r['market_id'],force=True,revision_reason='Synthetic separate future funding')
+            self.assertEqual(updated['funding']['proposal_capital'],1000)
+            self.assertEqual(updated['funding']['additional_funding_needed'],1000)
+            self.assertEqual(updated['funding']['amount_outside_proposal'],2000)
+            self.assertEqual(s.latest('actual')['body']['cash'],2000)
             db.close()
 
 class CommentaryTests(unittest.TestCase):

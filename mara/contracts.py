@@ -56,6 +56,12 @@ def validate(value, spec, path='$', root=None):
         if not spec.get('minItems',0)<=len(value)<=spec.get('maxItems',100000):raise ContractError(path+': array length')
         if spec.get('uniqueItems') and len({json.dumps(x,sort_keys=True) for x in value})!=len(value):raise ContractError(path+': duplicate items')
         for i,item in enumerate(value):validate(item,spec.get('items',{}),path+'['+str(i)+']',root)
+        if 'contains' in spec:
+            matches=0
+            for item in value:
+                try:validate(item,spec['contains'],path,root);matches+=1
+                except ContractError:pass
+            if not spec.get('minContains',1)<=matches<=spec.get('maxContains',len(value)):raise ContractError(path+': contains count')
     if isinstance(value,str):
         if not spec.get('minLength',0)<=len(value)<=spec.get('maxLength',1000000):raise ContractError(path+': text length')
         if 'pattern' in spec and not re.search(spec['pattern'],value):raise ContractError(path+': text pattern')

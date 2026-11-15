@@ -30,6 +30,10 @@ METRICS={
 DURATIONS={'revenue','net_income','operating_cashflow','capital_expenditure','diluted_eps'}
 
 
+class EvidenceError(ValueError):
+    def __init__(self,code):super().__init__(code);self.code=code
+
+
 def finite(v,lo=None,hi=None):
     if isinstance(v,bool):raise ValueError('boolean number')
     n=float(str(v).replace(',',''))
@@ -39,7 +43,9 @@ def finite(v,lo=None,hi=None):
 
 def dated(value,as_of,max_age):
     d=day(value)
-    if not 0<=(day(as_of)-d).days<=max_age:raise ValueError('future or stale observation')
+    age=(day(as_of)-d).days
+    if age<0:raise EvidenceError('future_observation')
+    if age>max_age:raise EvidenceError('stale_observation')
     return value
 
 
@@ -84,7 +90,7 @@ def sec_financials(raw,as_of):
 
 def sec_filings(raw,symbol,as_of):
     norm=lambda s:s.upper().replace('.','-')
-    if norm(symbol) not in {norm(s) for s in raw.get('tickers',[])}:raise ValueError('SEC identity mismatch')
+    if norm(symbol) not in {norm(s) for s in raw.get('tickers',[])}:raise EvidenceError('identity_mismatch')
     recent=raw.get('filings',{}).get('recent',{});out=[]
     for i,form in enumerate(recent.get('form',[])):
         if form not in {'10-K','10-Q','8-K','20-F','6-K','10-K/A','10-Q/A'}:continue
@@ -154,8 +160,16 @@ def fed_news(raw,as_of):
 
 
 class LinkedData(HTMLParser):
-    def __init__(self):super().__init__();self.active=False;self.parts=[];self.graph=[]
+    def __init__(self):super().__init__();self.active=False;self.parts=[];self.graph=[];self.components={}
     def handle_starttag(self,tag,attrs):
+        if tag=='walrus-render-on-client':
+            value=dict(attrs).get('componentprops')
+            if value:
+                try:
+                    obj=json.loads(value)
+                    if isinstance(obj,dict) and obj.get('componentId') in ('keyFundFacts','fundamentalsAndRisk'):
+                        self.components[obj['componentId']]=obj
+                except ValueError:pass
         if tag=='script' and dict(attrs).get('type')=='application/ld+json':self.active=True;self.parts=[]
     def handle_data(self,s):
         if self.active:self.parts.append(s)
@@ -180,7 +194,22 @@ def fund_profile(raw,symbol,as_of):
     desc=next(x['description'] for x in graph if x.get('@id','').endswith('#fund-description'))
     url=next(x['mainEntity']['contentUrl'] for x in graph if x.get('@id','').endswith('#holdings'))
     if url!=FUNDS[symbol]+'/latest-holdings.csv':raise ValueError('unexpected holdings URL')
+    metrics={};missing=[]
+    definitions={'thirtyDayAverageVolume':('shares',1),'thirtyDayMedianBidAskSpread':('fraction',.01),
+        'beta3Yr':('ratio',1),'numHoldings':('count',1),'priceBook':('ratio',1),
+        'priceEarnings':('ratio',1),'standardDeviation3Yr':('fraction',.01),
+        'thirtyDaySecYield':('fraction',.01),'twelveMonTrlYld':('fraction',.01)}
+    data={k:v for c in parser.components.values() for k,v in c.get('dataPoints',{}).items()}
+    for key,(unit,scale) in definitions.items():
+        try:
+            item=data[key];date=datetime.strptime(item['formattedAsOfDate'],'%b %d, %Y').date().isoformat()
+            dated(date,as_of,62)
+            formatted=item['formattedValue']
+            if scale==.01 and not formatted.endswith('%'):raise ValueError('Percentage unit required')
+            metrics[key]={'value':finite(formatted.rstrip('%'))*scale,'unit':unit,'observed_at':date,'label':item['label']}
+        except (ValueError,KeyError,TypeError,AttributeError):missing.append(key)
     return {'symbol':symbol,'name':fund['name'],'asset_class':fund.get('category'),'expense_ratio':expense,
+        'issuer_metrics':metrics,'missing_issuer_metrics':missing,
         'benchmark':fields['Benchmark Index']['value'],'objective':desc[:700],
         'observed_at':dt,'expense_observed_at':as_of,'holdings_url':url,
         'limits':'보수는 조회 시점 상품 표시값으로 변경 발효일 미제공. 운용사 보수는 세금·환전·거래수수료를 포함하지 않아요. 투자 추천이나 전체 상품 비교가 아니에요.'}
@@ -191,9 +220,19 @@ def fund_holdings(raw,as_of):
     observed=datetime.strptime(next(r[1] for r in lines if r and r[0]=='Fund Holdings as of'),'%b %d, %Y').date().isoformat()
     dated(observed,as_of,10)
     header=next(i for i,r in enumerate(lines) if r and r[0]=='Ticker')
-    data=[];sectors={};total=0;missing_weights=[]
+    data=[];sectors={};total=0;missing_weights=[];ended=False;seen=set()
+    columns=lines[header]
+    if len(set(columns))!=len(columns) or not {'Ticker','Asset Class','Sector','Name'}<=set(columns) or not {'Weight (%)','Market Weight'}&set(columns):raise ValueError('Incomplete holdings columns')
     for row in lines[header+1:]:
-        r=dict(zip(lines[header],row))
+        if not row or len(row)==1 and not row[0].strip():ended=True;continue
+        if len(row)!=len(columns):
+            if not ended or len(row)!=1:raise ValueError('Truncated holdings row')
+            continue
+        if ended:raise ValueError('Unexpected holding after footer')
+        r=dict(zip(columns,row))
+        identity=(r['Ticker'],r['Name'],r.get('Exchange',''),r['Asset Class'])
+        if not r['Ticker'] or not r['Name'] or identity in seen:raise ValueError('Ambiguous holdings identity')
+        seen.add(identity)
         weight=r.get('Weight (%)',r.get('Market Weight'))
         if weight is None:continue
         if weight in ('-',''):
@@ -205,28 +244,34 @@ def fund_holdings(raw,as_of):
             sectors[r['Sector']]=sectors.get(r['Sector'],0)+w
             data.append({'symbol':r['Ticker'],'name':r['Name'],'sector':r['Sector'],'weight':w})
     if not data or not 0.97<=total<=1.03:raise ValueError('incomplete fund weight coverage')
-    return {'observed_at':observed,'holdings_count':len(data),'reported_weight_sum':total,
+    result={'observed_at':observed,'holdings_count':len(data),'reported_weight_sum':total,
         'equity_fraction':sum(sectors.values()),'sector_weights':sectors,'missing_weight_rows':missing_weights,
         'complete_reported_weights':not missing_weights,
         'complete_lookthrough':False,
         'top_holdings':sorted(data,key=lambda x:x['weight'],reverse=True)[:10],
+        'constituents':data,
         'limits':'전량 CSV를 보존하고 상위 10개와 섹터 합계를 요약. 결측 비중은 0으로 대체하지 않음. 반올림/현금/파생상품 차이가 있고 토스 섹터 분류와 같지 않아요. 개별 종목과의 전체 중복 위험은 별도 확인.'}
+
+    from .holding_values import concentration
+    try:result['market_value_concentration']=concentration(raw,as_of)
+    except (ValueError,KeyError,TypeError,StopIteration):result['market_value_concentration']={'available':False,'reason':'보고 시장가치의 전량·통화·단위·기간 검증을 통과하지 못했어요.'}
+    return result
 
 
 def price_history(raw,symbol,as_of):
     rows={}
     for r in raw['candles']:
         dt=datetime.fromisoformat(r['timestamp'])
-        if dt.tzinfo is None:raise ValueError('undated candle')
+        if dt.tzinfo is None:raise EvidenceError('observation_timezone_missing')
         obs=dt.date().isoformat()
         # Today's bar may still be forming; only completed prior local trading dates.
         if obs>=as_of:continue
-        if r['currency']!='USD':raise ValueError('wrong candle currency')
+        if r['currency']!='USD':raise EvidenceError('currency_mismatch')
         value={'date':obs,'close':finite(r['closePrice'],0.000001),'volume':finite(r['volume'],0)}
         if obs in rows and rows[obs]!=value:raise ValueError('conflicting candle')
         rows[obs]=value
     rows=sorted(rows.values(),key=lambda r:r['date'])
-    if len(rows)<20:raise ValueError('too few candles')
+    if len(rows)<20:raise EvidenceError('insufficient_observations')
     dated(rows[-1]['date'],as_of,7)
     changes={str(n)+'_sessions':rows[-1]['close']/rows[-1-n]['close']-1 for n in (5,20,60) if len(rows)>n}
     recent=rows[-20:]
@@ -237,6 +282,11 @@ def price_history(raw,symbol,as_of):
 
 
 def orderbook(raw,as_of,collected_at):
+    # A valid empty provider response is not a dated executable quote.
+    # Never invent a timestamp or a zero spread to make it pass.
+    if raw.get('currency')=='USD' and raw.get('timestamp') is None and raw.get('asks')==[] and raw.get('bids')==[]:
+        return {'availability':'no_quote','currency':'USD','timestamp':None,
+            'limits':'공급자가 관측 호가를 제공하지 않았어요. 휴장 여부는 이 응답만으로 확정하지 않아요. 최근 거래량과 운용사 기간별 스프레드로 사전 유동성을 검토하고 주문 직전 호가는 별도로 확인해야 해요.'}
     stamp=datetime.fromisoformat(raw['timestamp'])
     if stamp.tzinfo is None or raw['currency']!='USD' or stamp>collected_at:raise ValueError('invalid or future orderbook')
     dated(stamp.date().isoformat(),as_of,7)
