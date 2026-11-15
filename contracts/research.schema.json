@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:research:1.0.0",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "owner_role",
+    "tools",
+    "calls",
+    "selection",
+    "budget",
+    "collected_at",
+    "raw_policy"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "mara.research/1.0.0"
+    },
+    "owner_role": {
+      "const": "evidence"
+    },
+    "tools": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "roles",
+          "provides"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "provides": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "calls": {
+      "type": "array",
+      "maxItems": 80,
+      "items": {
+        "type": "object",
+        "required": [
+          "tool",
+          "target",
+          "status",
+          "reason",
+          "fact_ids",
+          "raw_refs"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "collected",
+              "failed",
+              "skipped"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "raw_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "sha256",
+                "source",
+                "retrieved_at",
+                "bytes"
+              ],
+              "properties": {
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "source": {
+                  "type": "string",
+                  "pattern": "^https://"
+                },
+                "retrieved_at": {
+                  "type": "string"
+                },
+                "bytes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_hit": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    },
+    "selection": {
+      "type": "object"
+    },
+    "budget": {
+      "type": "object"
+    },
+    "collected_at": {
+      "type": "string"
+    },
+    "raw_policy": {
+      "type": "string"
+    }
+  }
+}

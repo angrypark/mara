@@ -168,6 +168,8 @@ def make_server(app,port):
                 if parts[:2]==['api','contracts'] and len(parts)==3:
                     try:return self.send(200,schema(parts[2]))
                     except (ValueError,OSError):return self.send(404,{'error':'Unknown contract'})
+                if parts[:2]==['api','research-raw'] and len(parts)==4:
+                    return self.send(200,app.setup.research_raw(parts[2],parts[3]))
                 if parts[:2]==['api','workbench'] and len(parts) in (3,4):
                     return self.send(200,app.workbench(parts[2],parts[3] if len(parts)==4 else None))
                 if parts[:2]==['api','dialogue'] and len(parts)==5 and parts[2] in app.dialogues:

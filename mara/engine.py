@@ -9,6 +9,7 @@ from .knowledge import Knowledge
 from .risk import evaluate
 from .clarifications import questions, repeated_questions, answers
 from .output_validation import AgentOutputError
+from .research import compact_market
 
 
 class ContextNeedsInput(ValueError):
@@ -144,6 +145,10 @@ class Engine:
                     'final_validation':'after leader; assess each statement against its original stage'}}
         def call(role, extra=None):
             payload = dict(common,knowledge=k.retrieve(as_of,role))
+            payload['market']=compact_market(m,role)
+            if prior:
+                payload['previous']=copy.deepcopy(prior)
+                payload['previous']['market']=compact_market(prior['market'],role,historical=True)
             payload.update(extra or {})
             payload['analysis_stage']='final_validation' if role=='validation' and 'final_proposal' in payload else 'perspective_validation' if role=='validation' else 'proposal_synthesis' if role=='leader' else role
             return a.call(role,payload)

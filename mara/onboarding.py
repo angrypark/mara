@@ -19,6 +19,7 @@ from .output_validation import AgentOutputError, failed_job_diagnostic
 from .clarifications import answers,save_answers,notes_history,questions
 from .store import Store
 from .reporting import present
+from .research import Research
 from .toss import TossClient,secret_config
 
 KST=ZoneInfo('Asia/Seoul')
@@ -95,11 +96,11 @@ def inputs(value,snapshot,cap,now):
 
 
 class PortfolioSetup:
-    def __init__(self,directory,client_factory=TossClient,model_factory=None):
+    def __init__(self,directory,client_factory=TossClient,model_factory=None,research_factory=Research):
         self.directory=Path(directory); self.directory.mkdir(parents=True,exist_ok=True,mode=0o700)
         self.path=self.directory/'portfolio.sqlite3'; self.broker_dir=self.directory.parent/'toss'
         self.model_path=self.directory.parent/'model.json'
-        self.client_factory=client_factory; self.model_factory=model_factory
+        self.client_factory=client_factory; self.model_factory=model_factory; self.research_factory=research_factory
         self.guard=threading.RLock(); self.thread=None
         config=self.directory/'portfolio-session.json'
         with self.session() as s:
@@ -221,6 +222,19 @@ class PortfolioSetup:
             row=s.get(eid)
             if row['kind']!='completed': raise PermissionError()
             return present(s,row)
+
+    def research_raw(self,run_id,sha):
+        from .research import digest
+        if not re.fullmatch(r'[a-f0-9]{32}',run_id) or not re.fullmatch(r'[a-f0-9]{64}',sha):raise PermissionError()
+        with self.session() as s:
+            starts=[r for r in s.events('run_started') if r['run_id']==run_id]
+            if not starts:raise PermissionError()
+            m=s.get(starts[-1]['body']['market_id'])['body']
+            refs=[r for c in m.get('research',{}).get('calls',[]) for r in c.get('raw_refs',[]) if r['sha256']==sha]
+            if not refs:raise PermissionError()
+        raw=(self.directory/'research'/(sha+'.raw')).read_bytes()
+        if digest(raw)!=sha:raise ValueError('Archive hash mismatch')
+        return {'schema_version':'mara.research-raw/1.0.0','provenance':refs[0],'all_occurrences':refs,'text':raw.decode('utf-8-sig')}
 
     def job(self,jid,status,message,**kwargs):
         with self.session() as s: s.append('onboarding_job',dict(id=jid,status=status,message=message,**kwargs),date.today().isoformat())
@@ -363,6 +377,10 @@ class PortfolioSetup:
                 'uncertainty':'기본 정보와 시세만 확인. 기업 가치·뉴스·ETF 내부 구성·거래 유동성·과거 수익률 미확인. 섹터는 토스 자체 분류이며 중복 가능.'})
         m['facts'].append({'id':'toss-usdkrw','topic':'FX','text':d.dumps(fx),'source':SOURCE,
             'published_at':today,'known_at':today,'valid_until':today,'uncertainty':'이번 평가에 매매기준율 사용. 실제 환전비용·세금 제외.'})
+        if self.research_factory:
+            with self.broker() as (b,_):
+                self.research_factory(self.directory/'research',now=captured).enrich(
+                    m,list(dict.fromkeys(list(positions)+candidates)),b,progress)
         d.market(m); nav=d.valuation(actual,m,allow_empty=True)['nav']
         p['proposal_capital']=amount if value['capital_mode']=='total' else nav+amount
         p['funding_mode']=value['capital_mode']

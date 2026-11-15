@@ -103,7 +103,7 @@ def evaluate(w, p, m, capital, actual=None):
     actual_risky=any(v>0 and s!='CASH' and m['assets'].get(s,{}).get('asset_class')!='cash'
                      for s,v in (actual or {}).get('weights',{}).items())
     if m.get('coverage',{}).get('actionable_risky_allocation') is False and (risky or actual_risky):
-        missing.append('기본 시세·분류 자료만으로 위험자산 제안을 확정할 수 없어요. 기업·시장 근거와 거래 가능성 자료를 보강해야 해요.')
+        missing.append('기업·시장 근거의 적합성 및 거래·위험 자료 검토가 아직 끝나지 않았어요. 추가 수집 성공만으로 위험자산 제안을 확정하지 않아요.')
     invested=sum(risky); hhi=sum((v/invested)**2 for v in risky) if invested else None
     monthly_contribution=p['contribution_amount']*365.25/12/p['contribution_every_days']
     surplus=p['monthly_income']-p['monthly_expenses']

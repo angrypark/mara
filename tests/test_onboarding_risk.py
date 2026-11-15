@@ -61,7 +61,7 @@ class SetupTests(unittest.TestCase):
         (root/'toss').mkdir()
         save_private(root/'toss/credentials.json',{'client_id':'fake','client_secret':'fake-secret','account_seq':1})
         save_private(root/'toss/policy.json',{'max_capital_krw':30000000})
-        self.app=PortfolioSetup(root/'service',ReadOnlyBroker,TestModel)
+        self.app=PortfolioSetup(root/'service',ReadOnlyBroker,TestModel,research_factory=None)
         self.snap=self.app.refresh()
         with self.app.session() as s:self.snapshot=s.get(self.snap['id'])
         self.value=form(self.snap)

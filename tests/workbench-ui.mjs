@@ -23,4 +23,11 @@ test('rejected result shows null output and explicit validation history in its c
   assert.equal(h.$('wb-pane').querySelector('pre').textContent,'null');assert.match(h.$('wb-pane').textContent,/market_evidence_reference/);assert.match(h.$('wb-pane').textContent,/rejected-output/);
  }finally{await h.close()}
 });
+test('research tools disclose partial collection and link frozen raw receipts',async()=>{const h=setup();try{
+ const d=structuredClone(f.weekly),c=d.components.find(c=>c.id==='evidence');
+ c.blocks.push({key:'research_tools',title:'이번 분석에 사용한 자료 도구',kind:'object',value:{tools:[{id:'sec_financials',label:'SEC 기업 재무',provides:'연간 현금흐름'}],calls:[{tool:'sec_financials',target:'AAA',status:'collected',reason:'수집됨',fact_ids:['demo-1'],raw_refs:[{sha256:'a'.repeat(64),retrieved_at:'2026-11-15T12:00:00Z'}]},{tool:'sec_financials',target:'BBB',status:'failed',reason:'http_429',fact_ids:[],raw_refs:[]}],selection:{not_deeply_collected:['CCC']}}});
+ h.ui.render(d);h.ui.choose('evidence');assert.match(h.$('wb-pane').textContent,/SEC 기업 재무 · 1\/2 수집/);assert.match(h.$('wb-pane').textContent,/공급자 요청 한도 초과/);assert.match(h.$('wb-pane').textContent,/상세 수집 범위 밖: CCC/);
+ assert.equal(h.$('wb-pane').querySelector('.wb-tool-call>a').getAttribute('href'),'/api/research-raw/'+d.run.id+'/'+'a'.repeat(64));
+ h.$('wb-pane').querySelector('.wb-tool .source-chip').click();assert.match(h.$('wb-pane').textContent,/demo-1/);
+ }finally{await h.close()}});
 for(const {name,run} of tests){await run();console.log('PASS '+name)}console.log(tests.length+' workbench UI tests passed');

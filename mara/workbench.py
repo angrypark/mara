@@ -136,6 +136,8 @@ def project(s,run_id):
             rendered.insert(0,{'key':'final_decision','title':'최종 검증을 반영한 결과 · 에이전트 초안과 구분','kind':'object',
                 'value':{'action':final['action'],'eligibility':final['eligibility'],'risks':final['risks']}})
         if role=='evidence':rendered.insert(0,{'key':'coverage','title':'이 실행에서 확인한 자료 범위','kind':'object','value':market.get('coverage',{'status':'not_recorded','message':'이전 실행에는 자료 범위 표가 없어요. 각 원본의 한계를 확인해요.'})})
+        if role=='evidence' and market.get('research'):
+            rendered.insert(1,{'key':'research_tools','title':'이번 분석에 사용한 자료 도구','kind':'object','value':market['research']})
         if role=='validation' and completed:
             for key in ('numeric','final_numeric'):rendered.append({'key':key,'title':LABELS[key],'kind':'object','value':completed['body']['validation'][key]})
         if role=='memory' and completed:rendered.append({'key':'pruning','title':LABELS['pruning'],'kind':'object','value':report['view']['pruning']})

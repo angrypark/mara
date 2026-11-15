@@ -70,8 +70,29 @@ window.MaraWorkbench=(()=>{
     if(c.source_ids.length)root.append(sourceButtons(c.source_ids));
     if(!c.blocks.length)root.append(el('p','empty','이 역할의 출력이 아직 없어요. 대화로 역할과 필요한 자료를 확인할 수 있어요.'));
     for(const block of c.blocks){const box=el('section','wb-block');box.append(el('h4','',block.title));
-      if(block.kind==='weights'){const map=block.value;for(const [s,w] of Object.entries(map).sort((a,b)=>b[1]-a[1])){const row=el('div','exposure-row');row.append(el('span','',symbols(s)),el('b','',pct(w)),bar(w));box.append(row)}}
+      if(block.key==='research_tools'){researchTools(box,block.value)}
+      else if(block.kind==='weights'){const map=block.value;for(const [s,w] of Object.entries(map).sort((a,b)=>b[1]-a[1])){const row=el('div','exposure-row');row.append(el('span','',symbols(s)),el('b','',pct(w)),bar(w));box.append(row)}}
       else box.append(objectView(block.value));root.append(box)}
+  }
+  function researchTools(root,value){
+    const labels={collected:'수집됨',failed:'조회 실패',skipped:'이번 범위에서 제외'};
+    const reasons={active_evidence_budget:'분석 자료 크기 한도',financial_evidence_budget:'재무 자료 크기 한도',collection_time_budget:'수집 시간 한도',time_budget_or_timeout:'응답 대기 시간 초과',SEC_identifier_unavailable:'SEC 기업 식별자 미확인',SEC_identity_source_failed:'SEC 기업 식별 확인에 실패해 재무 조회 제외',fund_profile_unavailable:'상품 정보를 확인하지 못해 구성 조회 제외',unsupported_or_invalid_data:'지원 형식·단위·시점 조건 미충족',network_unavailable:'외부 연결 실패',http_403:'공급자 접근 거부',http_429:'공급자 요청 한도 초과'};
+    root.append(el('p','hint','기업 자료는 보유 우선으로 최대 8개를 검토해요. ITOT·IVV는 분산 대안 비교용이며 자동으로 편입하지 않아요. 수집 성공과 투자 판단 완료는 달라요.'));
+    for(const tool of value.tools||[]){
+      const calls=(value.calls||[]).filter(c=>c.tool===tool.id),ok=calls.filter(c=>c.status==='collected').length;
+      const detail=el('details','wb-tool');detail.open=!!calls.some(c=>c.status==='failed');
+      detail.append(el('summary','',tool.label+' · '+ok+'/'+calls.length+' 수집'),el('p','hint',tool.provides));
+      if(!calls.length)detail.append(el('p','hint','이번 실행의 대상이 없어요.'));
+      for(const call of calls){
+        const row=el('div','wb-tool-call');row.append(chip(labels[call.status]||call.status),el('b','',call.target),el('p','hint',reasons[call.reason]||call.reason));
+        if(call.fact_ids?.length)row.append(sourceButtons(call.fact_ids));
+        for(const ref of call.raw_refs||[]){const a=el('a','', '수집 원문 · '+ref.sha256.slice(0,10)+' · '+ref.retrieved_at);a.href='/api/research-raw/'+doc.run.id+'/'+ref.sha256;a.target='_blank';a.rel='noopener';row.append(a)}
+        detail.append(row);
+      }root.append(detail);
+    }
+    const omitted=value.selection?.not_deeply_collected||[];
+    if(omitted.length)root.append(el('p','notice','상세 수집 범위 밖: '+omitted.join(', ')));
+    root.append(el('p','hint','원본 응답은 해시와 수집 시각으로 보존해요. 자료가 오래됐거나 일부 조회에 실패하면 해당 항목은 판단 근거로 채우지 않아요.'));
   }
   function sources(root,c){
     const used=new Set(c?.source_ids||[]);root.append(el('p','hint',c?'직접 인용 '+used.size+'개 · 아래에 이번 실행의 공통 근거도 함께 표시해요.':'당시 수집한 원본 근거예요. 관측 시점과 적용 기한을 함께 확인해요.'));

@@ -90,6 +90,10 @@ class TossClient:
     def sellable(self,symbol): return self.request('GET','/api/v1/sellable-quantity',{'symbol':symbol})
     def prices(self,symbols): return self.request('GET','/api/v1/prices',{'symbols':','.join(symbols)},account=False)
     def stocks(self,symbols): return self.request('GET','/api/v1/stocks',{'symbols':','.join(symbols)},account=False)
+    def candles(self,symbol):
+        return self.request('GET','/api/v1/candles',{'symbol':symbol,'interval':'1d','count':80,'adjusted':'true'},account=False)
+    def orderbook(self,symbol):
+        return self.request('GET','/api/v1/orderbook',{'symbol':symbol},account=False)
     def exchange_rate(self): return self.request('GET','/api/v1/exchange-rate',{'baseCurrency':'USD','quoteCurrency':'KRW'},account=False)
     def sectors(self): return self.request('GET','/api/v1/sectors',account=False)
     def sector_stocks(self,sector):

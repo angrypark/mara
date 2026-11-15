@@ -10,5 +10,6 @@ setup(
                 ('share/mara/guides/personas',glob('guides/personas/*.md')),
                 ('share/mara/web',glob('web/*.html')+glob('web/*.js')+glob('web/*.css')),
                 ('share/mara/examples',glob('examples/*.json')),
+                ('share/mara/resources',glob('resources/*.json')),
                 ('share/mara/contracts',glob('contracts/*.json'))],
 )
