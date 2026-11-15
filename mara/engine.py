@@ -31,8 +31,9 @@ class ContextRepeatError(ValueError):
 
 
 class Engine:
-    def __init__(self, session, model):
+    def __init__(self, session, model, research_library=None):
         self.s, self.model = session, model
+        self.research_library=research_library
 
     def set_profile(self, profile, as_of):
         d.profile(profile)
@@ -58,12 +59,16 @@ class Engine:
         due = last is None or d.day(as_of) >= d.day(last['body']['next_evaluation'])
         return {'due':due,'next_evaluation':last['body']['next_evaluation'] if last else as_of}
 
-    def run(self, as_of, market_id=None, force=False, revision_reason=None):
+    def run(self, as_of, market_id=None, force=False, revision_reason=None, amendment=None):
         d.day(as_of)
         run_id = uuid.uuid4().hex
         self.s.lock(run_id)
         try:
-            return self._run(as_of,market_id,force,run_id,revision_reason)
+            result=self._run(as_of,market_id,force,run_id,revision_reason,amendment)
+            from .evaluation import evaluate_report
+            try:evaluate_report(self.s,self.model,result['event_id'])
+            except Exception:pass  # evaluation_status reports failure; completed proposal remains.
+            return result
         except Exception as exc:
             # Do not log provider exceptions, whose URLs/bodies can contain secrets.
             failure={'error_type':type(exc).__name__,'retry':'Correct inputs/provider and rerun; completed state unchanged'}
@@ -73,10 +78,16 @@ class Engine:
         finally:
             self.s.unlock(run_id)
 
-    def _run(self, as_of, market_id, force, run_id, revision_reason=None):
+    def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None):
         previous = self.s.latest('completed')
         if previous and previous['body']['mode'] != self.model.mode: raise ValueError('Demo and live histories must use separate users')
         revision_of=None
+        frozen=None
+        if amendment:
+            frozen=self.s.get(amendment['completed_id'])
+            if not previous or previous['id']!=frozen['id']:raise ValueError('A newer report exists; apply to latest report')
+            if frozen['kind']!='completed' or frozen['effective']!=as_of:raise ValueError('Invalid amendment basis')
+            market_id=frozen['body']['market_id']
         if previous and as_of == previous['effective'] and revision_reason and revision_reason.strip():
             revision_of=previous['id']
             earlier=[e for e in self.s.events('completed') if e['effective']<as_of]
@@ -84,12 +95,21 @@ class Engine:
         elif previous and as_of <= previous['effective']: raise ValueError('Completed dates must advance; no duplicate weekly result')
         if not force and not revision_of and not self.due(as_of)['due']: raise ValueError('Weekly evaluation not due; use --force for an explicit early review')
         pe, he = self.s.latest('profile',as_of), self.s.latest('actual',as_of)
+        if frozen:
+            pe=self.s.get(frozen['body']['profile_id']);he=self.s.get(frozen['body']['actual_id'])
         me = self.s.get(market_id) if market_id else self.s.latest('market',as_of,shared=True)
         if pe is None or he is None or me is None: raise ValueError('Profile, actual holdings and market snapshot required')
         if me['kind'] != 'market' or me['effective'] != as_of: raise ValueError('Market snapshot must match evaluation date')
         p,h,m = pe['body'],he['body'],copy.deepcopy(me['body'])
+        if frozen:
+            # Carry only evidence actually read in that run, never today's library contents.
+            ids={f['id'] for f in m['facts']}
+            for event in self.s.events('research_evidence'):
+                if event['run_id']==frozen['run_id'] and event['body']['fact']['id'] not in ids:
+                    fact=event['body']['fact'];m['facts'].append(copy.deepcopy(fact));ids.add(fact['id'])
+                    self.s.append('research_evidence',event['body'],as_of,run_id)
         saved_answers=answers(self.s,as_of)
-        if saved_answers and p.get('clarification_answers')!=saved_answers:
+        if not frozen and saved_answers and p.get('clarification_answers')!=saved_answers:
             p=copy.deepcopy(p);p['clarification_answers']=saved_answers
             pe=self.s.get(self.set_profile(p,as_of))
         if previous and previous['body']['mode'] != self.model.mode: raise ValueError('Demo and live histories must use separate users')
@@ -112,14 +132,17 @@ class Engine:
         start_id = self.s.append('run_started',{'market_id':me['id'],'profile_id':pe['id'],
              'actual_id':he['id'],'previous_id':previous['id'] if previous else None,
              'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason,
-             'agent_registry':catalogue()},as_of,run_id)
+             'agent_registry':catalogue(),'amendment':amendment},as_of,run_id)
         k = Knowledge(self.s)
-        a = Agents(self.s,self.model,as_of,run_id)
+        a = Agents(self.s,self.model,as_of,run_id,self.research_library)
         rebalance_due = d.day(as_of) >= d.day(h['last_rebalanced']) + timedelta(days=p['rebalance_every_days'])
         anchors = {'goal':p['goal'],'constraints':p['constraints'],'actual_rationale':h['rationale'],
             'previous_rationale':previous['body']['proposal']['rationale'] if previous else None,
             'unresolved_risks':previous['body']['proposal']['risks'] if previous else [],
             'next_checks':previous['body']['proposal']['next_checks'] if previous else []}
+        if frozen:
+            anchors.update(previous_rationale=frozen['body']['proposal']['rationale'],
+                unresolved_risks=frozen['body']['proposal']['risks'],next_checks=frozen['body']['proposal']['next_checks'])
         prior = None
         outcome = None
         reflection = None
@@ -127,6 +150,10 @@ class Engine:
         if previous:
             pb = previous['body']
             prior_market = self.s.get(pb['market_id'])['body']
+            prior_market=copy.deepcopy(prior_market);known={f['id'] for f in prior_market['facts']}
+            for e in self.s.events('research_evidence'):
+                if e['run_id']==previous['run_id'] and e['seq']<=previous['seq'] and e['body']['fact']['id'] not in known:
+                    prior_market['facts'].append(e['body']['fact']);known.add(e['body']['fact']['id'])
             prior = {'event_id':previous['id'],'as_of':previous['effective'],'proposal':pb['proposal'],
                      'perspectives':pb['perspectives'],'validation':pb['validation'],
                      'reflection':pb['reflection'],'market':prior_market,
@@ -147,20 +174,32 @@ class Engine:
         common = {'as_of':as_of,'profile':p,'actual':h,'valuation':val,'market':m,'previous':prior,
                   'decision_context':semantics(p,m),
                   'anchors':anchors,'rebalance_due':rebalance_due,'performance':outcome,'funding':funding,
+                  'frozen_revision':bool(frozen),
                   'analysis_flow':{'perspectives':'independent; no current peer outputs',
                     'leader':'after perspective validation; before final proposal validation',
                     'final_validation':'after leader; assess each statement against its original stage'}}
         def call(role, extra=None):
             payload = dict(common,knowledge=k.retrieve(as_of,role))
+            if frozen:
+                recorded=[e['body']['payload'] for e in self.s.events('agent_input') if e['run_id']==frozen['run_id'] and e['body']['role']==role]
+                payload['knowledge']=copy.deepcopy(recorded[-1].get('knowledge',{})) if recorded else {}
             payload['market']=compact_market(m,role)
+            payload['decision_context']=semantics(p,m)
             if prior:
                 payload['previous']=previous_for_role(prior,role,compact_market(prior['market'],role,historical=True))
                 # These exact fields are already present under previous.proposal.
                 payload['anchors']={k:v for k,v in anchors.items() if k not in ('previous_rationale','unresolved_risks','next_checks')}
             payload.update(extra or {})
             payload['analysis_stage']='final_validation' if role=='validation' and 'final_proposal' in payload else 'perspective_validation' if role=='validation' else 'proposal_synthesis' if role=='leader' else role
-            return a.call(role,payload)
-        if previous:
+            if amendment and role==amendment.get('target_role',amendment['agent_id']) and (not amendment.get('target_stage') or amendment['target_stage']==payload['analysis_stage']):
+                payload['adopted_dialogue_change']=amendment
+                payload['change_policy']='사용자가 재검토를 요청한 판단. 명시적으로 수용/거절 이유를 출력 설명에 남기고 제약·근거 검증을 유지해요. profile/actual은 고정이며 변경 명령이 아니에요.'
+            result=a.call(role,payload)
+            ids={f['id'] for f in m['facts']}
+            for fact in a.research_facts:
+                if fact['id'] not in ids:m['facts'].append(fact);ids.add(fact['id'])
+            return result
+        if previous and not frozen:
             reflection, reflection_id = call('reflection')
             common['current_reflection'] = reflection
             # Every active record is inspected in bounded batches, including unrelated topics.
@@ -186,8 +225,9 @@ class Engine:
                     for op in plan['operations']: k.apply(op,as_of,run_id)
                 audit = k.prune(as_of,run_id)
                 self.s.append('anchor_check',{'anchors':anchors,'preserved':True,'audit_id':audit},as_of,run_id)
-        else:
+        elif not frozen:
             audit = k.prune(as_of,run_id)
+        else:audit=frozen['body']['pruning_audit_id']
         context, context_id = call('context')
         repeated=repeated_questions(context,p)
         if repeated:
@@ -195,6 +235,7 @@ class Engine:
                 'instruction':'이미 저장된 답변은 profile.clarification_answers에 있어요. 같은 의미는 기존 ID를 유지하세요. 정말 충돌/변경되어 다시 확인해야 하면 revisit_reason에 구체적인 이유를 적고, 그렇지 않으면 해당 질문을 missing/questions에서 제외하세요.'}})
             if repeated_questions(context,p):raise ContextRepeatError(ContextRepeatError.message)
         if context['missing']: raise ContextNeedsInput(context['missing'],context_id,questions(context))
+        common['context_analysis']=context
         evidence, _ = call('evidence')
         common.update(context_analysis=context,evidence_analysis=evidence)
         perspectives = {}
@@ -203,10 +244,13 @@ class Engine:
             perspectives[role], _ = call(role)
         checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
         validation, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks})
+        checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
         proposal, _ = call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation})
         final_check = evaluate(proposal['weights'],p,m,capital,val)
         final_review, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks,
                                          'final_proposal':proposal,'final_numeric_check':final_check})
+        final_check = evaluate(proposal['weights'],p,m,capital,val)
+        checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
         differences = {s:proposal['weights'].get(s,0)-val['weights'].get(s,0)
                        for s in set(proposal['weights'])|set(val['weights'])}
         if proposal['action'] == 'hold' and any(abs(x)>1e-6 for x in differences.values()):
@@ -239,7 +283,7 @@ class Engine:
         report = {'run_id':run_id,'mode':self.model.mode,'as_of':as_of,'profile_id':pe['id'],
             'actual_id':he['id'],'market_id':me['id'],'previous_id':previous['id'] if previous else None,
             'valuation':val,'performance':outcome,'reflection':reflection,'funding':funding,
-            'revision_of':revision_of,'revision_reason':revision_reason,
+            'revision_of':revision_of,'revision_reason':revision_reason,'amendment':amendment,
             'perspectives':perspectives,'validation':{'numeric':checks,'critique':validation,
             'final_numeric':final_check,'final_critique':final_review}, 'proposal':proposal,
             'pruning_audit_id':audit,'anchors':anchors,'next_evaluation':(d.day(as_of)+timedelta(days=7)).isoformat(),

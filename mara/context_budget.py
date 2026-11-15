@@ -1,8 +1,8 @@
 """Bounded role projections of one preceding run; immutable originals untouched."""
 import copy
 
-LIMITS={'context':256000,'evidence':256000,'buffett':256000,'marks':256000,'bogle':256000,
-        'reflection':384000,'memory':384000,'validation':512000,'leader':512000}
+LIMITS={'context':320000,'evidence':320000,'buffett':384000,'marks':384000,'bogle':384000,
+        'reflection':384000,'memory':384000,'validation':512000,'leader':512000,'evaluator':512000}
 PROPOSAL=('action','weights','rationale','dissent','risks','next_checks','premise_changes','validation_response','eligibility')
 
 

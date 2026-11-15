@@ -78,6 +78,17 @@ def validate_workbench(doc):
             weights(c['output']['weights'])
     for edge in doc['edges']:
         if edge['from'] not in ids or edge['to'] not in ids:raise ContractError('Unknown component reference')
+    flow=doc.get('extensions',{}).get('flow',[]);steps={step['id'] for step in flow}
+    if len(steps)!=len(flow):raise ContractError('Duplicate flow step')
+    for step in flow:
+        if step['agent_id'] not in ids or not set(step['depends_on'])<=steps:raise ContractError('Unknown flow reference')
+        c=next(c for c in doc['components'] if c['id']==step['agent_id']);records={r['output_id'] for r in c['records']}
+        if not set(step['record_ids'])<=records:raise ContractError('Unknown flow output')
+        snap=step.get('snapshot')
+        if snap:
+            if snap['source_output_id'] is not None and snap['source_output_id'] not in step['record_ids']:raise ContractError('Stage output mismatch')
+            if not set(snap['source_ids'])<=set(sources):raise ContractError('Unknown stage evidence')
+            if snap['status']!=step['status']:raise ContractError('Stage status mismatch')
     if doc['portfolio']:
         from .domain import weights
         weights(doc['portfolio']['proposal']['weights'])

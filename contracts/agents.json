@@ -70,5 +70,13 @@
     "label": "기억과 지식 정리",
     "description": "원본을 보존하면서 활성 지식 정리",
     "guide": "guides/roles/memory.md"
+  },
+  {
+    "id": "evaluator",
+    "kind": "evaluator",
+    "role": "Q1",
+    "label": "독립 보고서 평가",
+    "description": "근거·대안·위험·추적성의 품질 평가",
+    "guide": "guides/roles/evaluator.md"
   }
 ]

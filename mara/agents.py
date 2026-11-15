@@ -27,19 +27,21 @@ CONTRACTS = {
  'reflection': {'investment_outcome':'string','process_evaluation':'string',
      'perspective_review':{'buffett':'string','marks':'string','bogle':'string'},
      'lessons':['string'],'guide_change_proposals':['string']},
- 'memory': {'operations':[], 'conflicts':['string'],'summary':'string'}
+ 'memory': {'operations':[], 'conflicts':['string'],'summary':'string'},
+ 'evaluator': {'summary':'string','criteria':[],'red_flags':['string']}
 }
 
 
 def validate_output(role, obj, payload):
     kind = agent(role)['kind']
     validate(obj,output_schema(role))
+    if payload.get('adopted_dialogue_change') and 'change_response' not in obj:raise ValueError('Explicit change_response required')
     schema = CONTRACTS[kind]
     required(obj, list(schema))
     for key, example in schema.items():
         value = obj[key]
         if isinstance(example,str) and (not isinstance(value,str) or not value.strip()): raise ValueError('Nonempty text: '+key)
-        if isinstance(example,list) and key != 'operations': texts(value)
+        if isinstance(example,list) and key not in ('operations','criteria'): texts(value)
         if type(example) is bool and type(value) is not bool: raise ValueError('Boolean required: '+key)
     if kind in {'perspective','leader'}: weights(obj['weights'])
     if kind=='context' and 'questions' in obj:
@@ -56,6 +58,9 @@ def validate_output(role, obj, payload):
         required(obj['perspective_review'],personas())
         if any(not isinstance(v,str) or not v for v in obj['perspective_review'].values()): raise ValueError('Invalid perspective review')
     if kind == 'memory' and not isinstance(obj['operations'],list): raise ValueError('operations must be list')
+    if kind == 'evaluator':
+        from .evaluation import score
+        score(obj,payload)
     if kind in {'perspective','evidence'}:
         allowed = {f['id'] for f in payload['market']['facts']}
         refs = obj['evidence_ids'] if kind == 'perspective' else obj['facts']
@@ -94,6 +99,12 @@ class DemoModel:
     mode = 'demo'
     identity = {'mode':'demo','model':'synthetic-fixture-v1'}
     def complete(self, role, guide, p, contract):
+        if contract.get('$id')=='urn:mara:research-plan:1.0.0':return {'reason':'Synthetic fixture does not fetch public data','calls':[]}
+        if role=='evaluator' and contract.get('$id')=='urn:mara:agent-evaluator:1.0.0':
+            return {'summary':'합성 평가 연결 예시예요. 실제 보고서 품질 점수가 아니에요.',
+                'criteria':[{'id':c['id'],'score':0,'reason':'Synthetic fixture only','evidence_paths':[],
+                    'missing':['No real evaluation'],'improvements':['Use live evaluator']} for c in p['rubric']['criteria']],
+                'red_flags':['Synthetic fixture only']}
         if contract.get('$id')=='urn:mara:dialogue-answer:1.0.0':
             return {'answer':'합성 대화 예시예요. '+role+' 역할에 전달된 질문: '+p['question']+'\n이 실행의 판단 근거와 반대 조건을 함께 확인할 수 있어요. 실제 모델 응답이나 투자 분석이 아니에요.',
                 'evidence_ids':[f['id'] for f in p['sources'][:2]],'uncertainties':['합성 데이터로 화면과 저장 흐름만 확인해요.'],
@@ -122,8 +133,10 @@ class DemoModel:
 
 
 class Agents:
-    def __init__(self, session, model, as_of, run_id):
+    def __init__(self, session, model, as_of, run_id, research_library=None):
         self.s, self.model, self.as_of, self.run_id = session, model, as_of, run_id
+        self.research_library=research_library
+        self.research_facts=[]
 
     def guide(self, role):
         overrides = [e for e in self.s.events('guide',self.as_of) if e['body']['role'] == role]
@@ -138,6 +151,20 @@ class Agents:
             guide += '\n'+resource('guides/roles/research-tools.md').read_text()
         guide += '\n공통 기억 규칙: needs_revalidation=true인 보호 지식은 재검토 대상으로 보존한 기록이에요. 현재 사실로 확정하지 말고 적용 조건과 반증을 확인해요.'
         guide += '\n공통 인용 규칙 v1.1: evidence_ids와 facts에는 input.market.facts에 있는 id만 그대로 사용해요. actual.evidence_id, snapshot_id, 사용자 답변/프로필/이전 실행의 원본 이벤트 ID는 시장 fact ID가 아니므로 넣지 않아요. 개인 맥락은 판단 설명에서 입력 항목으로 구분해 서술해요. 자료 밖 주장은 불확실성으로 남기고 ID를 만들어내거나 단지 인용을 통과하려고 무관한 자료를 붙이지 않아요.'
+        payload=copy.deepcopy(payload)
+        if self.research_library:
+            from .company_research import research_loop
+            before={f['id'] for f in payload.get('market',{}).get('facts',[])}
+            payload=research_loop(self.s,self.model,role,guide,payload,self.run_id,self.as_of,self.research_library)
+            self.research_facts.extend(f for f in payload.get('market',{}).get('facts',[]) if f['id'] not in before)
+        if role in ('validation','leader') and payload.get('perspectives'):
+            from .risk import evaluate
+            from .decision import semantics
+            capital=payload.get('funding',{}).get('proposal_capital',payload['valuation']['nav'])
+            payload['numeric_checks']={r:evaluate(view['weights'],payload['profile'],payload['market'],capital,payload['valuation']) for r,view in payload['perspectives'].items()}
+            payload['decision_context']=semantics(payload['profile'],payload['market'])
+            if payload.get('final_proposal'):
+                payload['final_numeric_check']=evaluate(payload['final_proposal']['weights'],payload['profile'],payload['market'],capital,payload['valuation'])
         original=copy.deepcopy(payload)
         current=copy.deepcopy(original)
         current['citation_scope']={'market_fact_ids':[f['id'] for f in original.get('market',{}).get('facts',[])],
@@ -160,6 +187,8 @@ class Agents:
                 'payload':current,'contract':contract},self.as_of,self.run_id)
             # Provider failures are never retried by this output-validation repair.
             result = self.model.complete(role,guide,current,contract)
+            if self.model.mode=='demo' and current.get('adopted_dialogue_change'):
+                result['change_response']={'status':'rejected','reason':'합성 모델은 투자 판단을 변경하지 않아요. 변경 전달·후속 검증 경로만 확인해요.'}
             oid = self.s.append('agent_output', {'role':role,'input_id':iid,'output':result},self.as_of,self.run_id)
             try:validate_output(role,result,original)
             except (ValueError,TypeError,KeyError) as exc:
@@ -170,6 +199,10 @@ class Agents:
                 current=copy.deepcopy(current)
                 current['output_feedback']={'code':code,'rejected_output_id':oid,'previous_output':result,
                     'instruction':'직전 자기 응답을 원본 입력과 계약에 대조하여 한 번 교정하세요. 전체 JSON을 다시 반환하세요. 무관한 인용으로 치환하거나 자료 공백·반론·위험을 숨기지 마세요. 정성 검증 통과나 매수를 강요하지 않으며 필요하면 보류하세요.'}
+                if role=='evaluator':
+                    # The evaluator already has this payload and its own rejected
+                    # paths. Keep precise repair diagnostics private to this call.
+                    current['output_feedback']['validation_error']=str(exc)[:1000]
                 continue
             self.s.append('agent_validation',{'role':role,'input_id':iid,'output_id':oid,
                 'status':'accepted','code':None,'attempt':attempt},self.as_of,self.run_id)

@@ -36,7 +36,7 @@ TOOLS=[
  {'id':'institutional_reports','label':'금융기관 주간 논평','roles':['evidence','marks','validation'],'provides':'BlackRock·Schwab 원문 HTML과 날짜·제목·도입부 발췌; 기관 전망'},
  {'id':'financial_news','label':'금융 언론 뉴스 탐색','roles':['evidence','marks','validation'],'provides':'CNBC 공식 RSS 최근 제목·발표시각·기사 링크; 본문 미검토'},
 ]
-ALLOWED={'www.sec.gov','data.sec.gov','www.ishares.com','www.federalreserve.gov','api.bls.gov','home.treasury.gov','www.blackrock.com','www.schwab.com','www.cnbc.com'}
+ALLOWED={'www.sec.gov','data.sec.gov','www.ishares.com','www.federalreserve.gov','api.bls.gov','home.treasury.gov','www.blackrock.com','www.schwab.com','www.cnbc.com','www.microsoft.com','www.apple.com'}
 
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
@@ -265,12 +265,7 @@ def compact_market(market,role,historical=False):
                 value={k:v for k,v in value.items() if k!='metrics'}
                 value['scope']='상세 재무는 시장 근거·기업 관점·검증에 전달. 원본 시장 fact에서 확인.'
             else:
-                for series in value['metrics'].values():
-                    for s in series:
-                        for row in s['observations']:
-                            if isinstance(row,dict):row.pop('accession',None)
-                            else:row[4]=None
-                value['provenance']='접수번호는 저장된 원본 fact에 보존. 각 행의 공시일·기간은 유지.'
+                value['provenance']='수치 검증이 같은 근거를 사용할 수 있도록 접수번호·공시일·기간·단위를 보존해요.'
             f['text']=d.dumps(value)
     return historical_market(m) if historical else m
 

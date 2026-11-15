@@ -74,9 +74,16 @@ def source_values(market,tool,symbol):
     out=[]
     for f in market.get('facts',[]):
         if f.get('research_tool')!=tool or f.get('valid_until','')<market['as_of']:continue
-        if f['id']!='research-'+tool+'-'+symbol.replace('.','-'):continue
+        if f.get('known_at','9999')>market['as_of']:continue
         try:v=json.loads(f['text'])
         except (ValueError,TypeError):continue
+        if not isinstance(v,dict):continue
+        if f['id']!='research-'+tool+'-'+symbol.replace('.','-'):
+            identity=f.get('company_identity',{});company_cik=cik(identity.get('cik'));source=urlsplit(f.get('source',''))
+            if tool not in ('sec_filings','sec_financials') or identity.get('symbol','').replace('.','-')!=symbol.replace('.','-') or not company_cik or company_cik!=cik(v.get('cik')):continue
+            expected=('/submissions/CIK' if tool=='sec_filings' else '/api/xbrl/companyfacts/CIK')+company_cik.zfill(10)+'.json'
+            if source.scheme!='https' or source.hostname!='data.sec.gov' or source.path!=expected or source.username or source.password:continue
+            if identity.get('verification')!='SEC submissions ticker match' or not re.fullmatch('[a-f0-9]{64}',identity.get('version','')):continue
         if isinstance(v,dict):out.append((f['id'],v))
     return out
 
@@ -88,7 +95,7 @@ def asset_requirements(market,symbol):
     if a.get('asset_class')=='cash':return {'missing':missing,'evidence_ids':refs,'kind':'cash'}
     if a.get('kind') in {'STOCK','FOREIGN_STOCK','DEPOSITARY_RECEIPT','REIT'}:
         financials=source_values(market,'sec_financials',symbol)
-        filings=[(fid,v) for fid,v in source_values(market,'sec_filings',symbol) if v.get('symbol')==symbol and valid_filings(v,market['as_of'])]
+        filings=[(fid,v) for fid,v in source_values(market,'sec_filings',symbol) if v.get('symbol','').replace('.','-')==symbol.replace('.','-') and valid_filings(v,market['as_of'])]
         for fid,v in financials:
             if (all(current_metric(v,name,market['as_of']) for name in ('revenue','operating_cashflow'))
                 and cik(v.get('cik')) and any(cik(v.get('cik'))==cik(f.get('cik')) for _,f in filings)):refs.append(fid)

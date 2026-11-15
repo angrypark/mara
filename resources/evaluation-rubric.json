@@ -1,0 +1,64 @@
+{
+  "version": "1.0.0",
+  "frozen_on": "2026-11-16",
+  "scale": {
+    "0": "근거 없음 또는 모순",
+    "1": "언급만 있음",
+    "2": "핵심 일부와 중대한 공백",
+    "3": "주요 근거·대안·한계 연결",
+    "4": "가정·대안·민감도·반증까지 재현 가능"
+  },
+  "criteria": [
+    {
+      "id": "suitability",
+      "label": "목표·가계 적합성",
+      "weight": 15,
+      "requirement": "가계 자산과 투자금 구분, 납입 여력, 기간·손실 허용"
+    },
+    {
+      "id": "evidence",
+      "label": "근거의 충분성과 시점",
+      "weight": 15,
+      "requirement": "중심 주장에 맞는 1차 근거, 시점·단위·공백의 영향"
+    },
+    {
+      "id": "selection",
+      "label": "자산의 질·가격·선정",
+      "weight": 15,
+      "requirement": "개별주식: 사업·재무·가치 범위. ETF: 목적·보수·내부구성·대안. 대상에 맞춰 평가"
+    },
+    {
+      "id": "allocation",
+      "label": "배분·대안·기회비용",
+      "weight": 15,
+      "requirement": "비중 근거, 대안과 현금 기회비용, 목표 달성 trade-off"
+    },
+    {
+      "id": "risk",
+      "label": "위험·스트레스·집중",
+      "weight": 15,
+      "requirement": "종목·섹터·환율·가계 위험, 손실 시나리오와 가정 한계"
+    },
+    {
+      "id": "implementation",
+      "label": "비용·납입·실행 계획",
+      "weight": 10,
+      "requirement": "비용·환전·세금의 확인과 공백, 월납입·리밸런싱 분리"
+    },
+    {
+      "id": "monitoring",
+      "label": "반증·재평가·이견",
+      "weight": 10,
+      "requirement": "유지·변경 조건, 반대 관점, 다음 확인, 성과와 과정 구분"
+    },
+    {
+      "id": "traceability",
+      "label": "추적성과 전달",
+      "weight": 5,
+      "requirement": "결론에서 원본 근거·계산·가정·버전으로 추적"
+    }
+  ],
+  "applicability": "모든 8개 기준은 모든 제안에 적용. selection 세부 요구만 자산 유형에 따라 적용. 필요한 근거 누락은 N/A로 면제하지 않고 0~2점과 missing에 표시. 실제 미래성과는 평가 범위 밖이며 가중치 없음. 총점 분모 항상 100.",
+  "origin": "Mara 자체 기준; 기관의 공식 채점표 아님",
+  "references": "guides/reference-reports.md"
+}

@@ -1,0 +1,229 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "mara.evaluation/1.0.0"
+    },
+    "completed_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "as_of": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rubric": {
+      "type": "object",
+      "required": [
+        "version",
+        "criteria",
+        "scale",
+        "applicability"
+      ]
+    },
+    "rubric_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "output_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "urn:mara:agent-evaluator:1.0.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "criteria",
+        "red_flags"
+      ],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "red_flags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "maxItems": 20
+        },
+        "criteria": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "score",
+              "reason",
+              "evidence_paths",
+              "missing",
+              "improvements"
+            ],
+            "properties": {
+              "id": {
+                "enum": [
+                  "suitability",
+                  "evidence",
+                  "selection",
+                  "allocation",
+                  "risk",
+                  "implementation",
+                  "monitoring",
+                  "traceability"
+                ]
+              },
+              "score": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "evidence_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                },
+                "maxItems": 20
+              },
+              "missing": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                },
+                "maxItems": 20
+              },
+              "improvements": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                },
+                "maxItems": 20
+              }
+            }
+          }
+        },
+        "change_response": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "reason"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "accepted",
+                "partial",
+                "rejected"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          }
+        }
+      }
+    },
+    "score": {
+      "type": "object",
+      "properties": {
+        "total": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "maximum": {
+          "const": 100
+        },
+        "band": {
+          "enum": [
+            "strong",
+            "needs_improvement",
+            "major_gaps"
+          ]
+        },
+        "proposal_blocked": {
+          "type": "boolean"
+        },
+        "critical_findings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "assessment": {
+          "enum": [
+            "critical_review",
+            "quality_review"
+          ]
+        },
+        "scored_weight": {
+          "const": 100
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "total",
+        "maximum",
+        "band",
+        "proposal_blocked",
+        "critical_findings",
+        "assessment",
+        "scored_weight",
+        "rule"
+      ],
+      "additionalProperties": false
+    },
+    "independence": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "completed_id",
+    "run_id",
+    "as_of",
+    "evaluated_at",
+    "rubric",
+    "rubric_hash",
+    "output_id",
+    "output",
+    "score",
+    "independence"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:evaluation:1.0.0"
+}

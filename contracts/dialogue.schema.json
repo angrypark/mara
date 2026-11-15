@@ -78,6 +78,41 @@
               "maxLength": 16000
             },
             "maxItems": 120
+          },
+          "proposed_change": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scope",
+                  "summary",
+                  "reason"
+                ],
+                "properties": {
+                  "scope": {
+                    "enum": [
+                      "reasoning",
+                      "settings",
+                      "none"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 3000
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

@@ -21,6 +21,8 @@ from .workbench import runs, project
 from .dialogue import Dialogues, DialogueError
 from .clarifications import ClarificationError
 from .contracts import schema
+from .company_research import CompanyLibrary
+from .decision_actions import DecisionActions
 
 
 def resource(relative):
@@ -52,8 +54,11 @@ class Application:
         db.session(self.token)  # fail closed for mismatched database/config
         db.close()
         self.setup=PortfolioSetup(self.directory)
-        self.dialogues={'portfolio':Dialogues(self.setup.session,self.setup.analysis_model),
+        self.library=CompanyLibrary(self.directory/'company-research',quote_provider=self.setup.research_quote)
+        self.dialogues={'portfolio':Dialogues(self.setup.session,self.setup.analysis_model,self.library),
                         'demo':Dialogues(self.demo_session,DemoModel)}
+        self.actions={'portfolio':DecisionActions(self.setup.session,self.setup.analysis_model,self.library),
+                      'demo':DecisionActions(self.demo_session,DemoModel)}
 
     @contextmanager
     def demo_session(self):
@@ -75,6 +80,7 @@ class Application:
         finally: db.close()
         self.setup.recover()
         for manager in self.dialogues.values():manager.recover()
+        for manager in self.actions.values():manager.recover()
 
     def run_demo(self, next_week=False):
         with self.mutex:
@@ -187,6 +193,7 @@ def make_server(app,port):
                     '/api/setup/generate':app.setup.start,'/api/setup/holdings':lambda body:app.setup.refresh(),
                     '/api/setup/answers':app.setup.answer_context}
             for scope,manager in app.dialogues.items():routes['/api/dialogue/'+scope]=manager.start
+            for scope,manager in app.actions.items():routes['/api/decision-action/'+scope]=manager.start
             if self.path not in routes and self.path!='/api/demo-next': return self.send(404,{'error':'No such action'})
             try:
                 if self.headers.get('Transfer-Encoding'): raise InputError('지원하지 않는 전송 형식이에요.')

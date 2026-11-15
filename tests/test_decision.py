@@ -57,7 +57,7 @@ class DecisionTests(unittest.TestCase):
         filing={'symbol':'FUND','cik':'0000320193','filings':[dict(row,url='https://www.sec.gov/Archives/edgar/data/320193/000032019326000026/a.htm')]}
         fin={'cik':320193,'metrics':{k:[{'unit':'USD','period_type':'annual','observations':[row]}] for k in ('revenue','operating_cashflow')}}
         def ready(f=fin,g=filing):
-            m['facts']=[{'id':'research-'+tool+'-FUND','research_tool':tool,'valid_until':'2026-12-01','text':d.dumps(v)} for tool,v in [('sec_financials',f),('sec_filings',g)]]
+            m['facts']=[{'id':'research-'+tool+'-FUND','research_tool':tool,'known_at':m['as_of'],'valid_until':'2026-12-01','text':d.dumps(v)} for tool,v in [('sec_financials',f),('sec_filings',g)]]
             return assessment({'FUND':1},m)['blockers']
         self.assertFalse(ready())
         columns=['start','end','filed','value','accession','form'];compact=copy.deepcopy(fin);compact['observation_columns']=columns
@@ -124,7 +124,7 @@ class DecisionTests(unittest.TestCase):
             self.assertEqual(r['proposal']['eligibility'],'review_now');self.assertEqual(r['valuation']['nav'],0)
             self.assertEqual(r['proposal']['monthly_allocation']['amounts']['FUND'],400)
             self.assertEqual(r['funding']['availability'],'conditional_on_deposit');self.assertEqual(s.latest('actual'),original)
-            doc=project(s,r['run_id']);self.assertEqual(doc['schema_version'],'mara.workbench/1.1.0')
+            doc=project(s,r['run_id']);self.assertEqual(doc['schema_version'],'mara.workbench/1.2.0')
             self.assertTrue(all(row['body']['skills'] for row in s.events('agent_input')))
             self.assertFalse(any('perspectives' in row['body']['payload'] for row in s.events('agent_input') if row['body']['role'] in ('buffett','marks','bogle')))
             db.close()

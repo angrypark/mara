@@ -111,6 +111,28 @@
         ],
         "additionalProperties": false
       }
+    },
+    "change_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reason"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "accepted",
+            "partial",
+            "rejected"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
     }
   },
   "required": [

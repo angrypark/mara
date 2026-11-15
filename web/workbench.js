@@ -5,10 +5,11 @@ window.MaraWorkbench=(()=>{
   const statuses={completed:'완료',running:'분석 중',pending:'대기',needs_input:'추가 확인',failed:'실패',interrupted:'중단',skipped:'이번 실행 없음',blocked:'보류'};
   const actions={hold:'유지',adjust:'조정 검토',defer:'보류'}, pct=x=>x==null?'미확인':(x*100).toFixed(1)+'%';
   const symbols=s=>s==='CASH'?'기준통화 현금':s==='USD_CASH'?'달러 현금':s;
-  let scope='portfolio',runId=null,doc=null,selected='overview',tab='analysis',epoch=0,signature='',chatSignature='',loading=false;
+  let scope='portfolio',runId=null,doc=null,selected='overview',selectedStage=null,tab='analysis',epoch=0,signature='',chatSignature='',loading=false;
   const drafts=new Map();
+  let flowObserver=null;
   async function api(path,body){const response=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Mara-CSRF':document.querySelector('meta[name="mara-csrf"]').content},body:JSON.stringify(body)});const value=await response.json();if(!response.ok)throw Error(value.error||'불러오지 못했어요.');return value}
-  const key=()=>[scope,runId,selected].join('/'),current=()=>doc?.components.find(c=>c.id===selected);
+  const key=()=>[scope,runId,selected].join('/'),current=()=>{const c=doc?.components.find(c=>c.id===selected),stage=doc?.extensions?.flow?.find(x=>x.id===selectedStage&&x.agent_id===selected);return c&&stage?.snapshot?{...c,...stage.snapshot}:c};
   const button=(label,fn,cls='')=>{const b=el('button',cls,label);b.type='button';b.onclick=fn;return b};
   function saveDraft(){drafts.set(key(),$('wb-question').value)}
   function bar(value,kind='proposal'){const track=el('div','bar-track'),b=el('span','bar '+kind);b.style.width=Math.max(0,Math.min(100,Number(value)*100||0))+'%';track.append(b);track.setAttribute('aria-hidden','true');return track}
@@ -25,7 +26,7 @@ window.MaraWorkbench=(()=>{
   function list(values){return objectView(values)}
   function chip(text,status){const n=el('span','pill',text);if(status)n.dataset.status=status;return n}
   function validateDocument(d){
-    if(!['mara.workbench/1.0.0','mara.workbench/1.1.0'].includes(d?.schema_version))throw Error('지원하지 않는 결과 계약이에요. 화면과 서버 버전을 확인해주세요.');
+    if(!['mara.workbench/1.0.0','mara.workbench/1.1.0','mara.workbench/1.2.0'].includes(d?.schema_version))throw Error('지원하지 않는 결과 계약이에요. 화면과 서버 버전을 확인해주세요.');
     if(!d.run||!Array.isArray(d.components)||!d.components.length||!Array.isArray(d.sources)||!Array.isArray(d.edges))throw Error('결과 구조가 올바르지 않아요.');
     const ids=new Set(d.components.map(c=>c.id)),sources=new Set(d.sources.map(s=>s.id));
     if(ids.size!==d.components.length||sources.size!==d.sources.length||d.edges.some(e=>!ids.has(e.from)||!ids.has(e.to)))throw Error('중복되거나 알 수 없는 컴포넌트 참조예요.');
@@ -40,12 +41,54 @@ window.MaraWorkbench=(()=>{
     nodes();pane();
   }
   function nodes(){
+    flow();actionState();
     const nav=$('wb-nodes');nav.replaceChildren();
     const overview=button('전체 판단 · 비교',()=>choose('overview'),'wb-node wb-overview');overview.setAttribute('aria-pressed',String(selected==='overview'));nav.append(overview);
     let group='';for(const c of doc.components){if(c.role!==group){group=c.role;nav.append(el('p','wb-group',group==='R3'?'R3 · 독립 투자 관점':group+' · '+({R1:'판단의 기준',R2:'시장 이해',R4:'검증',R5:'종합',R6:'회고',F1:'기억'}[group]||'추가 역할')))}
       const b=button('',()=>choose(c.id),'wb-node');b.dataset.agent=c.id;b.setAttribute('aria-pressed',String(selected===c.id));b.append(el('span','wb-node-label',c.label));const state=el('span','wb-node-state',statuses[c.status]||c.status);state.dataset.status=c.status;b.append(state);nav.append(b)}
   }
-  function choose(id){saveDraft();selected=id;tab='analysis';epoch++;chatSignature='';nodes();pane();resetChat();loadChat();$('wb-title').focus({preventScroll:true})}
+  function flow(){
+    const root=$('wb-flow');if(!root)return;if(flowObserver)flowObserver.disconnect();root.replaceChildren();root.tabIndex=0;root.setAttribute('aria-label','의사결정 흐름. 좁은 화면에서는 좌우로 이동할 수 있어요.');
+    const stages=doc.extensions?.flow||[];if(!stages.length){root.append(el('p','hint','이전 실행의 역할 연결은 입력·연결 탭에서 확인할 수 있어요.'));return}
+    const graph=el('div','wb-flow-map');root.append(graph);
+    const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('aria-hidden','true');svg.classList.add('wb-flow-lines');graph.append(svg);
+    const perspectiveIds=doc.components.filter(c=>c.kind==='perspective').map(c=>c.id),positions={reflection:[1,1],memory:[2,1],context:[1,3],evidence:[2,3],review:[4,3],leader:[5,3],final_review:[6,3],evaluator:[7,3]};
+    perspectiveIds.forEach((id,i)=>positions[id]=[3,2+i]);
+    for(const step of stages){const c=doc.components.find(x=>x.id===step.agent_id),b=button('',()=>choose(step.agent_id,step.id),'wb-flow-node');b.dataset.step=step.id;b.dataset.status=step.status;b.setAttribute('aria-pressed',String(selected===step.agent_id&&(!selectedStage||selectedStage===step.id)));
+      const [col,row]=positions[step.id]||[3,2];b.style.gridColumn=col;b.style.gridRow=row;
+      b.append(el('span','wb-flow-role',c.role),el('strong','',step.label),el('span','wb-flow-state',statuses[step.status]||step.status));b.title=step.record_ids.length+'개 출력 기록 · 클릭하여 근거와 대화 열기';graph.append(b)}
+    const draw=()=>{if(!graph.isConnected)return;svg.replaceChildren();svg.setAttribute('viewBox','0 0 '+graph.offsetWidth+' '+graph.offsetHeight);const base=graph.getBoundingClientRect();
+      for(const step of stages){const to=graph.querySelector('[data-step="'+step.id+'"]');for(const id of step.depends_on){const from=graph.querySelector('[data-step="'+id+'"]');if(!from||!to)continue;const a=from.getBoundingClientRect(),b=to.getBoundingClientRect();const x1=a.right-base.left,y1=a.top+a.height/2-base.top,x2=b.left-base.left,y2=b.top+b.height/2-base.top,mid=(x1+x2)/2;
+        const path=document.createElementNS(ns,'path');path.setAttribute('d',`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`);svg.append(path);const arrow=document.createElementNS(ns,'path');arrow.setAttribute('d',`M ${x2-5} ${y2-3} L ${x2} ${y2} L ${x2-5} ${y2+3}`);svg.append(arrow)}}};
+    requestAnimationFrame(draw);
+    if(typeof ResizeObserver==='function'){flowObserver=new ResizeObserver(draw);flowObserver.observe(graph)}
+  }
+  async function decisionAction(action,messageId){
+    const status=$('wb-action-status'),ticket=runId;if(status)status.textContent=action==='evaluate'?'独立 평가를 요청하고 있어요…'.replace('独立','독립'):'변경을 반영한 새 판단을 요청하고 있어요…';
+    try{const body={action,run_id:ticket,request_id:crypto.randomUUID()};if(messageId)body.dialogue_request_id=messageId;await api('/api/decision-action/'+scope,body);await refresh()}
+    catch(e){if(status)status.textContent=e.message}
+  }
+  function actionState(){
+    const root=$('wb-action-status');if(!root)return;root.replaceChildren();
+    const lineage=doc.extensions?.lineage;if(lineage){const box=el('div','wb-change-banner');box.append(el('strong','','대화에서 이어진 새 판단'),el('p','',lineage.amendment.change.summary),el('p','hint','당시 '+doc.run.as_of+' 자료로 전체 재검증 · 원본 보존'));
+      if(lineage.change_response)box.append(el('p','',({accepted:'수용',partial:'일부 수용',rejected:'미수용'})[lineage.change_response.status]+' · '+lineage.change_response.reason));
+      box.append(button('원본 판단과 비교',async()=>{runId=lineage.amendment.base_run_id;signature='';await refresh()}));root.append(box)}
+    for(const a of (doc.extensions?.decision_actions||[]).slice(-3)){const box=el('div','wb-action-note');box.append(el('span','',a.result.message||(a.action==='revise'?'대화 변경의 후속 분석·검증 중…':'독립 품질 평가 중…')));if(a.result.new_run_id)box.append(button('새 판단 열기',async()=>{runId=a.result.new_run_id;signature='';await refresh()}));root.append(box)}
+  }
+  function qualityView(root){
+    const q=doc.extensions?.evaluation,c=doc.components.find(x=>x.id==='evaluator');
+    root.append(el('h4','','독립 보고서 품질 평가'));
+    if(!q){root.append(el('p','hint',c?.status==='running'?'평가자가 당시 근거와 보고서를 대조하고 있어요.':c?.status==='failed'?'평가가 완료되지 못했어요. 제안 원본은 보존되어 있어요.':'아직 이 제안의 독립 품질 평가가 없어요.'));if(doc.run.status==='completed'){const b=button('이 제안 독립 평가하기',()=>decisionAction('evaluate'));b.disabled=c?.status==='running';root.append(b)}return}
+    if(c?.status==='failed')root.append(el('p','error','최근 평가가 중단됐어요. 아래는 이전에 저장된 평가예요.'),button('평가 다시 실행',()=>decisionAction('evaluate')));
+    const heading=el('div','wb-score-heading');heading.append(el('b','wb-score',q.score.total+' / 100'),el('div','',q.output.summary));root.append(heading,el('p','hint','기준 v'+q.rubric.version+' · 자료 기준 '+q.as_of+' · 평가 '+q.evaluated_at+' · 보고서 품질이며 미래 수익 점수가 아니에요.'));
+    if(q.output.red_flags.length){const box=el('div','notice');box.append(el('strong','','먼저 해결할 결함'),list(q.output.red_flags));root.append(box)}
+    const chart=el('div','wb-quality-grid');for(const criterion of q.rubric.criteria){const r=q.output.criteria.find(x=>x.id===criterion.id),item=el('details','wb-quality-item');const summary=el('summary');summary.append(el('span','',criterion.label),el('b','',r.score+' / 4'),bar(r.score/4));item.append(summary,el('p','',r.reason),el('p','hint','가중치 '+criterion.weight+'점 · '+criterion.requirement));
+      if(r.missing.length)item.append(el('h5','','부족한 근거'),list(r.missing));if(r.improvements.length)item.append(el('h5','','개선할 내용'),list(r.improvements));item.append(el('h5','','평가에 사용한 근거'));
+      r.evidence_paths.forEach((path,index)=>{const detail=el('details');let value=c?.inputs;for(const part of path.slice(1).split('/'))value=value?.[part.replace(/~1/g,'/').replace(/~0/g,'~')];detail.append(el('summary','','근거 '+(index+1)+' 펼치기'),el('p','hint',path),objectView(value));item.append(detail)});chart.append(item)}root.append(chart,el('p','hint',q.score.rule));
+    const references=el('details','wb-block');references.append(el('summary','','평가 기준에 참고한 공개 보고서'));
+    for(const match of (c?.inputs?.reference_guide||'').matchAll(/\[([^\]]+)\]\((https:\/\/[^)]+)\)/g)){const a=el('a','',match[1]);a.href=match[2];a.target='_blank';a.rel='noopener';const p=el('p');p.append(a);references.append(p)}root.append(references);
+  }
+  function choose(id,stage=null){saveDraft();selected=id;selectedStage=stage;tab='analysis';epoch++;chatSignature='';nodes();pane();resetChat();loadChat();$('wb-title').focus({preventScroll:true});if(innerWidth<1100)$('wb-title').scrollIntoView({block:'start',behavior:'smooth'})}
   function setTab(name){tab=name;pane()}
   function sourceButtons(ids){const row=el('div','source-chips');for(const id of ids)row.append(button(id,()=>{setTab('sources');document.getElementById('wb-source-'+id)?.scrollIntoView({block:'nearest',behavior:'smooth'})},'source-chip'));return row}
   function pane(){
@@ -65,6 +108,8 @@ window.MaraWorkbench=(()=>{
       if(c){root.append(el('h4','','분석 당시 전달한 입력'),el('p','hint','실행에 고정된 입력이에요. 대화에서 한 설명은 투자 설정을 자동 변경하지 않아요.'),objectView(c.inputs))}return;
     }
     if(!c){overview(root);return}
+    if(c.id==='evaluator'){qualityView(root);return}
+    if(c.extensions?.research_activity?.length){const activity=el('details','wb-block');activity.append(el('summary','','추가 기업 조사 · '+c.extensions.research_activity.filter(x=>x.kind==='research_tool_result').length+'개 도구 결과'),objectView(c.extensions.research_activity));root.append(activity)}
     const summary=el('div','wb-summary');summary.append(chip(statuses[c.status],c.status),el('p','',c.summary));root.append(summary);
     if(c.status==='needs_input')root.append(button('투자 설정에서 답 반영하기',()=>document.getElementById('tab-setup').click()));
     if(c.source_ids.length)root.append(sourceButtons(c.source_ids));
@@ -131,10 +176,12 @@ window.MaraWorkbench=(()=>{
       const detail=el('details');detail.append(el('summary','','원본 근거 펼치기'),el('p','source-text',s.text));card.append(detail);
       if(s.uncertainty)card.append(el('p','notice',s.uncertainty));
       try{const url=new URL(s.source);if(url.protocol==='https:'){const a=el('a','',url.hostname+' 원문');a.href=url.href;a.rel='noopener noreferrer';a.target='_blank';card.append(a)}}catch(e){}
+      if(scope==='portfolio')for(const raw of s.raw_refs||[]){if(!/^[a-f0-9]{64}$/.test(raw.sha256))continue;const p=el('p'),a=el('a','','수집 당시 보존 원문 · '+raw.sha256.slice(0,10));a.href='/api/research-raw/'+runId+'/'+raw.sha256;a.target='_blank';a.rel='noopener';p.append(a);card.append(p)}
       root.append(card);
     }if(!doc.sources.length)root.append(el('p','empty','저장된 근거가 없어요.'));
   }
   function overview(root){
+    qualityView(root);
     const p=doc.portfolio;
     const finished=doc.components.filter(c=>['completed','blocked','needs_input'].includes(c.status)).length;
     const strip=el('div','wb-progress');strip.append(el('span','',finished+' / '+doc.components.length+' 역할 기록'),bar(finished/doc.components.length));root.append(strip);
@@ -167,7 +214,8 @@ window.MaraWorkbench=(()=>{
     try{const data=await api('/api/dialogue/'+k);if(ticket!==epoch||k!==key())return;
       if(data.schema_version!=='mara.dialogue/1.0.0'||data.run_id!==runId||data.agent_id!==selected)throw Error('대화 범위 또는 계약이 일치하지 않아요.');
       const sig=JSON.stringify(data);if(sig!==chatSignature){chatSignature=sig;const root=$('wb-chat-messages');root.replaceChildren();
-        for(const m of data.messages){const box=el('article','wb-chat-message '+m.role);box.append(el('p','eyebrow',m.role==='user'?'나':m.role==='status'?'실행 상태':current().label),el('p','wb-answer',m.text));if(m.evidence_ids.length)box.append(sourceButtons(m.evidence_ids));if(m.uncertainties.length){const details=el('details');details.append(el('summary','','불확실성과 한계'),list(m.uncertainties));box.append(details)}root.append(box)}
+        for(const m of data.messages){const box=el('article','wb-chat-message '+m.role);box.append(el('p','eyebrow',m.role==='user'?'나':m.role==='status'?'실행 상태':current().label),el('p','wb-answer',m.text));if(m.evidence_ids.length)box.append(sourceButtons(m.evidence_ids));if(m.uncertainties.length){const details=el('details');details.append(el('summary','','불확실성과 한계'),list(m.uncertainties));box.append(details)}
+          if(m.proposed_change&&m.proposed_change.scope!=='none'){const change=el('div','wb-proposed-change');change.append(el('strong','','판단 변경 제안'),el('p','',m.proposed_change.summary),el('p','hint',m.proposed_change.reason));if(m.proposed_change.scope==='reasoning'){const apply=button('변경 반영 · 후속 재평가',()=>decisionAction('revise',m.request_id),'primary');apply.disabled=doc.run.status!=='completed'||doc.extensions?.decision_actions?.some(x=>x.result.status==='running');change.append(apply,el('p','hint','당시 자료로 새 실행을 만들고 검증·종합·품질 평가를 다시 해요.'))}else change.append(button('투자 설정에서 변경하기',()=>document.getElementById('tab-setup').click()));box.append(change)}root.append(box)}
         if(!data.messages.length)root.append(el('p','hint','이 실행과 에이전트에 대한 첫 질문을 남겨보세요.'));
         root.scrollTop=root.scrollHeight;
       }
@@ -202,9 +250,9 @@ window.MaraWorkbench=(()=>{
     e.preventDefault();if(!current()||$('wb-send').disabled)return;const message=$('wb-question').value.trim();if(!message){$('wb-chat-status').textContent='질문을 입력해주세요.';return}
     const ticket=epoch,k=key();$('wb-send').disabled=true;$('wb-chat-status').textContent='질문을 전달하고 있어요…';
     const request_id=crypto.randomUUID();
-    try{await api('/api/dialogue/'+scope,{run_id:runId,agent_id:selected,request_id,message});if(ticket!==epoch||k!==key())return;$('wb-question').value='';drafts.delete(k);chatSignature='';await loadChat()}
+    try{const body={run_id:runId,agent_id:selected,request_id,message};if(current().source_output_id)body.source_output_id=current().source_output_id;await api('/api/dialogue/'+scope,body);if(ticket!==epoch||k!==key())return;$('wb-question').value='';drafts.delete(k);chatSignature='';await loadChat()}
     catch(e){if(ticket===epoch){$('wb-chat-status').textContent=e.message;$('wb-send').disabled=false}}
   };
-  setInterval(()=>{if(!$('report-panel').hidden){loadChat();if(doc?.run.status==='running')refresh()}},3000);
+  setInterval(()=>{if(!$('report-panel').hidden){loadChat();if(doc?.run.status==='running'||doc?.extensions?.decision_actions?.some(a=>a.result.status==='running')||doc?.components.some(c=>c.status==='running'))refresh()}},3000);
   return {refresh,openReport,render,choose,setTab,validateDocument};
 })();

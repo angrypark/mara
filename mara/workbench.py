@@ -16,7 +16,8 @@ LABELS={'summary':'판단 요약','constraints':'이번 판단의 제약','missi
  'validation_response':'검증 지적에 대한 응답','investment_outcome':'투자 결과 회고','process_evaluation':'판단 과정 평가',
  'perspective_review':'관점별 분석 평가','lessons':'다음 판단에 남길 교훈','guide_change_proposals':'가이드 개선 제안',
  'operations':'지식 갱신 제안','conflicts':'미해결 모순','numeric':'관점별 수치 검증','final_numeric':'최종 수치 검증',
- 'pruning':'정기 지식 점검','coverage':'자료 준비 상태'}
+ 'pruning':'정기 지식 점검','coverage':'자료 준비 상태','change_response':'대화 변경의 수용 여부와 이유',
+ 'criteria':'항목별 독립 평가','red_flags':'중요 결함'}
 
 
 def run_events(s,run_id):
@@ -70,7 +71,13 @@ def project(s,run_id):
     completed=next((e for e in reversed(ev) if e['kind']=='completed'),None)
     basis=(start or completed)['body'];as_of=basis['as_of'];state=run_state(ev,s)
     market=s.get(basis['market_id'])['body'];profile=s.get(basis['profile_id'])['body']
-    registry=basis.get('agent_registry') or catalogue()
+    registry=copy.deepcopy(basis.get('agent_registry') or catalogue())
+    if 'evaluator' not in {a['id'] for a in registry}:registry.append(next(a for a in catalogue() if a['id']=='evaluator'))
+    market=copy.deepcopy(market)
+    known={f['id'] for f in market['facts']}
+    for e in ev:
+        if e['kind']=='research_evidence' and e['body']['fact']['id'] not in known:
+            fact=e['body']['fact'];market['facts'].append(fact);known.add(fact['id'])
     inputs={};outputs={};records={}
     for e in ev:
         b=e['body'];role=b.get('role')
@@ -93,9 +100,9 @@ def project(s,run_id):
             if proposal['action']=='defer' and proposal.get('eligibility')!='blocked':
                 corrections.append({'field':'proposal.eligibility','original':proposal.get('eligibility'),'projected':'blocked','reason':'defer is never an actionable proposal'})
                 proposal['eligibility']='blocked'
-    sources=[dict({k:f.get(k,'') for k in ('id','topic','text','source','published_at','known_at','valid_until','uncertainty')},active=f['valid_until']>=as_of) for f in market['facts']]
+    sources=[dict({k:f.get(k,'') for k in ('id','topic','text','source','published_at','known_at','valid_until','uncertainty')},active=f['valid_until']>=as_of,raw_refs=f.get('raw_refs',[])) for f in market['facts']]
     source_ids={f['id'] for f in sources}
-    active_role=next((e['body']['role'] for e in reversed(ev) if e['kind']=='agent_input'),None)
+    active_role=next((e['body']['role'] for e in reversed(ev) if e['kind'] in ('agent_input','research_plan_input')),None)
     components=[]
     for meta in registry:
         role=meta['id'];inp=inputs.get(role);out=outputs.get(role)
@@ -106,8 +113,13 @@ def project(s,run_id):
             elif role=='validation':value=copy.deepcopy(completed['body']['validation']['final_critique'])
         status='completed' if value is not None else 'pending'
         if completed and value is None:status='skipped'
+        if role=='evaluator' and value is None:status='pending'
+        if role=='evaluator':
+            quality_status=next((e['body']['status'] for e in reversed(ev) if e['kind']=='evaluation_status'),None)
+            if quality_status in ('running','failed'):status=quality_status
         if role==active_role and state in ('failed','interrupted'):status='failed'
         if role==active_role and state=='running' and (not out or inp['seq']>out['seq']):status='running'
+        if role==active_role and state=='running' and not inp:status='running'
         if role=='context' and isinstance(value,dict) and value.get('missing'):status='needs_input'
         if role=='validation' and isinstance(value,dict) and value.get('qualitative_pass') is False:status='blocked'
         if role=='leader' and isinstance(value,dict) and value.get('action')=='defer':status='blocked'
@@ -153,6 +165,7 @@ def project(s,run_id):
             status=status,summary=summary,blocks=rendered,inputs=payload,output=value,source_ids=refs,
             records=records.get(role,[]),contract='/api/contracts/'+contract_name,
             extensions=dict({'final_proposal':report['body']['proposal']} if role=='leader' and completed else {},
+                research_activity=[dict(kind=e['kind'],event_id=e['id'],**e['body']) for e in ev if e['kind'] in ('research_plan','research_tool_result','research_tool_failure','research_progress') and e['body'].get('role')==role],
                 output_validation=[dict(e['body'],event_id=e['id']) for e in ev if e['kind']=='agent_validation' and e['body'].get('role')==role])))
     ids={c['id'] for c in components};edges=[]
     def edge(a,b,label):
@@ -162,6 +175,7 @@ def project(s,run_id):
         if c['kind']=='perspective':
             edge('context',c['id'],'개인 맥락');edge('evidence',c['id'],'공통 시장 근거');edge(c['id'],'validation','독립 제안');edge(c['id'],'leader','근거와 반론')
     edge('validation','leader','검증');edge('leader','validation','최종 재검증');edge('reflection','memory','결과와 교훈');edge('memory','context','다음 판단의 활성 지식')
+    edge('leader','evaluator','최종 제안');edge('validation','evaluator','최종 검증')
     portfolio=None
     if report:
         r=report['body'];v=report['view']
@@ -169,7 +183,7 @@ def project(s,run_id):
             'funding':r.get('funding'),'validation':r['validation'],'performance':r['performance'],
             'base_currency':v['base_currency'],'next_evaluation':r['next_evaluation'],'next_rebalance':r['next_rebalance'],
             'criteria':v['criteria'],'prices':v['prices']}
-    message={'completed':'저장된 판단을 탐색해요. 대화는 원래 제안을 바꾸지 않아요.',
+    message={'completed':'저장된 판단을 탐색하고, 대화 변경을 새 판단에 반영할 수 있어요. 원본은 보존돼요.',
              'needs_input':'개인 맥락에 추가 확인이 필요해요. 질문을 확인하고 투자 설정에서 답을 반영해주세요.',
              'failed':'분석이 중간에 멈췄어요. 완료한 단계의 근거는 보존돼요.',
              'interrupted':'서비스 재시작으로 중단됐어요. 자동 재실행하지 않았어요.',
@@ -185,7 +199,52 @@ def project(s,run_id):
             message=label+(' 교정' if repair else '')+' 응답을 받는 중 실행이 중단됐어요.'
             if repair:message+=' 앞선 응답은 검증을 통과하지 못해 채택되지 않았어요.'
         elif rejected_component:message=rejected_component['label']+' 응답 검증 실패: '+rejected_component['summary']
-    return validate_workbench({'schema_version':'mara.workbench/1.1.0',
+    evaluation=next((e['body'] for e in reversed(ev) if e['kind']=='report_evaluation'),None)
+    action_results={e['body']['request_id']:e['body'] for e in ev if e['kind']=='decision_action_result'}
+    actions=[dict(request_id=e['body']['request_id'],action=e['body']['action'],
+        result=action_results.get(e['body']['request_id'],{'status':'running'})) for e in ev if e['kind']=='decision_action_request']
+    flow=[]
+    def node(id,role,label,depends,stage=None):
+        c=next(c for c in components if c['id']==role);status=c['status'];stage_records=c['records'];snapshot=None
+        if stage:
+            stage_records=[r for r in stage_records if s.get(r['input_id'])['body']['payload'].get('analysis_stage')==stage]
+            stage_inputs=[e for e in ev if e['kind']=='agent_input' and e['body']['role']==role and e['body']['payload'].get('analysis_stage')==stage]
+            latest=stage_inputs[-1] if stage_inputs else None
+            result_event=next((e for e in reversed(ev) if e['kind']=='agent_output' and latest and e['body']['input_id']==latest['id']),None)
+            value=None;summary='아직 실행되지 않은 단계예요.'
+            status='pending' if state=='running' else 'skipped'
+            if latest:
+                status='running' if state=='running' else 'failed'
+                if result_event:
+                    try:
+                        value=copy.deepcopy(result_event['body']['output']);validate_output(role,value,latest['body']['payload'])
+                        status='blocked' if value.get('qualitative_pass') is False else 'completed';summary=value['reason']
+                        checks=latest['body']['payload']
+                        numeric=[checks['final_numeric_check']] if stage=='final_validation' and 'final_numeric_check' in checks else list(checks.get('numeric_checks',{}).values())
+                        if any(x.get('passed') is False for x in numeric):status='blocked';summary='수치 검증에서 충족되지 않은 조건이 있어요. '+summary
+                    except (ValueError,KeyError,TypeError):value=None;status='running' if state=='running' else 'failed';summary='이 단계의 응답은 계약 검증을 통과하지 못했어요.'
+            snapshot={'label':label,'status':status,'summary':summary,'output':value,'inputs':latest['body']['payload'] if latest else {},
+                'blocks':blocks(value),'records':stage_records,'source_ids':[],
+                'source_output_id':result_event['id'] if result_event else None,'stage':stage}
+        flow.append({'id':id,'agent_id':role,'label':label,'status':status,'depends_on':depends,'record_ids':[r['output_id'] for r in stage_records],'snapshot':snapshot})
+    node('reflection','reflection','지난 결과·과정 회고',[]);node('memory','memory','기억 정리·pruning',['reflection'])
+    node('context','context','개인 맥락',['memory']);node('evidence','evidence','시장·기업 근거',['context'])
+    for c in components:
+        if c['kind']=='perspective':node(c['id'],c['id'],c['label'],['evidence','context'])
+    node('review','validation','관점·위험 검증',[c['id'] for c in components if c['kind']=='perspective'],'perspective_validation')
+    node('leader','leader','포트폴리오 종합',['review']);node('final_review','validation','최종 제안 재검증',['leader'],'final_validation')
+    node('evaluator','evaluator','독립 보고서 평가',['final_review'])
+    amendment=basis.get('amendment');lineage=None
+    if amendment:
+        base=s.get(amendment['completed_id'])['body'];old=base['proposal']['weights'];new=completed['body']['proposal']['weights'] if completed else {}
+        target=next((c for c in components if c['id']==amendment.get('target_role',amendment['agent_id'])),None)
+        if amendment.get('target_stage'):
+            target=next((step['snapshot'] for step in flow if step.get('snapshot') and step['snapshot']['stage']==amendment['target_stage']),target)
+        lineage={'amendment':amendment,'base_weights':old,'new_weights':new,
+            'weight_changes':{k:new.get(k,0)-old.get(k,0) for k in set(old)|set(new)} if completed else None,
+            'change_response':(target['output'] or {}).get('change_response') if target else None}
+    return validate_workbench({'schema_version':'mara.workbench/1.2.0',
         'run':{'id':run_id,'as_of':as_of,'status':state,'mode':basis['mode'],'report_id':completed['id'] if completed else None,
             'previous_id':basis.get('previous_id'),'revision_of':basis.get('revision_of'),'message':message},
-        'components':components,'edges':edges,'sources':sources,'portfolio':portfolio,'extensions':{'projection_corrections':corrections}})
+        'components':components,'edges':edges,'sources':sources,'portfolio':portfolio,'extensions':{'projection_corrections':corrections,
+            'flow':flow,'evaluation':evaluation,'decision_actions':actions,'lineage':lineage}})

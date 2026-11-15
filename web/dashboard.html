@@ -67,12 +67,13 @@
 <p id="wb-message" role="status" aria-live="polite" class="hint"></p>
 <div id="wb-empty" class="empty" hidden>아직 시작한 분석이 없어요. 투자 설정에서 생성하거나 합성 데모로 화면을 살펴보세요.</div>
 <div id="wb-content" hidden><div class="wb-run-banner"><span id="wb-run-state" class="pill"></span><span id="wb-run-note"></span><span id="wb-contract-tag">계약 v1.0</span></div>
+<section class="wb-flow-section" aria-label="의사결정 흐름"><div class="wb-flow-heading"><div><h3>판단이 만들어지는 흐름</h3><p class="hint">박스를 선택해 근거를 읽고 에이전트에게 질문하세요. 변경을 반영하면 새 판단에서 후속 검증을 다시 거쳐요.</p></div><span class="tag">R4 검증 ↔ Q1 품질 평가</span></div><div id="wb-flow" class="wb-flow-scroll"></div><div id="wb-action-status" role="status"></div></section>
 <div class="wb-grid"><nav id="wb-nodes" class="wb-nodes" aria-label="분석 컴포넌트"></nav>
 <div class="wb-detail"><div class="wb-detail-heading"><p id="wb-role" class="eyebrow"></p><h3 id="wb-title" tabindex="-1"></h3><p id="wb-description" class="hint"></p></div>
 <nav class="wb-tabs" aria-label="컴포넌트 상세"><button type="button" data-wb-tab="analysis" aria-pressed="true">판단 요약</button><button type="button" data-wb-tab="inputs" aria-pressed="false">입력 · 연결</button><button type="button" data-wb-tab="sources" aria-pressed="false">근거 · 출처</button><button type="button" data-wb-tab="contract" aria-pressed="false">출력 · 계약</button></nav>
 <div id="wb-pane" class="wb-pane"></div></div>
 <div class="wb-chat"><div class="wb-chat-heading"><p class="eyebrow">AGENT CONVERSATION</p><h3 id="wb-chat-title">역할을 선택해 질문하세요</h3><p id="wb-chat-context" class="hint"></p></div><div id="wb-chat-messages" class="wb-chat-messages" role="log" aria-live="polite" aria-label="에이전트 대화"></div><div id="wb-chat-suggestions" class="wb-chat-suggestions"></div>
-<form id="wb-chat-form"><label for="wb-question" class="hint">이 에이전트에게 질문</label><textarea id="wb-question" maxlength="4000" rows="3" placeholder="이 판단의 가장 약한 근거는 무엇인가요?"></textarea><div class="wb-chat-send"><span id="wb-chat-status" class="hint" role="status"></span><button id="wb-send" class="primary" type="submit">질문 보내기</button></div></form><p class="wb-chat-policy hint">저장된 실행의 맥락으로 답해요. 대화는 공식 제안과 실제 보유를 바꾸지 않아요.</p></div>
+<form id="wb-chat-form"><label for="wb-question" class="hint">이 에이전트에게 질문</label><textarea id="wb-question" maxlength="4000" rows="3" placeholder="이 판단의 가장 약한 근거는 무엇인가요?"></textarea><div class="wb-chat-send"><span id="wb-chat-status" class="hint" role="status"></span><button id="wb-send" class="primary" type="submit">질문 보내기</button></div></form><p class="wb-chat-policy hint">변경 제안을 반영하면 당시 자료를 기준으로 새 실행을 만들어요. 원본 보고서와 실제 보유는 보존돼요. 최신 시장 분석은 투자 설정에서 새로 생성해요.</p></div>
 </div></div></section>
 <details id="report-document"><summary>전체 리포트 · 인쇄용 문서 보기</summary>
 

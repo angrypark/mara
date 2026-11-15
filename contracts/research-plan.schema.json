@@ -1,0 +1,222 @@
+{
+  "type": "object",
+  "properties": {
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "calls": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "const": "search"
+              },
+              "arguments": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100000
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "tool",
+              "arguments"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "const": "collect"
+              },
+              "arguments": {
+                "type": "object",
+                "properties": {
+                  "symbols": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Z0-9][A-Z0-9.\\-]{0,14}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  }
+                },
+                "required": [
+                  "symbols"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "tool",
+              "arguments"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "const": "compare"
+              },
+              "arguments": {
+                "type": "object",
+                "properties": {
+                  "symbols": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Z0-9][A-Z0-9.\\-]{0,14}$"
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100000
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  }
+                },
+                "required": [
+                  "symbols"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "tool",
+              "arguments"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "const": "company"
+              },
+              "arguments": {
+                "type": "object",
+                "properties": {
+                  "symbol": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9][A-Z0-9.\\-]{0,14}$"
+                  }
+                },
+                "required": [
+                  "symbol"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "tool",
+              "arguments"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "const": "filing_search"
+              },
+              "arguments": {
+                "type": "object",
+                "properties": {
+                  "symbol": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9][A-Z0-9.\\-]{0,14}$"
+                  },
+                  "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "symbol",
+                  "query"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "tool",
+              "arguments"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "const": "valuation"
+              },
+              "arguments": {
+                "type": "object",
+                "properties": {
+                  "assumptions": {
+                    "type": "object"
+                  },
+                  "symbol": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9][A-Z0-9.\\-]{0,14}$"
+                  }
+                },
+                "required": [
+                  "assumptions",
+                  "symbol"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "tool",
+              "arguments"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "reason",
+    "calls"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:research-plan:1.0.0"
+}

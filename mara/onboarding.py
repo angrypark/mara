@@ -130,6 +130,17 @@ class PortfolioSetup:
             config=secret_config(self.broker_dir/'credentials.json')
             yield self.client_factory(config,self.broker_dir/'access-token.json'),config
 
+    def research_quote(self,ticker):
+        from .company_research import symbol
+        ticker=symbol(ticker)
+        with self.broker() as (broker,config):
+            rows=broker.prices([ticker])
+        q=next(q for q in rows if q['symbol'].replace('.','-')==ticker)
+        now=datetime.now(timezone.utc);stamp=datetime.fromisoformat(q['timestamp'])
+        if q['currency']!='USD' or stamp.tzinfo is None or not 0<=(now-stamp).total_seconds()<=7*86400:raise ValueError('Invalid USD quote time')
+        return {'symbol':ticker,'price':numeric(q['lastPrice'],'가격'),'currency':'USD','observed_at':stamp.astimezone(KST).date().isoformat(),
+            'known_at':now.astimezone(KST).date().isoformat(),'source':SOURCE,'timestamp':q['timestamp']}
+
     def capital_limit(self):
         try: value=json.loads((self.broker_dir/'policy.json').read_text())['max_capital_krw']
         except (OSError,KeyError,ValueError): return 30000000
@@ -238,8 +249,11 @@ class PortfolioSetup:
             if not starts:raise PermissionError()
             m=s.get(starts[-1]['body']['market_id'])['body']
             refs=[r for c in m.get('research',{}).get('calls',[]) for r in c.get('raw_refs',[]) if r['sha256']==sha]
+            company_refs=[r for e in s.events('research_evidence') if e['run_id']==run_id for r in e['body']['fact'].get('raw_refs',[]) if r['sha256']==sha]
+            refs+=company_refs
             if not refs:raise PermissionError()
-        raw=(self.directory/'research'/(sha+'.raw')).read_bytes()
+        root=self.directory/'company-research'/'raw' if company_refs else self.directory/'research'
+        raw=(root/(sha+'.raw')).read_bytes()
         if digest(raw)!=sha:raise ValueError('Archive hash mismatch')
         return {'schema_version':'mara.research-raw/1.0.0','provenance':refs[0],'all_occurrences':refs,'text':raw.decode('utf-8-sig')}
 
@@ -411,6 +425,7 @@ class PortfolioSetup:
                 source_id=s.append('onboarding_evidence',{'snapshot_id':snapshot['id'],'captured_at':captured.isoformat(),
                     'holdings':fresh,'stocks':stocks,'prices':prices,'fx':fx,'sectors':memberships},today)
                 actual['evidence_id']=source_id
-                e=Engine(s,model); e.set_profile(p,today); e.set_holdings(actual)
+                from .company_research import CompanyLibrary
+                e=Engine(s,model,CompanyLibrary(self.directory/'company-research',quote_provider=self.research_quote)); e.set_profile(p,today); e.set_holdings(actual)
                 mid=s.store.publish_market(m)
             return e.run(today,mid,force=True,revision_reason=value.get('revision_reason'))

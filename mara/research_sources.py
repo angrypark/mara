@@ -70,9 +70,10 @@ def sec_financials(raw,as_of):
             rows=sorted(by_period.values(),key=lambda r:r['end'],reverse=True)[:3 if name in DURATIONS else 1]
             if rows:
                 series.append({'tag':tag,'unit':unit,'period_type':'annual' if name in DURATIONS else 'instant','observations':rows})
-                publication.extend(x['filed'] for x in rows)
-                if name!='long_term_debt':break
-        if series:data[name]=series
+        if series:
+            if name!='long_term_debt':series=[max(series,key=lambda s:(max(r['end'] for r in s['observations']),max(r['filed'] for r in s['observations'])))]
+            data[name]=series
+            publication.extend(r['filed'] for s in series for r in s['observations'])
     if not data:raise ValueError('no supported US GAAP observations')
     return {'entity':raw['entityName'],'cik':raw['cik'],'metrics':data,
         'missing_metrics':[k for k in METRICS if k not in data],

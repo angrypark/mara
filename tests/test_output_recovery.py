@@ -159,7 +159,7 @@ class SetupFailureTests(unittest.TestCase):
         class Bad(setup_fixture.TestModel):
             def complete(model,role,*args):
                 v=super().complete(role,*args)
-                if role=='buffett':v['evidence_ids']=['broker-event']
+                if role=='buffett' and args[-1].get('$id')!='urn:mara:research-plan:1.0.0':v['evidence_ids']=['broker-event']
                 return v
         self.app.model_factory=Bad;self.app.start(self.value);self.app.thread.join(10)
         job=self.app.state()['job'];self.assertEqual(job['error_type'],'AgentOutputError')
@@ -172,7 +172,7 @@ class SetupFailureTests(unittest.TestCase):
         class Bad(setup_fixture.TestModel):
             def complete(model,role,*args):
                 v=super().complete(role,*args)
-                if role=='buffett':v['evidence_ids']=['old-broker-record']
+                if role=='buffett' and args[-1].get('$id')!='urn:mara:research-plan:1.0.0':v['evidence_ids']=['old-broker-record']
                 return v
         self.app.model_factory=Bad
         with self.assertRaises(AgentOutputError):self.app.generate(self.value,self.snapshot)

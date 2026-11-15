@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "reviewed_on": "2026-11-16",
+  "policy": "공식 IR에서 확인한 보조 원문. 등록되지 않은 발행사는 SEC 본문 실패 시 명시적으로 공백을 반환해요. 후속 검토에서 URL·문서 시점·발행사 관계를 재확인해요.",
+  "documents": {
+    "MSFT": {"url": "https://www.microsoft.com/investor/reports/ar26/index.html", "title": "Microsoft 2026 Annual Report", "kind": "issuer_annual_report", "verified_on": "2026-11-16"},
+    "AAPL": {"url": "https://www.apple.com/newsroom/2026/11/apple-reports-fourth-quarter-results/", "title": "Apple fiscal 2026 fourth quarter results", "kind": "issuer_earnings_release_not_full_10K", "verified_on": "2026-11-16"}
+  }
+}
