@@ -14,7 +14,8 @@ from . import domain as d
 from .agents import HTTPModel,validate_output
 from .codex_model import CodexModel,CodexError,status as codex_status
 from .connection import identity,save_private
-from .engine import Engine,ContextNeedsInput
+from .engine import Engine,ContextNeedsInput,ContextRepeatError
+from .clarifications import answers,save_answers,notes_history,questions
 from .store import Store
 from .reporting import present
 from .toss import TossClient,secret_config
@@ -195,11 +196,21 @@ class PortfolioSetup:
     def state(self):
         with self.session() as s:
             reports=s.events('completed'); draft=s.latest('onboarding_draft'); job=s.latest('onboarding_job')
+            job_value=copy.deepcopy(job['body']) if job else None
+            if job_value and job_value.get('status')=='needs_input' and job_value.get('context_output_id'):
+                job_value['structured_questions']=questions(s.get(job_value['context_output_id'])['body']['output'])
             return {'draft':draft['body'] if draft else {},'snapshot':self.public_snapshot(s.latest('onboarding_snapshot')),
                 'model':self.model_state(),'latest':present(s,reports[-1]) if reports else None,
                 'history':[{'id':r['id'],'as_of':r['effective'],'action':r['body']['proposal']['action'],
                             'revision_of':r['body'].get('revision_of'),'previous_id':r['body'].get('previous_id')} for r in reversed(reports[-40:])],
-                'job':job['body'] if job else None,'capital_limit':self.capital_limit()}
+                'job':job_value,'clarification_answers':answers(s),
+                'context_note_history':notes_history(s,draft['body'].get('context_notes','') if draft else ''),
+                'capital_limit':self.capital_limit()}
+
+    def answer_context(self,value):
+        with self.guard:
+            if self.thread and self.thread.is_alive():raise InputError('진행 중인 분석이 끝난 뒤 답변을 수정해주세요.')
+            with self.session() as s:return save_answers(s,value)
 
     def report(self,eid):
         with self.session() as s:
@@ -259,7 +270,10 @@ class PortfolioSetup:
             self.generate(value,snapshot,lambda msg:self.job(jid,'running',msg))
             self.job(jid,'completed','포트폴리오 제안과 분석 리포트를 저장했어요. 주문은 전송하지 않았어요.')
         except ContextNeedsInput as exc:
-            self.job(jid,'needs_input',exc.message,questions=exc.questions,context_output_id=exc.output_id)
+            self.job(jid,'needs_input',exc.message,questions=exc.questions,context_output_id=exc.output_id,
+                     structured_questions=exc.structured_questions)
+        except ContextRepeatError as exc:
+            self.job(jid,'failed',exc.message,error_type='ContextRepeatError')
         except (InputError,CodexError) as exc: self.job(jid,'failed',str(exc))
         except Exception as exc:
             self.job(jid,'failed','생성하지 못했어요. 토스 연결·모델 설정·시장 자료를 확인한 뒤 다시 시도해주세요.',error_type=type(exc).__name__)
@@ -358,6 +372,8 @@ class PortfolioSetup:
             return original_complete(role,*args)
         model.complete=complete
         with self.session() as s:
+            p['clarification_answers']=answers(s)
+            p['context_note_history']=notes_history(s,p.get('context_notes',''))
             with s.store.transaction():
                 source_id=s.append('onboarding_evidence',{'snapshot_id':snapshot['id'],'captured_at':captured.isoformat(),
                     'holdings':fresh,'stocks':stocks,'prices':prices,'fx':fx,'sectors':memberships},today)

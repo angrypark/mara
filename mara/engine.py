@@ -7,16 +7,22 @@ from .agents import Agents, PERSONAS
 from .registry import catalogue, personas
 from .knowledge import Knowledge
 from .risk import evaluate
+from .clarifications import questions, repeated_questions, answers
 
 
 class ContextNeedsInput(ValueError):
     """A validated analyst request, not a provider/connection failure."""
     message='개인 투자 맥락에 추가 확인이 필요해요. 아래 항목을 확인하고 추가 설명을 입력해주세요.'
 
-    def __init__(self,questions,output_id):
+    def __init__(self,questions,output_id,structured_questions=None):
         super().__init__(self.message)
         self.questions=list(questions)
         self.output_id=output_id
+        self.structured_questions=structured_questions
+
+
+class ContextRepeatError(ValueError):
+    message='이미 저장한 답변을 에이전트가 다시 질문했어요. 한 번 재검토했지만 해소되지 않아 분석을 멈췄어요. 답변은 보존돼요. 반복 답변 대신 저장된 맥락을 확인하고 다시 시도해주세요.'
 
 
 class Engine:
@@ -75,6 +81,10 @@ class Engine:
         if pe is None or he is None or me is None: raise ValueError('Profile, actual holdings and market snapshot required')
         if me['kind'] != 'market' or me['effective'] != as_of: raise ValueError('Market snapshot must match evaluation date')
         p,h,m = pe['body'],he['body'],copy.deepcopy(me['body'])
+        saved_answers=answers(self.s,as_of)
+        if saved_answers and p.get('clarification_answers')!=saved_answers:
+            p=copy.deepcopy(p);p['clarification_answers']=saved_answers
+            pe=self.s.get(self.set_profile(p,as_of))
         if previous and previous['body']['mode'] != self.model.mode: raise ValueError('Demo and live histories must use separate users')
         d.profile(p); d.holdings(h); d.market(m)
         if self.model.mode == 'live' and (m.get('synthetic') or not m['facts']):
@@ -163,7 +173,12 @@ class Engine:
         else:
             audit = k.prune(as_of,run_id)
         context, context_id = call('context')
-        if context['missing']: raise ContextNeedsInput(context['missing'],context_id)
+        repeated=repeated_questions(context,p)
+        if repeated:
+            context,context_id=call('context',{'clarification_feedback':{'repeated_questions':repeated,
+                'instruction':'이미 저장된 답변은 profile.clarification_answers에 있어요. 같은 의미는 기존 ID를 유지하세요. 정말 충돌/변경되어 다시 확인해야 하면 revisit_reason에 구체적인 이유를 적고, 그렇지 않으면 해당 질문을 missing/questions에서 제외하세요.'}})
+            if repeated_questions(context,p):raise ContextRepeatError(ContextRepeatError.message)
+        if context['missing']: raise ContextNeedsInput(context['missing'],context_id,questions(context))
         evidence, _ = call('evidence')
         common.update(context_analysis=context,evidence_analysis=evidence)
         perspectives = {}

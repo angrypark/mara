@@ -19,3 +19,23 @@ HTML 입력의 `asset_scope=financial_assets`는 `total_assets`가 금융자산�
 기업 가치·뉴스·유동성·과거 수익률 부족은 시장 근거/검증 단계의 한계예요. 사용자의 개인 맥락 누락과 구분해 summary 또는 constraints에 기록하고 해당 역할이 검토하도록 해요. `cashflows_reconciled=false`는 과거 수익률 산정의 제한이며 그 사실만으로 최초 제안의 개인 맥락이 누락됐다고 판정하지 않아요.
 
 변경 이유: 추가 확인 요청이 연결 실패로 숨겨졌고 금융자산·계획 운용액의 의미가 충분히 전달되지 않았어요. 실제 필수 확인은 유지하면서 범위 오해와 중복 질문을 줄여요.
+
+## 누적 답변과 선택형 확인 · 1.2 · 2026-11-15
+
+먼저 `profile.clarification_answers`의 질문·명시적 답변·시점을 읽어요. 이는 확인 패널에서 사용자가 저장한 답변이며, 단순 에이전트 대화와 달라요. `profile.context_note_history`는 이전 추가 설명의 이력이며 현재 수치/현재 `context_notes`와 충돌하면 현재 입력을 우선하고 실제 충돌만 구체적으로 확인해요. 짧은 보충 설명이 생겼다고 서로 모순되지 않는 기존 답변을 잊지 않아요. 이전 노트가 현재도 참이라고 무조건 가정하지는 않아요.
+
+`questions`를 항상 출력해요. 핵심 누락이 없으면 missing/questions 모두 빈 배열이에요. 질문은 한 번에 최대 3개이며 missing은 questions의 prompt와 같은 순서/문구예요. 각 질문에는 id, topic, prompt, reason, options, revisit_reason을 담아요. topic은 다음 고정 분류를 사용해요: funding_source(추가 자금 출처), funding_timing(투입 시점), funding_scope(운용액 범위), cash_need_amount(필수 현금액), cash_need_timing(현금 사용 시점), cash_need_purpose(현금 목적/범위), horizon_plan(기간 종료 후 계획), goal_definition(목표 의미), income_stability(소득·납입 지속), debt(부채·상환), holdings_rationale(현재 보유 이유), constraint_conflict(서로 충돌하는 제약), other_context(그 외 핵심 사실). topic과 개별 사실 id는 구분해요. 아래 사실 ID 규칙을 따라요.
+
+이미 답한 항목의 새 질문은 `revisit_reason`에 이전 답변과 무엇이 충돌하거나 바뀌었는지 구체적으로 설명해야 해요. 미정이라는 선택도 답변이에요. 미정 상태를 보존하고 분석의 가정/제약이나 보류로 전달할 수 있으면 확답을 반복 요구하지 않아요. 과거 prose/legacy ID의 답변도 전체 질문과 답의 의미로 확인해 이미 해결된 질문을 새 ID로 다시 만들지 않아요. `clarification_feedback`이 있으면 저장된 답과 자신의 질문을 대조해 오류를 바로잡아요.
+
+선택지는 2~4개, id/label/description/requires_text로 작성해요. 개인 사실을 추측하거나 추천 표시·기본 선택을 하지 않아요. 서로 다른 실제 상황을 짧게 구분하고 가능하면 미정 선택도 제공해요. 금액·날짜 등 세부 내용이 있어야 답이 완결되면 requires_text=true예요. 예: 투입 시점의 '이미 준비된 자금이에요'(false), '정해진 시점에 투입할 예정이에요'(true), '아직 미정이에요'(false). 화면이 직접 답변도 항상 허용해요. 선택지 하나가 특정 금액·시점을 임의 확정하지 않아야 해요.
+
+변경 이유: 단일 추가 설명 칸을 덮어쓰면 이전 답변이 다음 실행에서 사라졌고, 확인 요청이 반복됐어요. 사용자별 질문/답변 원본과 최신 맥락을 연결하고 재확인이 필요한 이유를 명시해요. 답변 저장 자체를 투자 적합성 통과로 취급하지 않아요.
+
+구형 자유서술 답변(`legacy_` ID)이나 context_note_history가 있으면 새 질문의 ID만으로 답변 여부를 판단할 수 없어요. 모든 후속 질문의 revisit_reason에 이전 답/설명에서 이미 확인한 내용과 아직 확인되지 않은 차이를 구체적으로 적어요. 새로 필요한 사실이면 왜 기존 설명으로는 부족한지, 같은 사실이면 어떤 모순/변경이 있는지 밝히며 표현만 바꿔 같은 질문을 만들지 않아요.
+
+### 사실 ID와 질문 주제의 구분
+
+- `topic`은 위 고정 분류를 사용하고 `id`는 개별 사실의 안정적인 영문 식별자예요. 같은 사실을 다시 확인하거나 수정할 때 기존 id를 재사용해요. 질문 문구가 바뀌어도 id는 바꾸지 않아요.
+- 하나의 topic에 별개 사실이 여러 개면 각각 다른 id를 사용해요. 예: other_context의 `family_emergency_support`와 `employer_trading_restriction`. 두 답변은 함께 보존되어야 하며 뒤의 답변이 앞의 사실을 대체하지 않아요.
+- **저장된 답변이나 추가 설명 이력이 하나라도 있으면 모든 후속 질문에 revisit_reason을 적어요.** 이미 알고 있는 답변과 이번에 꼭 필요한 미확인 사실/충돌을 구체적으로 비교해요. 새 ID·topic으로 바꾸거나 바꾸어 말한 질문도 이 규칙의 예외가 아니에요. 이미 충분히 답한 내용은 다시 묻지 않아요.

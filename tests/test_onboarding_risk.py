@@ -290,13 +290,19 @@ class SetupHttpTests(unittest.TestCase):
                 with urllib.request.urlopen(base) as r:
                     html=r.read().decode();self.assertIn('max_sector_fraction',html);self.assertIn('포트폴리오 평가',html)
                 with post('/api/setup/draft',{'goal':'test'}) as r:self.assertTrue(json.load(r)['saved'])
+                from mara.clarifications import questions
+                old={'summary':'합성 질문','constraints':[],'missing':['추가 자금 출처는요?']}
+                with app.setup.session() as s:source=s.append('agent_output',{'role':'context','output':old},date.today().isoformat())
+                answer={'context_output_id':source,'request_id':'a'*32,'answers':[{'question_id':questions(old)[0]['id'],'option_id':None,'text':'급여 저축','expected_answer_id':None}]}
+                with self.assertRaises(urllib.error.HTTPError):post('/api/setup/answers',answer,{'X-Mara-CSRF':'invalid'})
+                with post('/api/setup/answers',answer) as r:self.assertEqual(len(json.load(r)['answers']),1)
                 for path,body,headers in [('/api/setup/draft',{}, {'Origin':'http://evil.test'}),
                     ('/api/setup/draft',{'goal':'x'*40000},{}),('/api/trade',{},{}),('/api/setup/model',{'model':'x'}, {})]:
                     with self.assertRaises(urllib.error.HTTPError):post(path,body,headers)
                 with urllib.request.urlopen(base+'/dashboard.js') as r:self.assertEqual(r.status,200)
                 # A running API keeps serving its matching frontend during an on-disk deployment.
                 with patch('mara.service.resource',side_effect=RuntimeError('new files being deployed')):
-                    for asset in ['/','/dashboard.js','/report.js','/dashboard.css']:
+                    for asset in ['/','/dashboard.js','/report.js','/clarifications.js','/dashboard.css']:
                         with urllib.request.urlopen(base+asset) as r:self.assertEqual(r.status,200)
                 with urllib.request.urlopen(base+'/api/state') as r:
                     state=json.load(r);self.assertFalse(state['live_trading']);self.assertIsNone(state['onboarding']['latest'])

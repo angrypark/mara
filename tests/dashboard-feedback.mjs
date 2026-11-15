@@ -7,6 +7,7 @@ import { Window } from '../.local/test-ui/node_modules/happy-dom/lib/index.js';
 
 const html=await readFile(new URL('../web/dashboard.html',import.meta.url),'utf8');
 const reportScript=await readFile(new URL('../web/report.js',import.meta.url),'utf8');
+const clarificationScript=await readFile(new URL('../web/clarifications.js',import.meta.url),'utf8');
 const script=await readFile(new URL('../web/dashboard.js',import.meta.url),'utf8');
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 async function settle(){await tick();await tick();await tick()}
@@ -30,6 +31,12 @@ async function setup(change=()=>{},generation=()=>({job_id:'new-job',status:'run
   w.fetch=async(path,options)=>{
     calls.push({path,body:options?.body?JSON.parse(options.body):null});
     if(path==='/api/state')return {ok:true,json:async()=>structuredClone(state)};
+    if(path==='/api/setup/answers'){
+      const request=JSON.parse(options.body),a=request.answers[0],q=state.onboarding.job.structured_questions.find(q=>q.id===a.question_id);
+      const row={...a,answer_id:'answer-'+calls.length,recorded_at:new Date().toISOString(),question:q,source_output_id:request.context_output_id,answer:a.text||q.options.find(o=>o.id===a.option_id).label};
+      state.onboarding.clarification_answers=[...(state.onboarding.clarification_answers||[]).filter(x=>x.question_id!==a.question_id),row];
+      return {ok:true,json:async()=>({saved:true,answers:structuredClone(state.onboarding.clarification_answers)})};
+    }
     if(path==='/api/setup/draft')return {ok:true,json:async()=>({saved:true})};
     if(path==='/api/setup/model'){
       const config=JSON.parse(options.body);
@@ -44,7 +51,7 @@ async function setup(change=()=>{},generation=()=>({job_id:'new-job',status:'run
     throw new Error('Unexpected HTTP request: '+path);
   };
   w.document.write(html.replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,''));
-  w.eval(reportScript);w.eval(script+'\nwindow.__testPoll=load;');await settle();
+  w.eval(reportScript);w.eval(clarificationScript);w.eval(script+'\nwindow.__testPoll=load;');await settle();
   const $=id=>w.document.getElementById(id),form=$('setup-form');
   form.elements.namedItem('confirmed').checked=true;
   return {w,state,calls,$,form,submit:async()=>{form.requestSubmit();await settle()},poll:async()=>{await w.__testPoll();await settle()},close:()=>w.happyDOM.close()};
@@ -141,22 +148,107 @@ test('Codex selection hides API key, saves without it, and enables generation',a
   }finally{await h.close()}
 });
 
-test('context questions survive polling and link to a saved clarification field',async()=>{
-  const questions=['추가 투자금의 출처와 투입 시점을 알려주세요.'];
-  const h=await setup(s=>{s.onboarding.job={id:'context-job',status:'needs_input',message:'개인 투자 맥락에 추가 확인이 필요해요.',questions}});
+function contextFixture(s){
+  s.onboarding.job={id:'context-job',context_output_id:'output-1',status:'needs_input',message:'확인이 필요해요.',
+    structured_questions:[{id:'funding_source',prompt:'추가 자금의 출처는 무엇인가요?',reason:'차입 여부를 확인해요.',revisit_reason:'',options:[
+      {id:'savings',label:'별도 저축',description:'차입하지 않은 자금',requires_text:false},
+      {id:'other',label:'다른 출처',description:'출처를 적어주세요.',requires_text:true}]},
+      {id:'funding_timing',prompt:'언제 투입할 계획인가요?',reason:'투입 시점을 확인해요.',revisit_reason:'',options:[
+      {id:'now',label:'지금 가능해요',description:'현재 준비된 자금',requires_text:false},
+      {id:'later',label:'추후 투입해요',description:'날짜를 알려주세요.',requires_text:true}]}]};
+}
+test('one stable choice panel keeps focus and drafts on polling, saves sequentially and resumes',async()=>{
+  const h=await setup(contextFixture,s=>{s.onboarding.job={id:'new-job',status:'running',message:'분석 중'};return {job_id:'new-job',status:'running'}});
   try{
-    assert.equal(h.$('context-requests').hidden,false);
-    assert.match(h.$('context-questions').textContent,/출처와 투입 시점/);
-    assert.doesNotMatch(h.$('generate-message').textContent,/토스 연결/);
-    assert.equal(h.$('generate').disabled,false);
-    h.$('answer-context').click();assert.equal(h.w.document.activeElement.name,'context_notes');
-    h.form.elements.namedItem('context_notes').value='다음 달 저축을 투입할 계획';
-    await h.poll();assert.equal(h.form.elements.namedItem('context_notes').value,'다음 달 저축을 투입할 계획');
-    h.$('save-draft').click();await settle();
-    assert.equal(h.calls.find(c=>c.path==='/api/setup/draft').body.context_notes,'다음 달 저축을 투입할 계획');
-    h.state.onboarding.job={id:'new-job',status:'running',message:'분석 중'};
-    await h.poll();assert.equal(h.$('context-requests').hidden,true);
+    assert.equal(h.$('context-requests').hidden,false);assert.equal(h.$('generation-actions').hidden,true);
+    assert.equal(h.$('generate-feedback').hidden,true);assert.equal(h.$('answer-context'),null);
+    assert.equal(h.$('context-card').querySelector('input:checked'),null);
+    const textarea=h.$('context-answer');textarea.value='매달 모은 자금';textarea.focus();
+    await h.poll();assert.equal(h.$('context-answer'),textarea);assert.equal(h.w.document.activeElement,textarea);assert.equal(textarea.value,'매달 모은 자금');
+    h.$('context-card').querySelector('input[value=savings]').click();h.$('context-next').click();await settle();
+    assert.equal(h.$('context-progress').textContent,'2 / 2');assert.equal(h.calls.filter(x=>x.path==='/api/setup/answers').length,1);
+    h.$('context-back').click();assert.equal(h.$('context-answer').value,'매달 모은 자금');
+    h.$('context-next').click();await settle();assert.equal(h.calls.filter(x=>x.path==='/api/setup/answers').length,1);
+    h.$('context-card').querySelector('input[value=later]').click();h.$('context-next').click();await settle();
+    assert.match(h.$('context-feedback').textContent,/구체적인 설명/);
+    h.$('context-answer').value='2027년 3월';h.$('context-next').click();await settle();await settle();
+    assert.equal(h.calls.filter(x=>x.path==='/api/setup/answers').length,2);
+    assert.equal(h.calls.filter(x=>x.path==='/api/setup/generate').length,1);
+    assert.equal(h.$('context-requests').hidden,true);assert.equal(h.$('context-memory').hidden,false);
+    assert.match(h.$('context-memory-list').textContent,/2027년 3월/);
+    const draft=h.calls.find(c=>c.path==='/api/setup/draft').body;assert.equal(draft['context-choice'],undefined);
   }finally{await h.close()}
+});
+
+test('saved answers restore after reload; failed resume preserves them and one question panel',async()=>{
+  const h=await setup(s=>{contextFixture(s);s.onboarding.job.structured_questions=s.onboarding.job.structured_questions.slice(0,1)},()=>({error:'보유 확인이 필요해요.'}));
+  try{
+    h.$('context-card').querySelector('input[value=savings]').click();h.$('context-next').click();await settle();await settle();
+    assert.equal(h.state.onboarding.clarification_answers.length,1);assert.match(h.$('generate-message').textContent,/보유 확인/);
+    assert.equal(h.$('context-requests').hidden,false);assert.match(h.$('context-memory-list').textContent,/별도 저축/);
+    const h2=await setup(s=>Object.assign(s,structuredClone(h.state)));
+    try{assert.equal(h2.$('context-card').querySelector('input:checked').value,'savings');assert.match(h2.$('context-memory-title').textContent,/답변 1개/)}finally{await h2.close()}
+    h.$('context-next').click();await settle();assert.equal(h.calls.filter(x=>x.path==='/api/setup/answers').length,1);
+  }finally{await h.close()}
+});
+
+test('unknown network outcome retries same request ID and leaves direct input editable',async()=>{
+  const h=await setup(contextFixture);const fetch=h.w.fetch;let tries=0,requests=[];
+  h.w.fetch=async(path,opts)=>{if(path==='/api/setup/answers'){requests.push(JSON.parse(opts.body));if(++tries===1)throw new Error('응답 연결 끊김')}return fetch(path,opts)};
+  try{
+    h.$('context-answer').value='직접 마련한 저축';h.$('context-next').click();await settle();
+    assert.match(h.$('context-feedback').textContent,/연결 끊김/);assert.equal(h.$('context-answer').value,'직접 마련한 저축');
+    h.$('context-next').click();await settle();assert.equal(requests[0].request_id,requests[1].request_id);assert.equal(h.$('context-progress').textContent,'2 / 2');
+  }finally{await h.close()}
+});
+
+test('reconfirmation shows prior answer but never preselects changed option meaning',async()=>{
+  const h=await setup(s=>{contextFixture(s);const q=structuredClone(s.onboarding.job.structured_questions[0]);
+    s.onboarding.clarification_answers=[{question_id:q.id,question:q,source_output_id:'older-output',option_id:'savings',text:'이전 설명',answer:'이전 의미',answer_id:'saved-1',recorded_at:'2026-11-15T00:00:00Z'}];
+    s.onboarding.job.structured_questions[0].options[0].label='차입한 자금';
+  });
+  try{
+    assert.match(h.$('context-card').textContent,/저장된 답변: 이전 의미/);
+    assert.equal(h.$('context-card').querySelector('input:checked'),null);assert.equal(h.$('context-answer').value,'');
+    h.$('context-next').click();await settle();assert.equal(h.calls.filter(c=>c.path==='/api/setup/answers').length,0);
+  }finally{await h.close()}
+});
+
+test('pending save locks answer controls and memory edits until the saved snapshot resumes',async()=>{
+  const h=await setup(s=>{contextFixture(s);s.onboarding.job.structured_questions=s.onboarding.job.structured_questions.slice(0,1);
+    const q=structuredClone(s.onboarding.job.structured_questions[0]);s.onboarding.clarification_answers=[{question_id:q.id,question:q,source_output_id:'older',option_id:null,text:'previous',answer:'previous',answer_id:'a-1',recorded_at:'2026-01-01'}];
+  });
+  const fetch=h.w.fetch;let release;
+  h.w.fetch=async(path,opts)=>{if(path==='/api/setup/answers')await new Promise(resolve=>{release=resolve});return fetch(path,opts)};
+  try{
+    h.$('context-answer').value='FIRST';h.$('context-next').click();await settle();
+    assert.equal(h.$('context-answer').disabled,true);
+    assert.ok([...h.$('context-card').querySelectorAll('input')].every(x=>x.disabled));
+    assert.ok([...h.$('context-memory-list').querySelectorAll('button')].every(x=>x.disabled));
+    release();await settle();await settle();assert.equal(h.state.onboarding.clarification_answers[0].text,'FIRST');
+    assert.equal(h.calls.filter(x=>x.path==='/api/setup/generate').length,1);
+  }finally{await h.close()}
+});
+
+test('resume keeps final answer locked until the generation request finishes',async()=>{
+ const h=await setup(s=>{contextFixture(s);s.onboarding.job.structured_questions=s.onboarding.job.structured_questions.slice(0,1)});
+ const fetch=h.w.fetch;let release;
+ h.w.fetch=async(path,opts)=>{if(path==='/api/setup/draft')await new Promise(resolve=>{release=resolve});return fetch(path,opts)};
+ try{
+  h.$('context-answer').value='FIRST';h.$('context-next').click();await settle();
+  assert.equal(h.$('context-answer').disabled,true);assert.equal(h.$('context-next').disabled,true);
+  release();await settle();await settle();assert.equal(h.state.onboarding.clarification_answers[0].text,'FIRST');
+  assert.equal(h.calls.filter(x=>x.path==='/api/setup/generate').length,1);
+ }finally{await h.close()}
+});
+
+test('historical notes allow explicit review without answering old questions again',async()=>{
+ const h=await setup(s=>{contextFixture(s);s.onboarding.context_note_history=[{text:'Previously saved context',recorded_at:'2026-11-15',source_id:'old-note'}]});
+ try{
+  assert.equal(h.$('context-recheck').hidden,false);h.$('context-recheck').click();await settle();
+  assert.equal(h.calls.filter(x=>x.path==='/api/setup/generate').length,1);
+  assert.equal(h.calls.filter(x=>x.path==='/api/setup/answers').length,0);
+ }finally{await h.close()}
 });
 
 for(const {name,run} of cases){await run();console.log('PASS '+name)}

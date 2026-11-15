@@ -23,6 +23,94 @@
         "maxLength": 16000
       },
       "maxItems": 120
+    },
+    "questions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 800
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 800
+          },
+          "revisit_reason": {
+            "type": "string",
+            "maxLength": 800
+          },
+          "options": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,31}$",
+                  "maxLength": 32
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "description": {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                "requires_text": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "description",
+                "requires_text"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "topic": {
+            "type": "string",
+            "enum": [
+              "funding_source",
+              "funding_timing",
+              "funding_scope",
+              "cash_need_amount",
+              "cash_need_timing",
+              "cash_need_purpose",
+              "horizon_plan",
+              "goal_definition",
+              "income_stability",
+              "debt",
+              "holdings_rationale",
+              "constraint_conflict",
+              "other_context"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "prompt",
+          "reason",
+          "options",
+          "revisit_reason",
+          "topic"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [
@@ -32,5 +120,5 @@
   ],
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:mara:agent-context:1.0.0"
+  "$id": "urn:mara:agent-context:1.1.0"
 }

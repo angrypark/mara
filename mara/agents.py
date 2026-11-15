@@ -39,6 +39,12 @@ def validate_output(role, obj, payload):
         if isinstance(example,list) and key != 'operations': texts(value)
         if type(example) is bool and type(value) is not bool: raise ValueError('Boolean required: '+key)
     if kind in {'perspective','leader'}: weights(obj['weights'])
+    if kind=='context' and 'questions' in obj:
+        qs=obj['questions']
+        if [q['prompt'] for q in qs]!=obj['missing'] or len({q['id'] for q in qs})!=len(qs):
+            raise ValueError('Clarification questions must match missing context with unique IDs')
+        if any(len({o['id'] for o in q['options']})!=len(q['options']) for q in qs):
+            raise ValueError('Clarification options must have unique IDs')
     if kind == 'leader' and obj['action'] not in {'hold','adjust','defer'}: raise ValueError('Invalid action')
     if kind == 'reflection':
         required(obj['perspective_review'],personas())
