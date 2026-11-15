@@ -8,6 +8,7 @@ from .registry import catalogue, personas
 from .knowledge import Knowledge
 from .risk import evaluate
 from .clarifications import questions, repeated_questions, answers
+from .output_validation import AgentOutputError
 
 
 class ContextNeedsInput(ValueError):
@@ -61,7 +62,9 @@ class Engine:
             return self._run(as_of,market_id,force,run_id,revision_reason)
         except Exception as exc:
             # Do not log provider exceptions, whose URLs/bodies can contain secrets.
-            self.s.append('failed',{'error_type':type(exc).__name__,'retry':'Correct inputs/provider and rerun; completed state unchanged'},as_of,run_id)
+            failure={'error_type':type(exc).__name__,'retry':'Correct inputs/provider and rerun; completed state unchanged'}
+            if isinstance(exc,AgentOutputError):failure.update(output_validation=exc.details,message=exc.message)
+            self.s.append('failed',failure,as_of,run_id)
             raise
         finally:
             self.s.unlock(run_id)

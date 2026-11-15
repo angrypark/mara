@@ -88,12 +88,15 @@ class Dialogues:
                 n=len(dumps(source))
                 if size+n<=20000:sources.append(source);size+=n
             role_input=copy.deepcopy(component['inputs'])
+            # Rejected self-output is repair context, not an adopted investment view.
+            role_input.pop('output_feedback',None)
             if 'market' in role_input:
                 role_input['market'].pop('facts',None)
                 role_input['market']['fact_ids']=[f['id'] for f in sources]
                 role_input['market']['facts_location']='sources; bounded subset with omitted_sources count'
             context={'as_of':doc['run']['as_of'],'mode':doc['run']['mode'],'role':role,'role_status':component['status'],
                 'role_input':role_input,
+                'output_validation':component['extensions'].get('output_validation',[]),
                 'profile':component['inputs'].get('profile',{}),'funding':component['inputs'].get('funding'),
                 'anchors':component['inputs'].get('anchors'), 'role_output':component['output'],
                 'final_proposal':component['extensions'].get('final_proposal'),

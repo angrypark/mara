@@ -13,6 +13,8 @@ def present(session,row):
         (session.owner,r['run_id'],'run_started')).fetchone()
     registry=session.decode(started)['body'].get('agent_registry',[]) if started else []
     analyses={};provenance={};memory=[]
+    rejected={e['body']['output_id'] for e in session.events('agent_validation')
+              if e['run_id']==r['run_id'] and e['body']['status']=='rejected'}
     events=session.store.db.execute('SELECT * FROM events WHERE owner=? AND run_id=? AND kind=? ORDER BY seq',
         (session.owner,r['run_id'],'agent_output')).fetchall()
     for event in events:
@@ -21,7 +23,7 @@ def present(session,row):
         source=session.get(body['input_id'])['body']
         provenance.setdefault(role,[]).append({'output_id':event['id'],'input_id':body['input_id'],
             'guide_hash':source['guide_hash'],'provider':source['provider']})
-        if role=='memory':memory.append(body['output'])
+        if role=='memory' and event['id'] not in rejected:memory.append(body['output'])
     facts=[f for f in market['facts'] if f['valid_until']>=r['as_of']]
     prices=[]
     for symbol,quote in market['prices'].items():

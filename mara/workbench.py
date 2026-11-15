@@ -3,6 +3,8 @@ import copy
 from .registry import catalogue
 from .contracts import validate_workbench, validate, schema, output_schema, ContractError
 from .reporting import present
+from .agents import validate_output
+from .output_validation import issue_code, REASONS
 
 LABELS={'summary':'판단 요약','constraints':'이번 판단의 제약','missing':'추가로 확인할 맥락',
  'facts':'사용한 근거','drivers':'핵심 시장 요인','changes':'지난 평가 이후 변화',
@@ -106,23 +108,29 @@ def project(s,run_id):
         if completed and value is None:status='skipped'
         if role==active_role and state in ('failed','interrupted'):status='failed'
         if role==active_role and state=='running' and (not out or inp['seq']>out['seq']):status='running'
-        if role=='context' and value and value.get('missing'):status='needs_input'
-        if role=='validation' and value and value.get('qualitative_pass') is False:status='blocked'
-        if role=='leader' and value and value.get('action')=='defer':status='blocked'
+        if role=='context' and isinstance(value,dict) and value.get('missing'):status='needs_input'
+        if role=='validation' and isinstance(value,dict) and value.get('qualitative_pass') is False:status='blocked'
+        if role=='leader' and isinstance(value,dict) and value.get('action')=='defer':status='blocked'
         if completed and role in ('leader','validation') and completed['body']['proposal']['eligibility']=='blocked':status='blocked'
-        rejected=None
+        rejected=None;rejection_code=None
         contract_name='agent-'+meta['kind']
-        if value is not None:
+        if value is not None or out:
             strict=bool(inp and inp['body'].get('contract',{}).get('$schema'))
             if not strict and meta['kind'] in ('evidence','perspective','leader'):contract_name='legacy-'+contract_name
-            try:validate(value,schema(contract_name))
-            except ContractError:
-                rejected=value;value=None;status='failed'
+            try:
+                validate(value,schema(contract_name))
+                # Validate against the original input paired with this output, even
+                # while a later repair request is in flight.
+                if strict and out:validate_output(role,value,s.get(out['body']['input_id'])['body']['payload'])
+            except (ValueError,TypeError,KeyError) as exc:
+                rejected=value;value=None;rejection_code=issue_code(exc)
+                status='running' if role==active_role and state=='running' and inp and out and inp['seq']>out['seq'] else 'failed'
         summary=next((value[k] for k in ('summary','thesis','rationale','reason','process_evaluation') if value and isinstance(value.get(k),str)), '')
         if not summary:summary={'skipped':'이번 실행에서는 아직 필요하지 않은 역할이에요.','pending':'아직 실행되지 않았어요.','running':'분석 중이에요.'}.get(status,'기록된 출력에서 확인해주세요.')
         rendered=blocks(value)
-        if rejected is not None:
-            rendered=[{'key':'contract_error','title':'출력 계약 검증 실패','kind':'text','value':'이 역할의 원본 응답이 계약을 충족하지 못했어요. 유효한 분석으로 표시하지 않아요.'}]
+        if rejection_code is not None:
+            summary=REASONS[rejection_code]+(' 응답을 교정하고 있어요.' if status=='running' else ' 이 응답은 채택되지 않았어요.')
+            rendered=[{'key':'contract_error','title':'출력 검증 실패','kind':'text','value':summary}]
         if role=='leader' and completed:
             final=report['body']['proposal']
             rendered.insert(0,{'key':'final_decision','title':'최종 검증을 반영한 결과 · 에이전트 초안과 구분','kind':'object',
@@ -136,7 +144,8 @@ def project(s,run_id):
         components.append(dict(id=role,role=meta['role'],kind=meta['kind'],label=meta['label'],description=meta['description'],
             status=status,summary=summary,blocks=rendered,inputs=payload,output=value,source_ids=refs,
             records=records.get(role,[]),contract='/api/contracts/'+contract_name,
-            extensions={'final_proposal':report['body']['proposal']} if role=='leader' and completed else {}))
+            extensions=dict({'final_proposal':report['body']['proposal']} if role=='leader' and completed else {},
+                output_validation=[dict(e['body'],event_id=e['id']) for e in ev if e['kind']=='agent_validation' and e['body'].get('role')==role])))
     ids={c['id'] for c in components};edges=[]
     def edge(a,b,label):
         if a in ids and b in ids:edges.append({'from':a,'to':b,'label':label})
@@ -157,6 +166,17 @@ def project(s,run_id):
              'failed':'분석이 중간에 멈췄어요. 완료한 단계의 근거는 보존돼요.',
              'interrupted':'서비스 재시작으로 중단됐어요. 자동 재실행하지 않았어요.',
              'running':'완료한 역할부터 확인할 수 있어요.'}[state]
+    if state=='failed':
+        rejected_component=next((c for c in components if c['id']==active_role and c['status']=='failed'
+            and any(b['key']=='contract_error' for b in c['blocks'])),None)
+        failed_input,failed_output=inputs.get(active_role),outputs.get(active_role)
+        waiting_for_output=failed_input and (not failed_output or failed_input['seq']>failed_output['seq'])
+        if waiting_for_output:
+            label=next(c['label'] for c in components if c['id']==active_role)
+            repair=bool(failed_input['body']['payload'].get('output_feedback'))
+            message=label+(' 교정' if repair else '')+' 응답을 받는 중 실행이 중단됐어요.'
+            if repair:message+=' 앞선 응답은 검증을 통과하지 못해 채택되지 않았어요.'
+        elif rejected_component:message=rejected_component['label']+' 응답 검증 실패: '+rejected_component['summary']
     return validate_workbench({'schema_version':'mara.workbench/1.0.0',
         'run':{'id':run_id,'as_of':as_of,'status':state,'mode':basis['mode'],'report_id':completed['id'] if completed else None,
             'previous_id':basis.get('previous_id'),'revision_of':basis.get('revision_of'),'message':message},

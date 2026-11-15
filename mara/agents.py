@@ -1,5 +1,6 @@
 """Independent role calls with frozen guides and bounded, explicit inputs."""
 import hashlib
+import copy
 import json
 import os
 import sys
@@ -8,6 +9,7 @@ from pathlib import Path
 from .domain import dumps, required, texts, weights
 from .registry import agent, personas, resource
 from .contracts import output_schema, validate
+from .output_validation import AgentOutputError, issue_code
 
 PERSONAS = personas()  # Compatibility alias; orchestration resolves the live catalogue.
 CONTRACTS = {
@@ -127,13 +129,32 @@ class Agents:
     def call(self, role, payload):
         guide = self.guide(role)
         guide += '\n공통 기억 규칙: needs_revalidation=true인 보호 지식은 재검토 대상으로 보존한 기록이에요. 현재 사실로 확정하지 말고 적용 조건과 반증을 확인해요.'
-        if len(guide) > 22000 or len(dumps(payload)) > 100000: raise ValueError('Role context budget exceeded; curate evidence')
+        guide += '\n공통 인용 규칙 v1.1: evidence_ids와 facts에는 input.market.facts에 있는 id만 그대로 사용해요. actual.evidence_id, snapshot_id, 사용자 답변/프로필/이전 실행의 원본 이벤트 ID는 시장 fact ID가 아니므로 넣지 않아요. 개인 맥락은 판단 설명에서 입력 항목으로 구분해 서술해요. 자료 밖 주장은 불확실성으로 남기고 ID를 만들어내거나 단지 인용을 통과하려고 무관한 자료를 붙이지 않아요.'
+        original=copy.deepcopy(payload)
+        current=copy.deepcopy(original)
+        current['citation_scope']={'market_fact_ids':[f['id'] for f in original.get('market',{}).get('facts',[])],
+            'rule':'facts/evidence_ids는 이 목록의 시장 fact ID만 사용. 개인 맥락과 보유 원본 event ID는 설명에서 별도로 구분.'}
         contract = output_schema(role)
-        iid = self.s.append('agent_input', {'role':role, 'guide':guide,
-            'guide_hash':hashlib.sha256(guide.encode()).hexdigest(),'provider':self.model.identity,
-            'payload':payload,'contract':contract},self.as_of,self.run_id)
-        result = self.model.complete(role,guide,payload,contract)
-        # Raw JSON is recorded even when semantic/shape checks reject it.
-        oid = self.s.append('agent_output', {'role':role,'input_id':iid,'output':result},self.as_of,self.run_id)
-        validate_output(role,result,payload)
-        return result, oid
+        for attempt in (1,2):
+            if len(guide)>22000 or len(dumps(current))>100000:
+                if attempt==2:raise AgentOutputError(role,code,oid,attempts=1)
+                raise ValueError('Role context budget exceeded; curate evidence')
+            iid = self.s.append('agent_input', {'role':role, 'guide':guide,
+                'guide_hash':hashlib.sha256(guide.encode()).hexdigest(),'provider':self.model.identity,
+                'payload':current,'contract':contract},self.as_of,self.run_id)
+            # Provider failures are never retried by this output-validation repair.
+            result = self.model.complete(role,guide,current,contract)
+            oid = self.s.append('agent_output', {'role':role,'input_id':iid,'output':result},self.as_of,self.run_id)
+            try:validate_output(role,result,original)
+            except (ValueError,TypeError,KeyError) as exc:
+                code=issue_code(exc)
+                self.s.append('agent_validation',{'role':role,'input_id':iid,'output_id':oid,
+                    'status':'rejected','code':code,'attempt':attempt},self.as_of,self.run_id)
+                if attempt==2:raise AgentOutputError(role,code,oid) from None
+                current=copy.deepcopy(current)
+                current['output_feedback']={'code':code,'rejected_output_id':oid,'previous_output':result,
+                    'instruction':'직전 자기 응답을 원본 입력과 계약에 대조하여 한 번 교정하세요. 전체 JSON을 다시 반환하세요. 무관한 인용으로 치환하거나 자료 공백·반론·위험을 숨기지 마세요. 정성 검증 통과나 매수를 강요하지 않으며 필요하면 보류하세요.'}
+                continue
+            self.s.append('agent_validation',{'role':role,'input_id':iid,'output_id':oid,
+                'status':'accepted','code':None,'attempt':attempt},self.as_of,self.run_id)
+            return result,oid

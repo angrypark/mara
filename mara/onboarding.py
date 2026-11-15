@@ -15,6 +15,7 @@ from .agents import HTTPModel,validate_output
 from .codex_model import CodexModel,CodexError,status as codex_status
 from .connection import identity,save_private
 from .engine import Engine,ContextNeedsInput,ContextRepeatError
+from .output_validation import AgentOutputError, failed_job_diagnostic
 from .clarifications import answers,save_answers,notes_history,questions
 from .store import Store
 from .reporting import present
@@ -197,6 +198,9 @@ class PortfolioSetup:
         with self.session() as s:
             reports=s.events('completed'); draft=s.latest('onboarding_draft'); job=s.latest('onboarding_job')
             job_value=copy.deepcopy(job['body']) if job else None
+            diagnostic=failed_job_diagnostic(s,job) if job else None
+            if diagnostic:job_value.update(message=diagnostic.message,output_validation=diagnostic.details,
+                diagnostic_source='read_only_validation_of_original_output')
             if job_value and job_value.get('status')=='needs_input' and job_value.get('context_output_id'):
                 job_value['structured_questions']=questions(s.get(job_value['context_output_id'])['body']['output'])
             return {'draft':draft['body'] if draft else {},'snapshot':self.public_snapshot(s.latest('onboarding_snapshot')),
@@ -274,6 +278,8 @@ class PortfolioSetup:
                      structured_questions=exc.structured_questions)
         except ContextRepeatError as exc:
             self.job(jid,'failed',exc.message,error_type='ContextRepeatError')
+        except AgentOutputError as exc:
+            self.job(jid,'failed',exc.message,error_type='AgentOutputError',output_validation=exc.details)
         except (InputError,CodexError) as exc: self.job(jid,'failed',str(exc))
         except Exception as exc:
             self.job(jid,'failed','생성하지 못했어요. 토스 연결·모델 설정·시장 자료를 확인한 뒤 다시 시도해주세요.',error_type=type(exc).__name__)

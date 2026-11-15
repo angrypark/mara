@@ -57,7 +57,7 @@ window.MaraWorkbench=(()=>{
     if(tab==='contract'){
       const url=c?.contract||'/api/contracts/workbench';const a=el('a','',c?'이 역할의 출력 JSON Schema':'작업실 JSON Schema');a.href=url;a.target='_blank';a.rel='noopener';root.append(a,el('p','hint','내려받는 결과에는 이 실행의 투자 맥락이 포함될 수 있어요.'));
       root.append(button('선택한 결과 JSON 내려받기',()=>{const blob=new Blob([JSON.stringify(c||doc,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=el('a');a.href=url;a.download='mara-'+runId+'-'+selected+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),0)}));
-      root.append(el('pre','',JSON.stringify(c?.output??doc,null,2)));if(c){root.append(el('h4','','실행과 가이드 버전'),objectView(c.records))}return;
+      root.append(el('pre','',JSON.stringify(c?c.output:doc,null,2)));if(c){if(c.extensions?.output_validation?.length)root.append(el('h4','','응답 검증 · 교정 이력'),objectView(c.extensions.output_validation));root.append(el('h4','','실행과 가이드 버전'),objectView(c.records))}return;
     }
     if(tab==='inputs'){
       root.append(el('h4','','다른 역할과의 연결'));const links=doc.edges.filter(e=>!c||e.from===c.id||e.to===c.id);const group=el('div','wb-relations');
