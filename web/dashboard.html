@@ -10,15 +10,24 @@
 <section id="setup"><h2>1. 투자 맥락</h2><p class="hint">모든 금액은 원화 기준이에요. 미완성 입력도 임시 저장할 수 있어요.</p><div class="fields">
 <label class="wide">투자 목표<textarea name="goal" required maxlength="2000" placeholder="무엇을 위해 투자하고 언제 자금을 쓸 예정인가요?"></textarea></label>
 <label>투자 기간 (개월)<input name="horizon_months" type="number" min="1" step="1" required></label>
+<label>기간 종료의 의미<select name="horizon_purpose"><option value="unknown">아직 미정</option><option value="review">계획을 점검할 시점</option><option value="withdrawal">투자금을 사용할 기한</option></select></label>
 <label>투자 시장<input value="미국 상장 주식·ETF" readonly></label>
-<label>총 금융자산 (원)<input name="total_assets" type="number" min="0" step="1" required><small>보유 주식·현금과 이번 투자 자금을 포함해요.</small></label>
+<label>총 금융자산 (원)<input name="total_assets" type="number" min="0" step="1" required><small>현재 보유한 주식·현금 등 금융자산이에요. 아직 받지 않은 소득과 예정 납입액은 제외해요.</small></label>
 <label>이번 운용액의 의미<select name="capital_mode" required><option value="">선택해주세요</option><option value="total">기존 보유를 포함한 운용 총액</option><option value="additional">기존 보유에 추가할 투자금</option></select></label>
 <label>이번 운용액 / 추가 투자금 (원)<input name="capital_amount" type="number" min="0" step="1" value="30000000" required><small id="capital-limit">기존 보유와 현금을 합친 운용 상한: 3,000만 원</small></label>
+<label>이번 투자 재원<select name="funding_source"><option value="undecided">아직 미정</option><option value="current_assets">이미 보유한 금융자산</option><option value="future_income">앞으로 받을 소득에서 납입</option></select><small>첫 납입 예산을 운용액에 적어요. 예정 납입은 실제 현금에 더하지 않아요.</small></label>
 <label>매회 추가 납입액 (원)<input name="contribution_amount" type="number" min="0" step="1" required><small>정기 납입이 없으면 0.</small></label>
-<label>추가 납입 주기 (일)<input name="contribution_every_days" type="number" min="1" step="1" value="30" required></label>
+<label>추가 납입 방식<select name="contribution_schedule"><option value="monthly">매월 한 번</option><option value="days">일수 간격</option></select></label>
+<label>일수 간격을 선택한 경우 (일)<input name="contribution_every_days" type="number" min="1" step="1" value="30" required><small>매월 한 번이면 이 일수로 월 납입액을 환산하지 않아요.</small></label>
 <label>리밸런싱 주기 (일)<input name="rebalance_every_days" type="number" min="1" step="1" required><small>주간 평가 주기와 별개예요.</small></label>
 <label>월 소득 (원)<input name="monthly_income" type="number" min="0" step="1" required></label>
 <label>월 지출 (원)<input name="monthly_expenses" type="number" min="0" step="1" required></label>
+<label>부동산 시가 (원, 선택)<input name="property_value" type="number" min="0" step="1"><small>금융자산이나 주식 투자 현금에 합산하지 않아요.</small></label>
+<label>관련 담보대출 잔액 (원, 선택)<input name="mortgage_balance" type="number" min="0" step="1"><small>시가에서 차감한 자기자본도 즉시 쓸 현금은 아니에요.</small></label>
+<label>대출 금리 (연 %, 선택)<input name="mortgage_rate" data-percent type="number" min="0" max="100" step="0.01"></label>
+<label>월 대출 원리금 상환액 (원, 선택)<input name="monthly_debt_payment" type="number" min="0" step="1"></label>
+<label>위 월 지출에 대출 상환 포함 여부<select name="debt_payment_in_expenses"><option value="unknown">미확인</option><option value="yes">이미 포함했어요</option><option value="no">별도로 나가요</option></select><small>이미 포함한 상환액은 두 번 빼지 않아요.</small></label>
+<label>포트폴리오 밖 별도 비상 현금 (원, 선택)<input name="outside_emergency_cash" type="number" min="0" step="1"><small>현재 실제 보유 현금과 중복하지 않아요. 미확인은 빈칸, 없으면 0.</small></label>
 <label>포트폴리오 안에 남길 필요 현금 (원)<input name="cash_need" type="number" min="0" step="1" required><small>비상금·예정 인출액. 포트폴리오 밖의 별도 현금은 제약에 적어요.</small></label>
 <label>현금이 필요한 날짜<input name="cash_need_date" type="date" required><small>필요 현금이 0이면 투자 목표 시점.</small></label>
 <label class="wide" id="context-notes-field">추가 설명 (선택)<textarea name="context_notes" id="context-notes" maxlength="4000" placeholder="추가 투자금의 출처와 투입 시점, 투자 기간 뒤의 계획, 별도 비상금·부채 등 판단에 필요한 맥락이나 에이전트 질문에 대한 답을 적어주세요."></textarea><small>보충 설명과 정정할 내용을 적어주세요. 이전 설명과 질문별 답변도 다음 분석에 함께 전달해요. 에이전트의 확인 질문은 화면 아래에서 바로 답할 수 있어요.</small></label>
@@ -26,14 +35,14 @@
 <section id="criteria"><h2>2. 섹터와 위험 기준</h2><p class="hint">선호는 분석 시 고려하고, 제외·비중 상한은 검증 조건으로 적용해요. 비율은 전체 제안 운용액 기준이에요.</p><div class="fields">
 <label>위험 선호<select name="risk_level" required><option value="">선택해주세요</option><option value="conservative">안정 우선</option><option value="balanced">위험과 성장의 균형</option><option value="growth">성장 우선</option></select><small>이 선택만으로 수치 제한을 자동 결정하지 않아요.</small></label>
 <label>감당 가능한 손실 (%)<input name="max_loss_fraction" data-percent type="number" min="0" max="100" step="0.1" required><small>시나리오 비교 기준이며 손실 상한 보장은 아니에요.</small></label>
-<label>종목·ETF 하나의 최대 비중 (%)<input name="max_position_fraction" data-percent type="number" min="0" max="100" step="0.1" required></label>
+<label>종목·ETF 하나의 최대 비중 (%)<input name="max_position_fraction" data-percent type="number" min="0" max="100" step="0.1" required><small>원화·달러 현금은 제외해요. ETF의 내부 분산과 이 상품 비중 상한은 별개예요.</small></label>
 <label>섹터 하나의 최대 비중 (%)<input name="max_sector_fraction" data-percent type="number" min="0" max="100" step="0.1" required><small>제한하지 않으면 100. ETF 내부 자료가 없으면 검증 미완료.</small></label>
 <label>주식 자산군 최대 비중 (%)<input name="max_equity_fraction" data-percent type="number" min="0" max="100" step="0.1" required><small>주식형 ETF 포함. 제한하지 않으면 100.</small></label>
 <label>최소 원화 현금 비중 (%)<input name="min_cash_fraction" data-percent type="number" min="0" max="100" step="0.1" required></label>
 <label>외화 표시 자산 최대 비중 (%)<input name="max_foreign_fraction" data-percent type="number" min="0" max="100" step="0.1" required><small>제한하지 않으면 100. 환헤지 반영 순노출과는 달라요.</small></label>
 <div><p class="hint">보유 불러오기를 누르면 토스 섹터 목록을 가져와요. 여러 개 선택하려면 ⌘ 또는 Ctrl을 누르세요.</p><button type="button" id="clear-sectors">섹터 선택 해제</button></div>
 <label>선호 섹터 (선택)<select name="preferred_sectors" multiple></select></label><label>제외 섹터 (선택)<select name="excluded_sectors" multiple></select></label>
-<label class="wide">검토할 종목·ETF 티커 (선택)<input name="symbols" maxlength="600" placeholder="예: AAPL, MSFT, VTI"><small>최대 30개. 비워두면 선호 섹터별 시총 상위 3개와 대분류별 상위 2개에서 최대 30개 주식을 후보로 골라요. 전체 시장 탐색은 아니며 대형주 편향이 있어요. ETF는 직접 입력해요. 현재 보유는 항상 포함해요.</small></label>
+<label class="wide">검토할 종목·ETF 티커 (선택)<input name="symbols" maxlength="600" placeholder="예: AAPL, MSFT, ITOT"><small>최대 30개. 비워두면 분산 비교 ETF(ITOT·IVV), 선호 섹터별 시총 상위 3개, 대분류별 상위 2개에서 후보를 골라요. 전체 시장 탐색이나 매수 추천은 아니에요. 현재 보유는 항상 포함해요.</small></label>
 <label class="wide">그 밖의 제약과 선호<textarea name="constraints" maxlength="4000" placeholder="배당 선호, 특정 기업 제외, 별도 비상금, 소득 변동, 매도 제약 등"></textarea></label>
 </div></section>
 <section id="holdings"><h2>3. 현재 보유 확인</h2><p class="hint">미국 주식 보유 수량을 조회해요. 매수가능금액을 실제 현금으로 간주하지 않아요.</p><div class="actions"><button id="refresh-holdings" type="button">토스 보유·섹터 불러오기</button><span id="snapshot-time" class="hint">아직 불러오지 않았어요.</span></div><div class="scroll"><table><thead><tr><th>티커</th><th>이름</th><th>보유 수량</th></tr></thead><tbody id="holdings-body"></tbody></table></div><p id="holding-exclusions" class="hint"></p>

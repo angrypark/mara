@@ -110,7 +110,7 @@ window.MaraReport=(()=>{
     $('evaluation-status').dataset.status=qualitative.qualitative_pass===false?'blocked':a.status;
     cards('metrics',[
       ['가정한 시나리오 손실',pct(a.scenario_loss_fraction),'손실 상한 보장이 아니에요.'],['시나리오 손실액',money(m.scenario_loss_amount)],['최대 종목 비중',pct(m.max_position_fraction)],
-      ['종목 HHI',m.position_hhi==null?'해당 없음':number(m.position_hhi,3),'현금 제외 · ETF 내부 미반영'],['유효 종목 수',m.effective_positions==null?'해당 없음':number(m.effective_positions)],['생활비 현금 여력',m.cash_months_of_expenses==null?'해당 없음':number(m.cash_months_of_expenses)+'개월'],
+      ['종목 HHI',m.position_hhi==null?'해당 없음':number(m.position_hhi,3),'현금 제외 · ETF 내부 미반영'],['유효 종목 수',m.effective_positions==null?'해당 없음':number(m.effective_positions)],['제안 현금 / 월 지출',m.cash_months_of_expenses==null?'해당 없음':number(m.cash_months_of_expenses)+'개월','미납입 금액을 포함할 수 있는 계획 비율 · 실제 비상금 아님'],
       ['연환산 변동성',pct(h.annualized_volatility)],['Sharpe ratio',number(h.sharpe,2)],['과거 최대 낙폭',pct(h.max_drawdown)]
     ]);
     const sectors={...(m.sector_exposures||{})};if(m.unknown_sector_fraction)sectors.unknown=m.unknown_sector_fraction;

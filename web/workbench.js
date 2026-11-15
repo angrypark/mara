@@ -25,7 +25,7 @@ window.MaraWorkbench=(()=>{
   function list(values){return objectView(values)}
   function chip(text,status){const n=el('span','pill',text);if(status)n.dataset.status=status;return n}
   function validateDocument(d){
-    if(d?.schema_version!=='mara.workbench/1.0.0')throw Error('지원하지 않는 결과 계약이에요. 화면과 서버 버전을 확인해주세요.');
+    if(!['mara.workbench/1.0.0','mara.workbench/1.1.0'].includes(d?.schema_version))throw Error('지원하지 않는 결과 계약이에요. 화면과 서버 버전을 확인해주세요.');
     if(!d.run||!Array.isArray(d.components)||!d.components.length||!Array.isArray(d.sources)||!Array.isArray(d.edges))throw Error('결과 구조가 올바르지 않아요.');
     const ids=new Set(d.components.map(c=>c.id)),sources=new Set(d.sources.map(s=>s.id));
     if(ids.size!==d.components.length||sources.size!==d.sources.length||d.edges.some(e=>!ids.has(e.from)||!ids.has(e.to)))throw Error('중복되거나 알 수 없는 컴포넌트 참조예요.');
@@ -36,7 +36,7 @@ window.MaraWorkbench=(()=>{
     if(selected!=='overview'&&!current())selected='overview';
     $('wb-run-state').textContent=statuses[d.run.status];$('wb-run-state').dataset.status=d.run.status;
     $('wb-run-note').textContent=(d.run.mode==='demo'?'합성 데모 · 실제 분석 아님 · ':'')+d.run.as_of+' · '+d.run.message;
-    $('wb-contract-tag').textContent='v1.0 · '+d.components.length+'개 역할';
+    $('wb-contract-tag').textContent='v'+d.schema_version.split('/')[1]+' · '+d.components.length+'개 역할';
     nodes();pane();
   }
   function nodes(){
@@ -71,8 +71,38 @@ window.MaraWorkbench=(()=>{
     if(!c.blocks.length)root.append(el('p','empty','이 역할의 출력이 아직 없어요. 대화로 역할과 필요한 자료를 확인할 수 있어요.'));
     for(const block of c.blocks){const box=el('section','wb-block');box.append(el('h4','',block.title));
       if(block.key==='research_tools'){researchTools(box,block.value)}
+      else if(block.key==='decision_status'){decisionStatus(box,block.value)}
+      else if(block.key==='monthly_allocation'){monthlyPlan(box,block.value)}
+      else if(block.key==='findings'){findings(box,block.value)}
+      else if(block.key==='household'){household(box,block.value)}
+      else if(block.key==='analysis_skills'){for(const skill of block.value)box.append(el('p','',skill.label+' · v'+skill.version))}
       else if(block.kind==='weights'){const map=block.value;for(const [s,w] of Object.entries(map).sort((a,b)=>b[1]-a[1])){const row=el('div','exposure-row');row.append(el('span','',symbols(s)),el('b','',pct(w)),bar(w));box.append(row)}}
       else box.append(objectView(block.value));root.append(box)}
+  }
+  function findings(root,items){
+    const category={personal_context:'개인 맥락 확인',constraint:'입력 조건 검토',market_evidence:'시장 자료 수집',capability:'분석 도구 보강',execution:'주문 전 확인',uncertainty:'불확실성 관리'};
+    for(const item of items||[]){const card=el('article','wb-tool-call');card.append(chip(item.blocks_proposal?'제안 보류 사유':'추가 확인'),el('b','',category[item.category]||item.category),el('p','',item.subject+' · '+item.reason),el('p','hint','해소 기준: '+item.resolution));
+      if(item.owner==='user'||item.owner==='context')card.append(button('투자 설정 확인',()=>document.getElementById('tab-setup').click()));
+      else if(doc.components.some(c=>c.id===item.owner))card.append(button('담당 역할 보기',()=>choose(item.owner)));
+      root.append(card)}
+  }
+  function decisionStatus(root,value){
+    root.append(chip(value.status==='blocked'?'제안 보류':'사용자 검토 가능'),el('p','hint','배분 계획에 대한 판단이에요. 실제 주문은 승인하거나 전송하지 않아요.'));
+    if(value.funding_availability==='conditional_on_deposit')root.append(el('p','notice','향후 납입을 전제로 한 계획이에요. 현재 입금된 금액으로 해석하지 않아요.'));
+    if(value.numeric_blockers?.length&&!value.findings?.length)root.append(el('h4','','수치·필수 자료 검증'),list(value.numeric_blockers));
+    findings(root,value.findings);
+    if(!value.findings?.length&&value.analyst_blockers?.length)root.append(list(value.analyst_blockers));
+    const detail=el('details');detail.append(el('summary','','주문 전에 확인할 항목'),list(value.execution_checks||[]));root.append(detail);
+  }
+  function monthlyPlan(root,value){
+    root.append(el('p','',value.status==='blocked'?'보류 중인 참고 배분 · 납입 지시가 아니에요.':'실제 납입 후 재검토할 목표 배분'),el('p','hint',value.schedule==='monthly'?'매월 한 번 기준':'입력한 일수 간격마다 납입'));
+    for(const [symbol,amount] of Object.entries(value.amounts||{})){const row=el('div','exposure-row');row.append(el('span','',symbols(symbol)),el('b','',Number(amount).toLocaleString('ko-KR')+' '+value.currency));root.append(row)}
+    root.append(el('p','hint',value.rule));
+  }
+  function household(root,value){
+    const labels={property_value:'부동산 시가',mortgage_balance:'담보대출 잔액',property_equity:'부동산 자기자본',outside_emergency_cash:'별도 비상 현금',monthly_debt_payment:'월 대출 상환액',monthly_surplus_before_investing:'납입 전 월 잉여',monthly_contribution:'월 납입 계획',monthly_remaining_after_investing:'납입 후 월 잔여'};
+    const unit=value.base_currency==='KRW'?'원':' '+(value.base_currency||'');const dl=el('dl','wb-data');for(const [key,label] of Object.entries(labels)){dl.append(el('dt','',label),el('dd','',value[key]==null?'미확인':Number(value[key]).toLocaleString('ko-KR')+unit))}root.append(dl);
+    root.append(el('p','hint',value.debt_payment_in_expenses==='yes'?'대출 상환은 월 지출에 포함되어 다시 차감하지 않았어요.':value.debt_payment_in_expenses==='no'?'대출 상환을 별도 지출로 반영해요.':'대출 상환의 지출 포함 여부가 미확인이에요.'),el('p','hint',value.limits));
   }
   function researchTools(root,value){
     const labels={collected:'수집됨',failed:'조회 실패',skipped:'이번 범위에서 제외'};
@@ -111,6 +141,8 @@ window.MaraWorkbench=(()=>{
     if(!p){root.append(el('p','wb-summary',doc.run.message),el('p','hint','아직 종합된 제안이 없어요. 왼쪽 역할을 선택하면 완료한 분석과 추가 확인을 볼 수 있어요.'));return}
     const pr=p.proposal,capital=p.funding?.proposal_capital??p.actual.nav;
     const decision=el('div','wb-summary');decision.append(chip(actions[pr.action]||pr.action,pr.action),el('p','',pr.rationale));root.append(decision);
+    if(pr.decision_status){const detail=el('details','wb-block');detail.open=pr.action==='defer';detail.append(el('summary','','판단 상태와 남은 확인'));decisionStatus(detail,pr.decision_status);root.append(detail)}
+    if(pr.monthly_allocation){const plan=el('section','wb-block');plan.append(el('h4','','정기 납입 배분 계획'));monthlyPlan(plan,pr.monthly_allocation);root.append(plan)}
     if(pr.action==='defer')root.append(el('p','notice','보류된 비중은 검토 중인 후보예요. 확정안이나 주문 가능한 포트폴리오가 아니에요.'));
     const metrics=el('div','metrics');for(const [label,value] of [['실제 보유 평가액',p.actual.nav],['제안 기준액',capital],['추가 필요 자금',p.funding?.additional_funding_needed??0]]){const box=el('div','metric');box.append(el('span','label',label),el('b','',Number(value).toLocaleString('ko-KR')+' '+p.base_currency));metrics.append(box)}root.append(metrics);
     const maps=[p.actual.nav?p.actual.weights:null,pr.weights,p.previous?.proposal?.weights||null],names=['실제 보유','이번 제안','지난 제안'];

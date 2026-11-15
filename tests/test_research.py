@@ -92,7 +92,9 @@ class SourceTests(unittest.TestCase):
    r=Research(tmp,NOW,lambda u:(_ for _ in ()).throw(urllib.error.HTTPError(u,429,'secret text',{},None)))
    m=market();r.enrich(m,['AAPL'])
    validate(m['research'],schema('research'))
-   self.assertFalse(m['facts']);self.assertEqual(m['coverage']['status'],'limited');self.assertFalse(m['coverage']['actionable_risky_allocation'])
+   self.assertFalse(m['facts']);self.assertEqual(m['coverage']['status'],'limited')
+   from mara.decision import assessment
+   self.assertTrue(assessment({'AAPL':1},m)['blockers'])
    self.assertTrue(all(c['status'] in ('failed','skipped') for c in m['research']['calls']));self.assertNotIn('secret text',json.dumps(m))
    r.used_chars=44000
    r.record('fed','US',lambda:{'items':[],'limits':'x'},src.FED)

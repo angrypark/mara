@@ -19,6 +19,8 @@ from . import domain as d
 from .toss import BrokerError
 from .contracts import validate,schema
 from .registry import resource
+from .decision import POLICY
+from . import commentary_sources as commentary
 
 VERSION='mara.research/1.0.0'
 TOOLS=[
@@ -31,8 +33,10 @@ TOOLS=[
  {'id':'fund_holdings','label':'ETF 내부 구성','roles':['bogle','validation'],'provides':'ITOT/IVV 전체 CSV 보존, 상위 10개 및 섹터 합계'},
  {'id':'candles','label':'가격 이력·거래량','roles':['evidence','marks','validation'],'provides':'최대 80 수정 일봉에서 5/20/60 거래일 가격변화·평균 거래량'},
  {'id':'orderbook','label':'관측 호가','roles':['marks','validation'],'provides':'관측시각의 최우선 호가·스프레드; 체결 보장 아님'},
+ {'id':'institutional_reports','label':'금융기관 주간 논평','roles':['evidence','marks','validation'],'provides':'BlackRock·Schwab 원문 HTML과 날짜·제목·도입부 발췌; 기관 전망'},
+ {'id':'financial_news','label':'금융 언론 뉴스 탐색','roles':['evidence','marks','validation'],'provides':'CNBC 공식 RSS 최근 제목·발표시각·기사 링크; 본문 미검토'},
 ]
-ALLOWED={'www.sec.gov','data.sec.gov','www.ishares.com','www.federalreserve.gov','api.bls.gov','home.treasury.gov'}
+ALLOWED={'www.sec.gov','data.sec.gov','www.ishares.com','www.federalreserve.gov','api.bls.gov','home.treasury.gov','www.blackrock.com','www.schwab.com','www.cnbc.com'}
 
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
@@ -158,6 +162,11 @@ class Research:
             url='https://api.bls.gov/publicAPI/v1/timeseries/data/'+series
             self.record('bls',series,lambda u=url,s=series:src.bls(json.loads(self.fetch(u)),s,self.as_of),url)
         self.record('fed','US',lambda:src.fed_news(self.fetch(src.FED),self.as_of),src.FED,14)
+        progress('금융기관 주간 리포트와 공식 금융 뉴스 피드를 확인하고 있어요.')
+        for name,config in commentary.REPORTS.items():
+            url=config['url']
+            self.record('institutional_reports',name,lambda u=url,n=name:commentary.report(self.fetch(u),n,self.as_of),url)
+        self.record('financial_news','CNBC',lambda:commentary.news(self.fetch(commentary.NEWS),self.as_of,datetime.now(timezone.utc).isoformat()),commentary.NEWS,3)
         # Identity bootstrap is a dated SEC subset; every ticker must be reconfirmed
         # against live submissions. Never guess a CIK from a similar company name.
         seed=json.loads(resource('resources/sec-tickers.json').read_text())
@@ -234,8 +243,8 @@ class Research:
         missing+=['공시 본문·경쟁우위·정상화 가치 및 부채 만기 검토','산업·지정학·기업 뉴스의 포괄 수집','세금·환전·계좌별 총 거래 비용','동일 통화 배당 재투자 총수익률·위험 지표','ETF 구성과 토스 제외 섹터의 분류 대조','주문 시점의 유동성·체결 가능성']
         market['coverage']={'status':'partial' if self.facts else 'limited',
             'available':market.get('coverage',{}).get('available',['기존 스냅샷 가격·자산 정보'])+available,'missing':missing,
-            'research_fact_count':len(self.facts),'actionable_risky_allocation':False,
-            'reason':'재무·거시·상품 자료로 분석 범위를 넓혔어요. 수집 성공은 투자 적합성·가치평가 완료 또는 체결 가능 확인이 아니며, 남은 정성·거래·위험 검증을 자동 통과시키지 않아요.'}
+            'research_fact_count':len(self.facts),'proposal_policy':POLICY,
+            'reason':'편입을 제안한 자산의 필수 자료·개인 제약·R4 검증으로 판단해요. 다른 후보의 자료 부족이나 주문 시점 확인을 이유로 모든 배분 제안을 일괄 차단하지 않아요.'}
         d.market(market)
         return market
 

@@ -53,6 +53,16 @@ def profile(p):
     if not isinstance(p['base_currency'], str) or len(p['base_currency']) != 3: raise ValueError('Currency required')
     day(p['cash_need_date'])
     if 'proposal_capital' in p: number(p['proposal_capital'], 1)
+    if p.get('contribution_schedule','days') not in {'days','monthly'}:raise ValueError('Invalid contribution schedule')
+    if p.get('funding_source','undecided') not in {'current_assets','future_income','undecided'}:raise ValueError('Invalid funding source')
+    if p.get('horizon_purpose','unknown') not in {'review','withdrawal','unknown'}:raise ValueError('Invalid horizon purpose')
+    if 'household' in p:
+        h=p['household']
+        if not isinstance(h,dict):raise ValueError('Invalid household')
+        for k in ['property_value','mortgage_balance','monthly_debt_payment','outside_emergency_cash']:
+            if h.get(k) is not None:number(h[k])
+        if h.get('mortgage_rate') is not None:number(h['mortgage_rate'],0,1)
+        if h.get('debt_payment_in_expenses','unknown') not in {'yes','no','unknown'}:raise ValueError('Invalid debt payment scope')
     if 'criteria' in p:
         c=p['criteria']
         required(c,['risk_level','preferred_sectors','excluded_sectors','max_sector_fraction',

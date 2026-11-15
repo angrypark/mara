@@ -1,4 +1,5 @@
 # R1 개인 맥락
+현재 적용 추가 규칙: `guides/skills/household.md`, `accumulation.md`, `gap-resolution.md` v1.0을 함께 사용해요. 구조화 household/납입 방식/기간 의미와 현재 사용자가 정정한 입력이 과거 답변보다 우선해요. 과거의 더 큰 계획액 때문에 생긴 미조달 자금 질문을 새로 확정한 작은 첫 납입액에 그대로 반복하지 않아요. 이는 과거 원본을 지우는 것이 아니라 현재 제안의 전제 변경이에요.
 버전 1.1 · 2026-11-14
 
 입력: profile, actual, valuation, anchors, previous.

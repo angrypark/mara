@@ -135,6 +135,12 @@ def project(s,run_id):
             final=report['body']['proposal']
             rendered.insert(0,{'key':'final_decision','title':'최종 검증을 반영한 결과 · 에이전트 초안과 구분','kind':'object',
                 'value':{'action':final['action'],'eligibility':final['eligibility'],'risks':final['risks']}})
+            for key,title in [('decision_status','제안 판단과 주문 전 확인'),('monthly_allocation','매월 납입 배분 계획')]:
+                if key in final:rendered.insert(1,{'key':key,'title':title,'kind':'object','value':final[key]})
+        if role=='context' and inp and inp['body']['payload'].get('decision_context'):
+            rendered.insert(0,{'key':'household','title':'부동산·부채·소득과 신규 투자금','kind':'object','value':inp['body']['payload']['decision_context']['household']})
+        if inp and inp['body'].get('skills'):
+            rendered.append({'key':'analysis_skills','title':'이 역할에 적용한 분석 스킬','kind':'object','value':inp['body']['skills']})
         if role=='evidence':rendered.insert(0,{'key':'coverage','title':'이 실행에서 확인한 자료 범위','kind':'object','value':market.get('coverage',{'status':'not_recorded','message':'이전 실행에는 자료 범위 표가 없어요. 각 원본의 한계를 확인해요.'})})
         if role=='evidence' and market.get('research'):
             rendered.insert(1,{'key':'research_tools','title':'이번 분석에 사용한 자료 도구','kind':'object','value':market['research']})
@@ -179,7 +185,7 @@ def project(s,run_id):
             message=label+(' 교정' if repair else '')+' 응답을 받는 중 실행이 중단됐어요.'
             if repair:message+=' 앞선 응답은 검증을 통과하지 못해 채택되지 않았어요.'
         elif rejected_component:message=rejected_component['label']+' 응답 검증 실패: '+rejected_component['summary']
-    return validate_workbench({'schema_version':'mara.workbench/1.0.0',
+    return validate_workbench({'schema_version':'mara.workbench/1.1.0',
         'run':{'id':run_id,'as_of':as_of,'status':state,'mode':basis['mode'],'report_id':completed['id'] if completed else None,
             'previous_id':basis.get('previous_id'),'revision_of':basis.get('revision_of'),'message':message},
         'components':components,'edges':edges,'sources':sources,'portfolio':portfolio,'extensions':{'projection_corrections':corrections}})

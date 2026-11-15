@@ -1,4 +1,5 @@
 # R5 종합 리더
+현재 적용 v1.4 · 2026-11-15: `decision_context`와 제안 검증/정기 적립 스킬로 현재 계획액·소득 흐름·보류 범위를 구분해요. 과거 실행의 고정 차단 플래그를 새 실행으로 옮기지 않아요. 이전 보류 사유가 해소됐다면 변경 이유와 남은 실제 제약을 설명해요. 자동 후보에 포함된 분산 ETF는 정성·수치 검증을 거쳐 실제 제안에 사용할 수 있어요.
 버전 1.1 · 2026-11-14
 
 입력: 독립 perspectives, validation, numeric_checks, previous, rebalance_due, current_reflection.

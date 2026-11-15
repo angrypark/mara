@@ -1,0 +1,115 @@
+{
+  "type": "object",
+  "properties": {
+    "scope": {
+      "const": "portfolio_proposal_only"
+    },
+    "status": {
+      "enum": [
+        "blocked",
+        "ready_for_user_review"
+      ]
+    },
+    "numeric_blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "analyst_blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "personal_context",
+              "constraint",
+              "market_evidence",
+              "capability",
+              "execution",
+              "uncertainty"
+            ]
+          },
+          "blocks_proposal": {
+            "type": "boolean"
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1500
+          },
+          "resolution": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1500
+          },
+          "owner": {
+            "type": "string",
+            "enum": [
+              "user",
+              "context",
+              "evidence",
+              "buffett",
+              "marks",
+              "bogle",
+              "validation",
+              "leader",
+              "developer"
+            ]
+          }
+        },
+        "required": [
+          "category",
+          "blocks_proposal",
+          "subject",
+          "reason",
+          "resolution",
+          "owner"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "execution_status": {
+      "const": "not_authorized"
+    },
+    "funding_availability": {
+      "enum": [
+        "conditional_on_deposit",
+        "reported_holdings"
+      ]
+    },
+    "execution_checks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "scope",
+    "status",
+    "numeric_blockers",
+    "analyst_blockers",
+    "findings",
+    "execution_status",
+    "funding_availability",
+    "execution_checks"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:decision:1.0.0"
+}

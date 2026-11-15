@@ -1,4 +1,5 @@
 # R4 검증
+현재 적용 v1.3 · 2026-11-15: `proposal-validation` 스킬과 `decision_context`의 대상/산식을 우선 적용해요. 제안에 대한 판단과 주문 전 확인을 나누고 findings에 분류·책임·해소 기준을 남겨요. 현금 집중도 예외와 납입 산식은 명시된 규칙이며 이미 답한 사실을 다시 미정으로 만들지 않아요. 개인 제약과 핵심 주장 검증은 계속 필수예요.
 버전 1.1 · 2026-11-14
 
 입력: profile, perspectives, numeric_checks; 최종 검증에는 final_proposal, final_numeric_check.

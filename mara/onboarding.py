@@ -28,7 +28,9 @@ FIELDS={'goal','horizon_months','total_assets','monthly_income','monthly_expense
     'max_loss_fraction','max_position_fraction','contribution_amount','contribution_every_days','rebalance_every_days',
     'constraints','capital_amount','capital_mode','cash_krw','cash_usd','last_rebalanced','rationale','symbols',
     'risk_level','preferred_sectors','excluded_sectors','max_sector_fraction','max_equity_fraction',
-    'min_cash_fraction','max_foreign_fraction','snapshot_id','confirmed','revision_reason','context_notes'}
+    'min_cash_fraction','max_foreign_fraction','snapshot_id','confirmed','revision_reason','context_notes',
+    'contribution_schedule','funding_source','horizon_purpose','property_value','mortgage_balance',
+    'monthly_debt_payment','mortgage_rate','outside_emergency_cash','debt_payment_in_expenses'}
 
 
 class InputError(ValueError): pass
@@ -75,6 +77,11 @@ def inputs(value,snapshot,cap,now):
     notes=v.get('context_notes','')
     if not isinstance(notes,str):raise InputError('추가 설명은 글로 입력해주세요.')
     p.update(asset_scope='financial_assets',context_notes=notes.strip())
+    p.update(contribution_schedule=v.get('contribution_schedule','days'),
+             funding_source=v.get('funding_source','undecided'),horizon_purpose=v.get('horizon_purpose','unknown'))
+    p['household']={key:None if v.get(key) in (None,'') else numeric(v[key],key,1 if key=='mortgage_rate' else None)
+        for key in ['property_value','mortgage_balance','monthly_debt_payment','mortgage_rate','outside_emergency_cash']}
+    p['household']['debt_payment_in_expenses']=v.get('debt_payment_in_expenses','unknown')
     p['criteria']={key:v.get(key) for key in ['risk_level','preferred_sectors','excluded_sectors']}
     p['criteria'].update({key:numeric(v.get(key),key,1) for key in ['max_sector_fraction','max_equity_fraction','min_cash_fraction','max_foreign_fraction']})
     try:
@@ -322,7 +329,8 @@ class PortfolioSetup:
                     ranked.extend(x['symbol'] for x in memberships[name]['stocks'][:3])
                 for sector in sectors:
                     if sector['depth']==0: ranked.extend(x['symbol'] for x in memberships[sector['name']]['stocks'][:2])
-                candidates=list(dict.fromkeys(x for x in ranked if x not in excluded and re.fullmatch(r'[A-Z][A-Z0-9.\-]{0,14}',x)))[:30]
+                # Broad funds are genuine review candidates, not automatic purchases.
+                candidates=list(dict.fromkeys(['ITOT','IVV']+[x for x in ranked if x not in excluded and re.fullmatch(r'[A-Z][A-Z0-9.\-]{0,14}',x)]))[:30]
             symbols=sorted(set(candidates)|set(positions))
             if not symbols: raise InputError('조회한 섹터에서 분석 후보를 찾지 못했어요. 검토할 티커를 직접 입력해주세요.')
             if len(symbols)>80: raise InputError('조회·분석할 종목이 너무 많아요. 후보를 줄여주세요.')
@@ -350,8 +358,8 @@ class PortfolioSetup:
             'actionable_risky_allocation':False,
             'reason':'현재 연결은 기본 조회 자료예요. 가격·섹터만으로 저평가나 전망을 확인할 수 없어 위험자산 제안을 확정하지 않아요.'}
         p['candidate_screen']={'automatic':automatic,'symbols':candidates,
-            'method':'현재 보유 + 선호 섹터별 시총 상위 3개 + 대분류별 상위 2개에서 제외 섹터 제거 후 신규 후보 최대 30개' if automatic else '사용자 지정 후보 + 현재 보유',
-            'limitation':'전체 시장 탐색이 아니며 대형주 편향이 있어요. 자동 후보에는 ETF가 포함되지 않아요. 기업 가치·뉴스 추가 검토가 필요해요.'}
+            'method':'현재 보유 + 분산 비교 ETF(ITOT/IVV) + 선호 섹터별 상위 3개 + 대분류별 상위 2개, 신규 후보 최대 30개' if automatic else '사용자 지정 후보 + 현재 보유',
+            'limitation':'전체 시장 탐색이 아니며 개별주는 대형주 편향이 있어요. 후보 포함은 매수 추천이 아니고 ETF 내부 제외 섹터/집중도와 가치·뉴스를 별도 검증해요.'}
         valid=(d.day(today)+timedelta(days=7)).isoformat()
         stockmap={x['symbol']:x for x in stocks}; quotemap={x['symbol']:x for x in prices}
         for symbol in symbols:
@@ -385,7 +393,8 @@ class PortfolioSetup:
         p['proposal_capital']=amount if value['capital_mode']=='total' else nav+amount
         p['funding_mode']=value['capital_mode']
         if not 0<p['proposal_capital']<=self.capital_limit(): raise InputError('기존 보유와 추가 자금을 합친 제안 총액이 운용 한도를 넘어요.')
-        if p['proposal_capital']>p['total_assets']: raise InputError('제안 운용액이 입력한 총 금융자산보다 커요. 자산과 운용액을 확인해주세요.')
+        if p['proposal_capital']>p['total_assets'] and p['funding_source']!='future_income':
+            raise InputError('제안액이 현재 금융자산보다 커요. 향후 소득으로 납입할 계획이면 투자 재원을 선택하고 실제 현금과 구분해주세요.')
         if p['cash_need']>p['proposal_capital']: raise InputError('포트폴리오 안에서 남길 현금이 운용 총액보다 커요.')
         d.profile(p); d.holdings(actual)
         model=self.analysis_model()

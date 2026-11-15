@@ -251,5 +251,13 @@ test('historical notes allow explicit review without answering old questions aga
  }finally{await h.close()}
 });
 
+test('monthly contribution and household fields restore and save without converting property equity to cash',async()=>{
+ const h=await setup(s=>{Object.assign(s.onboarding.draft,{contribution_schedule:'monthly',contribution_amount:1000,property_value:400000,mortgage_balance:200000,debt_payment_in_expenses:'yes',funding_source:'future_income',outside_emergency_cash:''})});
+ try{
+  const f=h.$('setup-form');assert.equal(f.elements.contribution_schedule.value,'monthly');assert.equal(f.elements.property_value.value,'400000');assert.equal(f.elements.outside_emergency_cash.value,'');
+  h.$('save-draft').click();await settle();const saved=h.calls.find(x=>x.path==='/api/setup/draft').body;
+  assert.equal(saved.contribution_amount,1000);assert.equal(saved.mortgage_balance,200000);assert.equal(saved.debt_payment_in_expenses,'yes');assert.equal(saved.funding_source,'future_income');
+ }finally{await h.close()}
+});
 for(const {name,run} of cases){await run();console.log('PASS '+name)}
 console.log(cases.length+' dashboard feedback tests passed');

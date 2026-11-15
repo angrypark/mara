@@ -81,7 +81,8 @@ class Dialogues:
                 record=s.get(component['records'][-1]['input_id'])['body'];guide=record['guide'];guide_hash=record['guide_hash']
             else:
                 agent(role)
-                guide=Agents(s,None,doc['run']['as_of'],run_id).guide(role);guide_hash=hashlib.sha256(guide.encode()).hexdigest()
+                from .analysis_skills import for_role
+                guide=Agents(s,None,doc['run']['as_of'],run_id).guide(role)+'\n'+for_role(role)[1];guide_hash=hashlib.sha256(guide.encode()).hexdigest()
             sources=[];size=0
             referenced=set(component['source_ids'])|{ref for item in history['messages'][-10:] for ref in item['evidence_ids']}
             for source in sorted(doc['sources'],key=lambda x:x['id'] not in referenced):

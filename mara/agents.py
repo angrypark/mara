@@ -10,6 +10,7 @@ from .domain import dumps, required, texts, weights
 from .registry import agent, personas, resource
 from .contracts import output_schema, validate
 from .output_validation import AgentOutputError, issue_code
+from .analysis_skills import for_role
 
 PERSONAS = personas()  # Compatibility alias; orchestration resolves the live catalogue.
 CONTRACTS = {
@@ -48,6 +49,9 @@ def validate_output(role, obj, payload):
         if any(len({o['id'] for o in q['options']})!=len(q['options']) for q in qs):
             raise ValueError('Clarification options must have unique IDs')
     if kind == 'leader' and obj['action'] not in {'hold','adjust','defer'}: raise ValueError('Invalid action')
+    if kind=='validation' and 'findings' in obj:
+        blocked=any(x['blocks_proposal'] for x in obj['findings'])
+        if obj['findings'] and blocked==obj['qualitative_pass']:raise ValueError('Validation findings contradict qualitative_pass')
     if kind == 'reflection':
         required(obj['perspective_review'],personas())
         if any(not isinstance(v,str) or not v for v in obj['perspective_review'].values()): raise ValueError('Invalid perspective review')
@@ -106,7 +110,7 @@ class DemoModel:
                     'changes_since_previous':['DEMO: 이전 판단 비교 표시 예시예요.'] if p.get('previous') else [],
                     'assumptions':['Fixture only'], 'risks':['No real analysis'],
                     'falsifiers':['New verified evidence'], 'next_checks':['Check next observation']}
-        if role == 'validation': return {'issues':[], 'unsupported_claims':[], 'qualitative_pass':True,'reason':'DEMO fixture'}
+        if role == 'validation': return {'issues':[], 'unsupported_claims':[], 'qualitative_pass':True,'reason':'DEMO fixture','findings':[]}
         if role == 'leader': return {'action':'hold','weights':p['valuation']['weights'],'rationale':'DEMO maintain actual holdings',
                     'dissent':['DEMO: independent perspectives retained in report'], 'risks':['Fixture only'],
                     'next_checks':['Verify live evidence'], 'premise_changes':['Compare prior report'], 'validation_response':'DEMO only'}
@@ -128,6 +132,8 @@ class Agents:
 
     def call(self, role, payload):
         guide = self.guide(role)
+        skills,skill_guide=for_role(role)
+        guide += '\n'+skill_guide
         if payload.get('market',{}).get('research'):
             guide += '\n'+resource('guides/roles/research-tools.md').read_text()
         guide += '\n공통 기억 규칙: needs_revalidation=true인 보호 지식은 재검토 대상으로 보존한 기록이에요. 현재 사실로 확정하지 말고 적용 조건과 반증을 확인해요.'
@@ -139,12 +145,17 @@ class Agents:
         contract = output_schema(role)
         # Current and previous research summaries plus independent perspectives
         # remain bounded; raw provider responses never enter this budget.
-        context_limit=160000 if payload.get('market',{}).get('research') else 100000
+        from .context_budget import LIMITS
+        context_limit=LIMITS.get(role,256000) if payload.get('market',{}).get('research') else 100000
+        current['input_budget']={'version':'role-envelope/1.0','max_characters':context_limit,
+            'knowledge_characters':6000,'previous_completed_runs':1,
+            'rule':'현재 근거와 현재 관점은 자르지 않아요. 이전 기록은 역할별 투영으로 전달하고 원본은 보존해요. 상한 초과는 명시적으로 실패하며 결론을 강제하지 않아요.'}
         for attempt in (1,2):
             if len(guide)>22000 or len(dumps(current))>context_limit:
                 if attempt==2:raise AgentOutputError(role,code,oid,attempts=1)
                 raise ValueError('Role context budget exceeded; curate evidence')
             iid = self.s.append('agent_input', {'role':role, 'guide':guide,
+                'skills':skills,
                 'guide_hash':hashlib.sha256(guide.encode()).hexdigest(),'provider':self.model.identity,
                 'payload':current,'contract':contract},self.as_of,self.run_id)
             # Provider failures are never retried by this output-validation repair.

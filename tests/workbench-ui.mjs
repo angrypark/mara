@@ -30,4 +30,11 @@ test('research tools disclose partial collection and link frozen raw receipts',a
  assert.equal(h.$('wb-pane').querySelector('.wb-tool-call>a').getAttribute('href'),'/api/research-raw/'+d.run.id+'/'+'a'.repeat(64));
  h.$('wb-pane').querySelector('.wb-tool .source-chip').click();assert.match(h.$('wb-pane').textContent,/demo-1/);
  }finally{await h.close()}});
+test('decision findings route to responsible role and blocked monthly amounts stay conditional',async()=>{const h=setup();try{
+ const d=structuredClone(f.weekly),c=d.components.find(c=>c.id==='leader');
+ c.blocks.push({key:'decision_status',title:'판단과 다음 확인',kind:'object',value:{status:'blocked',funding_availability:'conditional_on_deposit',numeric_blockers:[],execution_checks:['계좌 비용'],findings:[{category:'market_evidence',blocks_proposal:true,subject:'FUND',reason:'구성 미확인',resolution:'운용사 구성 확인',owner:'evidence'}]}});
+ c.blocks.push({key:'monthly_allocation',title:'월 납입',kind:'object',value:{status:'blocked',schedule:'monthly',amounts:{FUND:400,CASH:600},currency:'USD',rule:'첫 납입 중복 금지'}});
+ h.ui.render(d);h.ui.choose('leader');assert.match(h.$('wb-pane').textContent,/향후 납입을 전제/);assert.match(h.$('wb-pane').textContent,/보류 중인 참고 배분/);assert.match(h.$('wb-pane').textContent,/400 USD/);assert.match(h.$('wb-pane').textContent,/해소 기준: 운용사 구성 확인/);
+ [...h.$('wb-pane').querySelectorAll('button')].find(b=>b.textContent==='담당 역할 보기').click();assert.equal(h.$('wb-title').textContent,'시장 근거');
+ }finally{await h.close()}});
 for(const {name,run} of tests){await run();console.log('PASS '+name)}console.log(tests.length+' workbench UI tests passed');

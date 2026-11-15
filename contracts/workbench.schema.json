@@ -2,7 +2,10 @@
   "type": "object",
   "properties": {
     "schema_version": {
-      "const": "mara.workbench/1.0.0"
+      "enum": [
+        "mara.workbench/1.0.0",
+        "mara.workbench/1.1.0"
+      ]
     },
     "run": {
       "type": "object",
@@ -678,6 +681,67 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 16000
+                        },
+                        "findings": {
+                          "type": "array",
+                          "maxItems": 25,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "category": {
+                                "type": "string",
+                                "enum": [
+                                  "personal_context",
+                                  "constraint",
+                                  "market_evidence",
+                                  "capability",
+                                  "execution",
+                                  "uncertainty"
+                                ]
+                              },
+                              "blocks_proposal": {
+                                "type": "boolean"
+                              },
+                              "subject": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                              },
+                              "reason": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 1500
+                              },
+                              "resolution": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 1500
+                              },
+                              "owner": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "context",
+                                  "evidence",
+                                  "buffett",
+                                  "marks",
+                                  "bogle",
+                                  "validation",
+                                  "leader",
+                                  "developer"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "category",
+                              "blocks_proposal",
+                              "subject",
+                              "reason",
+                              "resolution",
+                              "owner"
+                            ],
+                            "additionalProperties": false
+                          }
                         }
                       },
                       "required": [
@@ -1153,6 +1217,12 @@
                   "additionalProperties": {
                     "type": "number"
                   }
+                },
+                "decision_status": {
+                  "$ref": "#/$defs/decision-status"
+                },
+                "monthly_allocation": {
+                  "$ref": "#/$defs/monthly-plan"
                 }
               },
               "required": [
@@ -1290,6 +1360,12 @@
                           "additionalProperties": {
                             "type": "number"
                           }
+                        },
+                        "decision_status": {
+                          "$ref": "#/$defs/decision-status"
+                        },
+                        "monthly_allocation": {
+                          "$ref": "#/$defs/monthly-plan"
                         }
                       },
                       "required": [
@@ -1466,6 +1542,15 @@
                             },
                             "amount_outside_proposal": {
                               "type": "number"
+                            },
+                            "source": {
+                              "type": "string"
+                            },
+                            "availability": {
+                              "type": "string"
+                            },
+                            "monthly_contribution_is_future_flow": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -1513,6 +1598,15 @@
                     },
                     "amount_outside_proposal": {
                       "type": "number"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "availability": {
+                      "type": "string"
+                    },
+                    "monthly_contribution_is_future_flow": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -1721,6 +1815,15 @@
                             "additionalProperties": {
                               "type": "number"
                             }
+                          },
+                          "actual_cash_available": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "proposal_cash_reserved": {
+                            "type": "number"
                           }
                         },
                         "required": [
@@ -1852,6 +1955,39 @@
                           "type": "string",
                           "minLength": 1
                         }
+                      },
+                      "evidence_assessment": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/evidence-assessment"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "household": {
+                        "$ref": "#/$defs/household"
+                      },
+                      "calculation_scope": {
+                        "type": "object",
+                        "properties": {
+                          "cash_reserved": {
+                            "type": "string"
+                          },
+                          "position_limit": {
+                            "type": "string"
+                          },
+                          "contribution": {
+                            "$ref": "#/$defs/contribution"
+                          }
+                        },
+                        "required": [
+                          "cash_reserved",
+                          "position_limit",
+                          "contribution"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -1899,6 +2035,67 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 16000
+                    },
+                    "findings": {
+                      "type": "array",
+                      "maxItems": 25,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "personal_context",
+                              "constraint",
+                              "market_evidence",
+                              "capability",
+                              "execution",
+                              "uncertainty"
+                            ]
+                          },
+                          "blocks_proposal": {
+                            "type": "boolean"
+                          },
+                          "subject": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 300
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "resolution": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "owner": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "context",
+                              "evidence",
+                              "buffett",
+                              "marks",
+                              "bogle",
+                              "validation",
+                              "leader",
+                              "developer"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "category",
+                          "blocks_proposal",
+                          "subject",
+                          "reason",
+                          "resolution",
+                          "owner"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -2097,6 +2294,15 @@
                           "additionalProperties": {
                             "type": "number"
                           }
+                        },
+                        "actual_cash_available": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "proposal_cash_reserved": {
+                          "type": "number"
                         }
                       },
                       "required": [
@@ -2228,6 +2434,39 @@
                         "type": "string",
                         "minLength": 1
                       }
+                    },
+                    "evidence_assessment": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/evidence-assessment"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "household": {
+                      "$ref": "#/$defs/household"
+                    },
+                    "calculation_scope": {
+                      "type": "object",
+                      "properties": {
+                        "cash_reserved": {
+                          "type": "string"
+                        },
+                        "position_limit": {
+                          "type": "string"
+                        },
+                        "contribution": {
+                          "$ref": "#/$defs/contribution"
+                        }
+                      },
+                      "required": [
+                        "cash_reserved",
+                        "position_limit",
+                        "contribution"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -2274,6 +2513,67 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 16000
+                    },
+                    "findings": {
+                      "type": "array",
+                      "maxItems": 25,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "personal_context",
+                              "constraint",
+                              "market_evidence",
+                              "capability",
+                              "execution",
+                              "uncertainty"
+                            ]
+                          },
+                          "blocks_proposal": {
+                            "type": "boolean"
+                          },
+                          "subject": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 300
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "resolution": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "owner": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "context",
+                              "evidence",
+                              "buffett",
+                              "marks",
+                              "bogle",
+                              "validation",
+                              "leader",
+                              "developer"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "category",
+                          "blocks_proposal",
+                          "subject",
+                          "reason",
+                          "resolution",
+                          "owner"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -2400,5 +2700,365 @@
   ],
   "additionalProperties": false,
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:mara:workbench:1.0.0"
+  "$id": "urn:mara:workbench:1.1.0",
+  "$defs": {
+    "household": {
+      "type": "object",
+      "properties": {
+        "property_value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "mortgage_balance": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "property_equity": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "loan_to_value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "outside_emergency_cash": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "monthly_debt_payment": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "monthly_surplus_before_investing": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "monthly_contribution": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "monthly_remaining_after_investing": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "debt_payment_in_expenses": {
+          "type": "string"
+        },
+        "cashflow_complete": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "limits": {
+          "type": "string"
+        },
+        "base_currency": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "property_value",
+        "mortgage_balance",
+        "property_equity",
+        "loan_to_value",
+        "outside_emergency_cash",
+        "monthly_debt_payment",
+        "monthly_surplus_before_investing",
+        "monthly_contribution",
+        "monthly_remaining_after_investing",
+        "debt_payment_in_expenses",
+        "cashflow_complete",
+        "limits"
+      ],
+      "additionalProperties": false
+    },
+    "contribution": {
+      "type": "object",
+      "properties": {
+        "monthly_amount": {
+          "type": "number"
+        },
+        "schedule": {
+          "type": "string"
+        },
+        "amount_per_payment": {
+          "type": "number"
+        },
+        "method": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "monthly_amount",
+        "schedule",
+        "amount_per_payment",
+        "method"
+      ],
+      "additionalProperties": false
+    },
+    "evidence-assessment": {
+      "type": "object",
+      "properties": {
+        "policy": {
+          "const": "proposal-evidence-1.0"
+        },
+        "selected_assets": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "missing": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "kind": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "missing",
+              "evidence_ids",
+              "kind"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "blocks": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "resolution": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "subject",
+              "owner",
+              "category",
+              "blocks",
+              "reason",
+              "resolution"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "execution_checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limits": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "policy",
+        "selected_assets",
+        "blockers",
+        "execution_checks",
+        "limits"
+      ],
+      "additionalProperties": false
+    },
+    "decision-status": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "const": "portfolio_proposal_only"
+        },
+        "status": {
+          "enum": [
+            "blocked",
+            "ready_for_user_review"
+          ]
+        },
+        "numeric_blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "analyst_blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "maxItems": 512,
+          "items": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "type": "string",
+                "enum": [
+                  "personal_context",
+                  "constraint",
+                  "market_evidence",
+                  "capability",
+                  "execution",
+                  "uncertainty"
+                ]
+              },
+              "blocks_proposal": {
+                "type": "boolean"
+              },
+              "subject": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1500
+              },
+              "resolution": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1500
+              },
+              "owner": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "context",
+                  "evidence",
+                  "buffett",
+                  "marks",
+                  "bogle",
+                  "validation",
+                  "leader",
+                  "developer"
+                ]
+              }
+            },
+            "required": [
+              "category",
+              "blocks_proposal",
+              "subject",
+              "reason",
+              "resolution",
+              "owner"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "execution_status": {
+          "const": "not_authorized"
+        },
+        "funding_availability": {
+          "enum": [
+            "conditional_on_deposit",
+            "reported_holdings"
+          ]
+        },
+        "execution_checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "scope",
+        "status",
+        "numeric_blockers",
+        "analyst_blockers",
+        "findings",
+        "execution_status",
+        "funding_availability",
+        "execution_checks"
+      ],
+      "additionalProperties": false
+    },
+    "monthly-plan": {
+      "type": "object",
+      "properties": {
+        "schedule": {
+          "enum": [
+            "monthly",
+            "days"
+          ]
+        },
+        "amount": {
+          "type": "number",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string"
+        },
+        "amounts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "status": {
+          "enum": [
+            "blocked",
+            "conditional_plan"
+          ]
+        },
+        "rule": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schedule",
+        "amount",
+        "currency",
+        "amounts",
+        "status",
+        "rule"
+      ],
+      "additionalProperties": false
+    }
+  }
 }

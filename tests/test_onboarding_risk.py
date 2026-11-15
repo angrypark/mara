@@ -138,7 +138,7 @@ class SetupTests(unittest.TestCase):
         r=self.app.generate(dict(self.value,symbols=''),self.snapshot)
         with self.app.session() as s:
             screen=s.get(r['profile_id'])['body']['candidate_screen']
-            self.assertTrue(screen['automatic']);self.assertEqual(screen['symbols'],['TEST'])
+        self.assertTrue(screen['automatic']);self.assertEqual(screen['symbols'],['ITOT','IVV','TEST'])
 
     def test_holdings_changed_and_total_cap_block(self):
         class Changed(ReadOnlyBroker):
@@ -250,6 +250,9 @@ class RiskTests(unittest.TestCase):
 
     def test_stale_sector_source_is_missing_and_zero_weight_ignored(self):
         self.m['assets']['BROAD']['sector_valid_until']='2020-01-01'
+        result=evaluate({'BROAD':0.2,'CASH':0.8},self.p,self.m,1000)
+        self.assertTrue(result['passed']);self.assertEqual(result['metrics']['unknown_sector_fraction'],0.2)
+        self.p['criteria']['max_sector_fraction']=0.1
         self.assertFalse(evaluate({'BROAD':0.2,'CASH':0.8},self.p,self.m,1000)['passed'])
         self.assertTrue(evaluate({'BROAD':0,'CASH':1},self.p,self.m,1000)['passed'])
         self.m['assets']['BROAD']['sector_as_of']='2099-01-01'

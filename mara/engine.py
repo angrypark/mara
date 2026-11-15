@@ -10,6 +10,9 @@ from .risk import evaluate
 from .clarifications import questions, repeated_questions, answers
 from .output_validation import AgentOutputError
 from .research import compact_market
+from .decision import semantics,decision_findings
+from .contracts import validate,schema
+from .context_budget import previous_for_role
 
 
 class ContextNeedsInput(ValueError):
@@ -98,7 +101,10 @@ class Engine:
         capital=p.get('proposal_capital',val['nav'])
         funding={'proposal_capital':capital,'actual_nav':val['nav'],
                  'additional_funding_needed':max(0,capital-val['nav']),
-                 'amount_outside_proposal':max(0,val['nav']-capital)}
+                 'amount_outside_proposal':max(0,val['nav']-capital),
+                 'source':p.get('funding_source','undecided'),
+                 'availability':'conditional_on_deposit' if capital>val['nav'] or p.get('funding_source')=='future_income' else 'reported_holdings',
+                 'monthly_contribution_is_future_flow':True}
         # Retain expired facts in immutable evidence but exclude them from current inference.
         m['facts'] = [f for f in m['facts'] if f['valid_until'] >= as_of]
         if self.model.mode=='live' and not m['facts']:
@@ -121,7 +127,7 @@ class Engine:
         if previous:
             pb = previous['body']
             prior_market = self.s.get(pb['market_id'])['body']
-            prior = {'as_of':previous['effective'],'proposal':pb['proposal'],
+            prior = {'event_id':previous['id'],'as_of':previous['effective'],'proposal':pb['proposal'],
                      'perspectives':pb['perspectives'],'validation':pb['validation'],
                      'reflection':pb['reflection'],'market':prior_market,
                      'profile':self.s.get(pb['profile_id'])['body']}
@@ -139,6 +145,7 @@ class Engine:
                 outcome['cashflows_reconciled']=False
                 outcome['limitation']='외부 입출금 대조가 끝나지 않아 평가액만 표시해요. 자금 납입을 투자 수익으로 해석하지 않아요.'
         common = {'as_of':as_of,'profile':p,'actual':h,'valuation':val,'market':m,'previous':prior,
+                  'decision_context':semantics(p,m),
                   'anchors':anchors,'rebalance_due':rebalance_due,'performance':outcome,'funding':funding,
                   'analysis_flow':{'perspectives':'independent; no current peer outputs',
                     'leader':'after perspective validation; before final proposal validation',
@@ -147,8 +154,9 @@ class Engine:
             payload = dict(common,knowledge=k.retrieve(as_of,role))
             payload['market']=compact_market(m,role)
             if prior:
-                payload['previous']=copy.deepcopy(prior)
-                payload['previous']['market']=compact_market(prior['market'],role,historical=True)
+                payload['previous']=previous_for_role(prior,role,compact_market(prior['market'],role,historical=True))
+                # These exact fields are already present under previous.proposal.
+                payload['anchors']={k:v for k,v in anchors.items() if k not in ('previous_rationale','unresolved_risks','next_checks')}
             payload.update(extra or {})
             payload['analysis_stage']='final_validation' if role=='validation' and 'final_proposal' in payload else 'perspective_validation' if role=='validation' else 'proposal_synthesis' if role=='leader' else role
             return a.call(role,payload)
@@ -214,6 +222,18 @@ class Engine:
         proposal['eligibility'] = 'blocked' if blocked else ('review_now' if rebalance_due or not previous else 'review_at_rebalance')
         proposal['weight_changes'] = differences
         proposal['execution'] = 'Proposal only; user records actual changes separately'
+        proposal['decision_status']={'scope':'portfolio_proposal_only','status':'blocked' if blocked else 'ready_for_user_review',
+            'numeric_blockers':final_check['errors']+final_check['missing'],
+            'analyst_blockers':final_review['issues'] if not final_review['qualitative_pass'] else [],
+            'findings':decision_findings(final_check,final_review),
+            'execution_status':'not_authorized','funding_availability':funding['availability'],
+            'execution_checks':(final_check.get('evidence_assessment') or {}).get('execution_checks',[])}
+        proposal['monthly_allocation']={'schedule':p.get('contribution_schedule','days'),
+            'amount':p['contribution_amount'],'currency':p['base_currency'],
+            'amounts':{s:p['contribution_amount']*w for s,w in proposal['weights'].items()},
+            'status':'blocked' if blocked else 'conditional_plan',
+            'rule':'첫 납입은 같은 달의 정기 납입과 중복하지 않아요. 실제 입금 후 기존 편차와 비용을 재검토할 목표 배분이며 주문 지시가 아니에요.'}
+        validate(proposal['decision_status'],schema('decision'))
         proposal['market_changes'] = evidence['changes']
         # Original dissent is retained regardless of how the leader summarizes it.
         report = {'run_id':run_id,'mode':self.model.mode,'as_of':as_of,'profile_id':pe['id'],

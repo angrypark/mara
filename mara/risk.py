@@ -2,8 +2,9 @@
 import math
 import statistics
 from . import domain as d
+from .decision import assessment,contributions,household
 
-VERSION='portfolio-risk-1.0'
+VERSION='portfolio-risk-1.1'
 
 
 def history_metrics(w, market):
@@ -97,16 +98,26 @@ def evaluate(w, p, m, capital, actual=None):
         for sector,weight in sectors.items():
             if weight>c['max_sector_fraction']+1e-9: errors.append('섹터 상한 초과: '+sector)
             if sector in c['excluded_sectors'] and weight>1e-9: errors.append('제외 섹터 포함: '+sector)
-        if unknown_sector and (c['max_sector_fraction']<1 or c['excluded_sectors']):
+        # Unknown exposure can all belong to one sector. If even that bound is
+        # below the cap, missing labels cannot make the proposed cap fail.
+        sector_upper=max(sectors.values(),default=0)+unknown_sector
+        if unknown_sector and (sector_upper>c['max_sector_fraction']+1e-9 or c['excluded_sectors']):
             missing.append('ETF 내부 구성 또는 섹터 자료가 부족해 섹터 제한을 검증할 수 없어요.')
     risky=[v for s,v in w.items() if s!='CASH' and m['assets'].get(s,{}).get('asset_class')!='cash' and v>0]
     actual_risky=any(v>0 and s!='CASH' and m['assets'].get(s,{}).get('asset_class')!='cash'
                      for s,v in (actual or {}).get('weights',{}).items())
-    if m.get('coverage',{}).get('actionable_risky_allocation') is False and (risky or actual_risky):
+    readiness=assessment(w,m)
+    if readiness is not None:
+        missing.extend(x['subject']+': '+x['reason'] for x in readiness['blockers'])
+    elif m.get('coverage',{}).get('actionable_risky_allocation') is False and (risky or actual_risky):
         missing.append('기업·시장 근거의 적합성 및 거래·위험 자료 검토가 아직 끝나지 않았어요. 추가 수집 성공만으로 위험자산 제안을 확정하지 않아요.')
     invested=sum(risky); hhi=sum((v/invested)**2 for v in risky) if invested else None
-    monthly_contribution=p['contribution_amount']*365.25/12/p['contribution_every_days']
-    surplus=p['monthly_income']-p['monthly_expenses']
+    contribution=contributions(p);family=household(p)
+    monthly_contribution=contribution['monthly_amount']
+    surplus=family['monthly_surplus_before_investing']
+    if family['cashflow_complete'] is False:warnings.append('담보대출 상환액이 월 지출에 포함됐는지 미확인이에요. 납입 지속 가능성의 조건으로 확인해요.')
+    if p.get('funding_source')=='future_income' and monthly_contribution>max(0,surplus):
+        missing.append('향후 소득만으로 납입하는 계획이 확인된 월 잉여자금을 초과해요. 납입액 또는 재원을 확인해요.')
     if monthly_contribution>max(0,surplus): warnings.append('예정 납입액이 월 소득에서 지출을 뺀 금액보다 커요. 별도 자금 출처를 확인해요.')
     if unknown_sector: warnings.append('일부 섹터 노출은 미확인이에요. 분산이 충분하다는 뜻이 아니에요.')
     if unknown_fee: warnings.append('일부 보수율이 미확인이며 총 비용은 계산하지 못했어요.')
@@ -120,13 +131,18 @@ def evaluate(w, p, m, capital, actual=None):
         turnover=sum(abs(w.get(s,0)-actual['weights'].get(s,0)) for s in set(w)|set(actual['weights']))/2
     return dict(base,version=VERSION,passed=not errors and not missing,
         status='blocked' if errors else ('needs_review' if missing or warnings else 'pass'),
-        errors=errors,missing=missing,warnings=warnings,
+        errors=errors,missing=missing,warnings=warnings,evidence_assessment=readiness,
+        calculation_scope={'cash_reserved':'제안 금액에 제안 현금 비중을 적용한 계획액. 실제 가용 현금 아님.',
+                           'position_limit':'비현금 종목·ETF 대상. CASH/현금성 자산 제외.',
+                           'contribution':contribution},household=family,
         metrics={'capital':capital,'scenario_loss_amount':capital*base['scenario_loss_fraction'],
             'max_position_fraction':max(risky,default=0),'position_hhi':hhi,
             'effective_positions':1/hhi if hhi else None,'sector_exposures':sectors,
             'unknown_sector_fraction':unknown_sector,'asset_classes':classes,'currencies':currencies,
             'cash_months_of_expenses':base['cash_reserved']/p['monthly_expenses'] if p['monthly_expenses'] else None,
             'monthly_surplus':surplus,'monthly_contribution':monthly_contribution,
+            'actual_cash_available':(actual or {}).get('values',{}).get('CASH'),
+            'proposal_cash_reserved':base['cash_reserved'],
             'known_weighted_expense_ratio':fee,'unknown_fee_fraction':unknown_fee,
             'one_way_turnover':turnover},historical=hist,
         limitations=['종목 HHI는 ETF 내부 종목 중복·상관관계를 설명하지 않아요.',

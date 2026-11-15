@@ -26,6 +26,67 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 16000
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 25,
+      "items": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "personal_context",
+              "constraint",
+              "market_evidence",
+              "capability",
+              "execution",
+              "uncertainty"
+            ]
+          },
+          "blocks_proposal": {
+            "type": "boolean"
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1500
+          },
+          "resolution": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1500
+          },
+          "owner": {
+            "type": "string",
+            "enum": [
+              "user",
+              "context",
+              "evidence",
+              "buffett",
+              "marks",
+              "bogle",
+              "validation",
+              "leader",
+              "developer"
+            ]
+          }
+        },
+        "required": [
+          "category",
+          "blocks_proposal",
+          "subject",
+          "reason",
+          "resolution",
+          "owner"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [

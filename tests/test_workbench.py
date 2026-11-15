@@ -104,6 +104,7 @@ class WorkbenchTests(unittest.TestCase):
             with self.assertRaises(ContractError):validate_workbench(bad)
     def test_catalogue_extension_runs_and_renders_without_engine_changes(self):
         extra=dict(registry.agent('buffett'),id='research_test',label='Synthetic research perspective')
+        self.m['research']={'schema_version':'mara.research/1.0.0','selection':{},'budget':{},'collected_at':'2026-11-14T12:00:00+00:00','calls':[]}
         with patch.object(registry,'REGISTRY',registry.REGISTRY+[extra]):
             result=self.e.run('2026-11-14',self.db.publish_market(self.m),revision_reason='extension')
             doc=project(self.s,result['run_id'])
