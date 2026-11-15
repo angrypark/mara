@@ -131,7 +131,7 @@ class Session:
         if not reason.strip(): raise ValueError('Recovery reason required')
         lock = self.store.db.execute('SELECT run_id FROM locks WHERE owner=?', (self.owner,)).fetchone()
         if lock:
-            self.append('recovery', {'run_id': lock['run_id'], 'reason': reason}, as_of)
+            self.append('recovery', {'run_id': lock['run_id'], 'reason': reason}, as_of, lock['run_id'])
             self.unlock(lock['run_id'])
 
     def export(self):

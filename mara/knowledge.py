@@ -16,8 +16,9 @@ class Knowledge:
         return result
 
     def active(self, as_of):
-        return [k for k in self.current(as_of).values() if k['status'] == 'active'
-                and (not k['valid_until'] or k['valid_until'] >= as_of)]
+        return [dict(k,needs_revalidation=bool(k['valid_until'] and k['valid_until']<as_of))
+                for k in self.current(as_of).values() if k['status'] == 'active'
+                and (k['category'] in PROTECTED or not k['valid_until'] or k['valid_until'] >= as_of)]
 
     def retrieve(self, as_of, role, limit=6000):
         from .store import Session, SHARED

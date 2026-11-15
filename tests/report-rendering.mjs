@@ -53,6 +53,15 @@ test('independent proposals, actual holdings, cap violations, zero balances and 
     assert.equal(h.$('sector-chart').querySelector('.limit-mark').style.left,'30%');
   }finally{await h.close()}
 });
+test('new perspectives extend printable cards and comparison columns',async()=>{
+  const h=setup();try{
+    const r=structuredClone(fixture.weekly);r.body.perspectives.additional=structuredClone(r.body.perspectives.bogle);
+    r.view.agent_registry=[{id:'additional',label:'추가 관점',description:'확장 검증'}];h.render(r);
+    assert.equal(h.$('perspectives').children.length,4);assert.match(h.$('perspectives').querySelector('[data-persona="additional"]').textContent,/추가 관점/);
+    assert.equal(h.$('perspective-weights').querySelector('tr').children.length,6);
+    assert.match(h.$('perspective-weights').closest('table').querySelector('thead').textContent,/추가 관점/);
+  }finally{await h.close()}
+});
 test('older report fields degrade explicitly and untrusted strings stay inert',async()=>{
   const h=setup();try{
     const r=structuredClone(fixture.weekly);r.view.market_analysis=null;

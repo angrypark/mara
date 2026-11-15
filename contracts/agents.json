@@ -1,0 +1,74 @@
+[
+  {
+    "id": "context",
+    "kind": "context",
+    "role": "R1",
+    "label": "개인 맥락",
+    "description": "목표와 현금 필요, 지켜야 할 제약",
+    "guide": "guides/roles/context.md"
+  },
+  {
+    "id": "evidence",
+    "kind": "evidence",
+    "role": "R2",
+    "label": "시장 근거",
+    "description": "확인된 사실과 해석, 자료 공백",
+    "guide": "guides/roles/evidence.md"
+  },
+  {
+    "id": "buffett",
+    "kind": "perspective",
+    "role": "R3",
+    "label": "Warren Buffett",
+    "description": "사업의 질 · 내재가치 · 안전마진",
+    "guide": "guides/personas/buffett.md"
+  },
+  {
+    "id": "marks",
+    "kind": "perspective",
+    "role": "R3",
+    "label": "Howard Marks",
+    "description": "사이클 · 가격에 반영된 기대 · 손실",
+    "guide": "guides/personas/marks.md"
+  },
+  {
+    "id": "bogle",
+    "kind": "perspective",
+    "role": "R3",
+    "label": "John Bogle",
+    "description": "분산 · 낮은 비용 · 장기 유지",
+    "guide": "guides/personas/bogle.md"
+  },
+  {
+    "id": "validation",
+    "kind": "validation",
+    "role": "R4",
+    "label": "위험·적합성 검증",
+    "description": "수치 조건과 주장 근거의 재검증",
+    "guide": "guides/roles/validation.md"
+  },
+  {
+    "id": "leader",
+    "kind": "leader",
+    "role": "R5",
+    "label": "포트폴리오 리더",
+    "description": "관점의 차이와 검증을 반영한 제안",
+    "guide": "guides/roles/leader.md"
+  },
+  {
+    "id": "reflection",
+    "kind": "reflection",
+    "role": "R6",
+    "label": "결과와 과정 회고",
+    "description": "당시 판단과 실제 결과를 따로 평가",
+    "guide": "guides/roles/reflection.md"
+  },
+  {
+    "id": "memory",
+    "kind": "memory",
+    "role": "F1",
+    "label": "기억과 지식 정리",
+    "description": "원본을 보존하면서 활성 지식 정리",
+    "guide": "guides/roles/memory.md"
+  }
+]

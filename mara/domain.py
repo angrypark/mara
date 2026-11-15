@@ -94,7 +94,7 @@ def market(m):
         number(a['stress_loss'], 0, 1)
         if a['expense_ratio'] is not None: number(a['expense_ratio'], 0, 1)
         if type(a['liquid']) is not bool: raise ValueError('liquid must be boolean')
-        if a.get('asset_class','unknown') not in {'equity','fixed_income','commodity','real_asset','unknown'}:
+        if a.get('asset_class','unknown') not in {'equity','fixed_income','commodity','real_asset','cash','unknown'}:
             raise ValueError('Unknown asset classification')
         if 'sector_complete' in a and type(a['sector_complete']) is not bool: raise ValueError('Sector completeness must be boolean')
         if 'sector_exposures' in a:
@@ -121,6 +121,11 @@ def market(m):
 def valuation(h, m, allow_empty=False):
     if h['base_currency'] != m['base_currency']: raise ValueError('Convert quotes to base currency with FX source first')
     if h['as_of'] > m['as_of']: raise ValueError('Future holdings')
+    for currency,amount in h.get('cash_components',{}).items():
+        if currency!=h['base_currency'] and amount and not any(
+                units and m['assets'].get(symbol,{}).get('asset_class')=='cash'
+                and m['assets'][symbol].get('currency')==currency for symbol,units in h['positions'].items()):
+            raise ValueError('Foreign cash was combined with base cash; refresh and separate currency holdings before evaluation')
     values = {s: units * m['prices'][s]['price'] for s, units in h['positions'].items() if units}
     values['CASH'] = h['cash']
     nav = sum(values.values())
@@ -148,7 +153,7 @@ def suitability(w, p, m, nav):
             errors.append('Unknown/unpriced asset: ' + s); continue
         a = m['assets'][s]
         if a['market'] not in p['markets']: errors.append('Market not allowed: ' + s)
-        if weight > p['max_position_fraction'] + 1e-9: errors.append('Position limit: ' + s)
+        if a.get('asset_class')!='cash' and weight > p['max_position_fraction'] + 1e-9: errors.append('Position limit: ' + s)
         loss += weight * a['stress_loss']
     # Cash reserve is intentionally conservative; a liquid risky asset is not guaranteed cash.
     if liquid + 1e-6 < p['cash_need']: errors.append('Cash reserve below stated cash need')

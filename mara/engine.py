@@ -4,6 +4,7 @@ import uuid
 from datetime import timedelta
 from . import domain as d
 from .agents import Agents, PERSONAS
+from .registry import catalogue, personas
 from .knowledge import Knowledge
 from .risk import evaluate
 
@@ -86,9 +87,12 @@ class Engine:
                  'amount_outside_proposal':max(0,val['nav']-capital)}
         # Retain expired facts in immutable evidence but exclude them from current inference.
         m['facts'] = [f for f in m['facts'] if f['valid_until'] >= as_of]
+        if self.model.mode=='live' and not m['facts']:
+            raise ValueError('Live analysis requires currently valid evidence')
         start_id = self.s.append('run_started',{'market_id':me['id'],'profile_id':pe['id'],
              'actual_id':he['id'],'previous_id':previous['id'] if previous else None,
-             'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason},as_of,run_id)
+             'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason,
+             'agent_registry':catalogue()},as_of,run_id)
         k = Knowledge(self.s)
         a = Agents(self.s,self.model,as_of,run_id)
         rebalance_due = d.day(as_of) >= d.day(h['last_rebalanced']) + timedelta(days=p['rebalance_every_days'])
@@ -121,10 +125,14 @@ class Engine:
                 outcome['cashflows_reconciled']=False
                 outcome['limitation']='외부 입출금 대조가 끝나지 않아 평가액만 표시해요. 자금 납입을 투자 수익으로 해석하지 않아요.'
         common = {'as_of':as_of,'profile':p,'actual':h,'valuation':val,'market':m,'previous':prior,
-                  'anchors':anchors,'rebalance_due':rebalance_due,'performance':outcome,'funding':funding}
+                  'anchors':anchors,'rebalance_due':rebalance_due,'performance':outcome,'funding':funding,
+                  'analysis_flow':{'perspectives':'independent; no current peer outputs',
+                    'leader':'after perspective validation; before final proposal validation',
+                    'final_validation':'after leader; assess each statement against its original stage'}}
         def call(role, extra=None):
             payload = dict(common,knowledge=k.retrieve(as_of,role))
             payload.update(extra or {})
+            payload['analysis_stage']='final_validation' if role=='validation' and 'final_proposal' in payload else 'perspective_validation' if role=='validation' else 'proposal_synthesis' if role=='leader' else role
             return a.call(role,payload)
         if previous:
             reflection, reflection_id = call('reflection')
@@ -159,7 +167,7 @@ class Engine:
         evidence, _ = call('evidence')
         common.update(context_analysis=context,evidence_analysis=evidence)
         perspectives = {}
-        for role in PERSONAS:
+        for role in personas():
             # No peer output enters any perspective call. Separate requests, no shared conversation state.
             perspectives[role], _ = call(role)
         checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
@@ -172,7 +180,7 @@ class Engine:
                        for s in set(proposal['weights'])|set(val['weights'])}
         if proposal['action'] == 'hold' and any(abs(x)>1e-6 for x in differences.values()):
             raise ValueError('Hold proposal changes actual weights')
-        blocked = not final_check['passed'] or not final_review['qualitative_pass']
+        blocked = proposal['action']=='defer' or not final_check['passed'] or not final_review['qualitative_pass']
         if blocked:
             proposal['action'] = 'defer'
             proposal['risks'] += final_check['errors'] + final_check['missing'] + final_review['issues']

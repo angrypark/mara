@@ -88,7 +88,7 @@ function modelStatus(s,reset=false){
   if(!s.configured)$('model-settings').open=true;
   if(!modelSettingsInitialized||reset){$('model-provider').value=savedModelProvider;$('model-id').value=s.model||'';modelSettingsInitialized=true;providerFields()}
 }
-function show(row){displayed=row.id;showingDemo=row.body.mode==='demo';window.MaraReport.render(row)}
+function show(row){displayed=row.id;showingDemo=row.body.mode==='demo';window.MaraReport.render(row);$('report-document').dataset.reportId=row.id;window.MaraWorkbench?.openReport(row)}
 async function load(){try{
   const s=await api('/api/state'),o=s.onboarding;text('service','실행 중');text('broker-state',s.broker_connected?'조회 연결 확인':'연결 확인 필요');text('broker-time',s.broker_check?.checked_at?'최근 확인 '+new Date(s.broker_check.checked_at).toLocaleString('ko-KR'):'보유 불러오기로 확인해주세요.');
   if(!initialized){snapshot(o.snapshot,true);restore(o.draft);if(o.snapshot)form.elements.snapshot_id.value=o.snapshot.id;form.elements.confirmed.checked=false;initialized=true}
@@ -97,6 +97,7 @@ async function load(){try{
   if(o.latest&&o.latest.id!==displayed&&!selectedHistory){show(o.latest);if(!viewChosen||o.job?.id===expectedJobId)selectView('report',false)}
   $('historylist').replaceChildren(...o.history.map(r=>{const div=document.createElement('div'),b=document.createElement('button');b.type='button';b.className='rowbutton';b.textContent=r.as_of+' · '+({adjust:'조정 제안',hold:'유지',defer:'보류'}[r.action]||r.action)+(r.revision_of?' · 수정본':'');b.onclick=async()=>{try{show(await api('/api/portfolio/report/'+r.id));selectedHistory=true;selectView('report')}catch(e){text('message',e.message)}};div.append(b);return div}));
   demoReport=s.latest;$('demo-view').disabled=!demoReport;
+  window.MaraWorkbench?.refresh();
   if(s.latest)text('demo-result',pretty({구분:'합성 데모',평가일:s.latest.effective,제안:s.latest.body.proposal,회고:s.latest.body.reflection}));
 }catch(e){text('service','연결 확인 필요');text('message','서비스 상태를 불러오지 못했어요. '+e.message)}}
 async function action(button,fn){if(busy.has(button.id))return;busy.add(button.id);button.disabled=true;try{await fn()}catch(e){text('message',e.message);if(button.id==='generate'||button.id==='save-draft')generationFeedback(e.message,[],'error',true);if(button.id==='save-model')text('model-message',e.message);if(button.id==='refresh-holdings')text('snapshot-time',e.message)}finally{busy.delete(button.id);button.disabled=running&&['generate','refresh-holdings','save-model'].includes(button.id);if(button.id==='generate')button.textContent=running?'포트폴리오 분석 중…':generateLabel}}
@@ -126,7 +127,7 @@ form.noValidate=true;
 $('demo-view').onclick=()=>{if(demoReport){show(demoReport);selectedHistory=true;selectView('report')}};
 $('print-report').onclick=()=>window.print();
 let printDetails=[];
-window.addEventListener('beforeprint',()=>{printDetails=Array.from($('report-content').querySelectorAll('details:not([open])'));printDetails.forEach(d=>d.open=true)});
+window.addEventListener('beforeprint',()=>{printDetails=Array.from($('report-panel').querySelectorAll('details:not([open])'));printDetails.forEach(d=>d.open=true)});
 window.addEventListener('afterprint',()=>{printDetails.forEach(d=>d.open=false);printDetails=[]});
 $('demo-next').onclick=()=>action($('demo-next'),async()=>{const r=await fetch('/api/demo-next',{method:'POST',headers:{'X-Mara-CSRF':csrf}});if(!r.ok)throw new Error('모의 평가 실패');await load();if(showingDemo&&demoReport)show(demoReport);text('message','별도 데모 평가를 저장했어요.')});
 function theme(value){document.documentElement.dataset.theme=value;$('theme').textContent=value==='dark'?'라이트 모드':'다크 모드'}

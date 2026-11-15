@@ -8,7 +8,6 @@ window.MaraReport=(()=>{
   const number=(n,d=1)=>n==null?'계산 불가':Number(n).toLocaleString('ko-KR',{maximumFractionDigits:d});
   const action={hold:'유지',adjust:'조정 제안',defer:'보류'};
   const names={buffett:['Warren Buffett','기업 가치 · 안전마진'],marks:['Howard Marks','위험 · 사이클'],bogle:['John Bogle','비용 · 분산']};
-  const roles=Object.keys(names);
   const labels={equity:'주식',bond:'채권',cash:'현금',unknown:'미확인',other:'기타'};
   const sourceId=i=>'report-source-'+i;
   const symbol=s=>s==='CASH'?'기준통화 현금':s;
@@ -50,9 +49,14 @@ window.MaraReport=(()=>{
     }));
   }
   function personas(r,v,sources){
+    const recorded=(v.agent_registry?.length?v.agent_registry.map(a=>a.id):Object.keys(names)).filter(id=>r.perspectives?.[id]);
+    const roles=[...new Set([...recorded,...Object.keys(r.perspectives||{})])];
+    const metadata=Object.fromEntries((v.agent_registry||[]).map(a=>[a.id,[a.label,a.description]]));
+    const identity=role=>metadata[role]||names[role]||[role,'독립 투자 관점'];
+    $('perspective-weights').closest('table').querySelector('thead tr').replaceChildren(...['자산',...roles.map(role=>identity(role)[0]),'최종 제안'].map(label=>el('th','',label)));
     $('perspectives').replaceChildren(...roles.map(role=>{
       const p=r.perspectives?.[role],card=el('article','persona '+role);card.dataset.persona=role;
-      card.append(el('p','eyebrow',names[role][1]),el('h3','',names[role][0]));
+      card.append(el('p','eyebrow',identity(role)[1]),el('h3','',identity(role)[0]));
       if(!p){card.append(el('p','hint','이 관점의 분석 기록이 없어요.'));return card}
       card.append(el('p','persona-thesis',p.thesis),section('이 판단을 한 근거',p.decision_basis,'이전 형식의 보고서예요. 아래 가정과 원본 분석에서 근거를 확인해요.'));
       const weights=el('div','persona-weights');

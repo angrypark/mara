@@ -1,0 +1,2316 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "mara.workbench/1.0.0"
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000
+        },
+        "as_of": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "running",
+            "needs_input",
+            "failed",
+            "interrupted"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "demo",
+            "live"
+          ]
+        },
+        "report_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previous_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision_of": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "as_of",
+        "status",
+        "mode",
+        "report_id",
+        "previous_id",
+        "revision_of",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "role": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "kind": {
+            "enum": [
+              "context",
+              "evidence",
+              "perspective",
+              "validation",
+              "leader",
+              "reflection",
+              "memory"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "running",
+              "pending",
+              "needs_input",
+              "failed",
+              "skipped",
+              "blocked"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 16000
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 16000
+                },
+                "kind": {
+                  "enum": [
+                    "text",
+                    "list",
+                    "weights",
+                    "object"
+                  ]
+                },
+                "value": {}
+              },
+              "required": [
+                "key",
+                "title",
+                "kind",
+                "value"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "kind": {
+                        "const": "text"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "kind": {
+                        "const": "list"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "kind": {
+                        "const": "weights"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "kind": {
+                        "const": "object"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "type": [
+                          "object",
+                          "array",
+                          "boolean",
+                          "number",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "inputs": {
+            "type": "object"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16000
+            },
+            "maxItems": 120
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "contract": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "extensions": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "kind",
+          "label",
+          "description",
+          "status",
+          "summary",
+          "blocks",
+          "inputs",
+          "output",
+          "source_ids",
+          "records",
+          "contract",
+          "extensions"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "context"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "output": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "summary": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16000
+                        },
+                        "constraints": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "missing": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        }
+                      },
+                      "required": [
+                        "summary",
+                        "constraints",
+                        "missing"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "evidence"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "output": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "summary": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16000
+                        },
+                        "facts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "drivers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "changes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "portfolio_implications": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "uncertainties": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        }
+                      },
+                      "required": [
+                        "facts",
+                        "changes",
+                        "uncertainties"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "perspective"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "output": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "thesis": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16000
+                        },
+                        "weights": {
+                          "type": "object",
+                          "minProperties": 1,
+                          "additionalProperties": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          }
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "decision_basis": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "changes_since_previous": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "assumptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "risks": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "falsifiers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "next_checks": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        }
+                      },
+                      "required": [
+                        "thesis",
+                        "weights",
+                        "evidence_ids",
+                        "assumptions",
+                        "risks",
+                        "falsifiers",
+                        "next_checks"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "validation"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "output": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "issues": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "unsupported_claims": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "qualitative_pass": {
+                          "type": "boolean"
+                        },
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16000
+                        }
+                      },
+                      "required": [
+                        "issues",
+                        "unsupported_claims",
+                        "qualitative_pass",
+                        "reason"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "leader"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "output": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "enum": [
+                            "hold",
+                            "adjust",
+                            "defer"
+                          ],
+                          "type": "string"
+                        },
+                        "weights": {
+                          "type": "object",
+                          "minProperties": 1,
+                          "additionalProperties": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          }
+                        },
+                        "rationale": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16000
+                        },
+                        "dissent": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "risks": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "next_checks": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "premise_changes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "validation_response": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16000
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "weights",
+                        "rationale",
+                        "dissent",
+                        "risks",
+                        "next_checks",
+                        "premise_changes"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "reflection"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "output": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "investment_outcome": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16000
+                        },
+                        "process_evaluation": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16000
+                        },
+                        "perspective_review": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          }
+                        },
+                        "lessons": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "guide_change_proposals": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        }
+                      },
+                      "required": [
+                        "investment_outcome",
+                        "process_evaluation",
+                        "perspective_review",
+                        "lessons",
+                        "guide_change_proposals"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "memory"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "output": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "operations": {
+                          "type": "array",
+                          "maxItems": 30,
+                          "items": {
+                            "type": "object"
+                          }
+                        },
+                        "conflicts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "summary": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16000
+                        }
+                      },
+                      "required": [
+                        "operations",
+                        "conflicts",
+                        "summary"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "completed",
+                    "needs_input",
+                    "blocked"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "output": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 1
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "label"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "topic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "published_at": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "known_at": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "valid_until": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16000
+          },
+          "uncertainty": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "topic",
+          "text",
+          "source",
+          "published_at",
+          "known_at",
+          "valid_until",
+          "uncertainty",
+          "active"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "portfolio": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "actual": {
+              "type": "object",
+              "properties": {
+                "nav": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "weights": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "values": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                }
+              },
+              "required": [
+                "nav",
+                "weights",
+                "values"
+              ],
+              "additionalProperties": false
+            },
+            "proposal": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "enum": [
+                    "hold",
+                    "adjust",
+                    "defer"
+                  ],
+                  "type": "string"
+                },
+                "weights": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "additionalProperties": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "rationale": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 16000
+                },
+                "dissent": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 16000
+                  },
+                  "maxItems": 120
+                },
+                "risks": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 16000
+                  },
+                  "maxItems": 120
+                },
+                "next_checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 16000
+                  },
+                  "maxItems": 120
+                },
+                "premise_changes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 16000
+                  },
+                  "maxItems": 120
+                },
+                "validation_response": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 16000
+                },
+                "eligibility": {
+                  "enum": [
+                    "blocked",
+                    "review_now",
+                    "review_at_rebalance"
+                  ]
+                },
+                "execution": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "market_changes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "weight_changes": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              },
+              "required": [
+                "action",
+                "weights",
+                "rationale",
+                "dissent",
+                "risks",
+                "next_checks",
+                "premise_changes",
+                "eligibility",
+                "execution",
+                "market_changes",
+                "weight_changes"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "action": {
+                        "const": "defer"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "eligibility": {
+                        "const": "blocked"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "previous": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "as_of": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "proposal": {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "enum": [
+                            "hold",
+                            "adjust",
+                            "defer"
+                          ],
+                          "type": "string"
+                        },
+                        "weights": {
+                          "type": "object",
+                          "minProperties": 1,
+                          "additionalProperties": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          }
+                        },
+                        "rationale": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16000
+                        },
+                        "dissent": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "risks": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "next_checks": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "premise_changes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "maxItems": 120
+                        },
+                        "validation_response": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 16000
+                        },
+                        "eligibility": {
+                          "enum": [
+                            "blocked",
+                            "review_now",
+                            "review_at_rebalance"
+                          ]
+                        },
+                        "execution": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "market_changes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "weight_changes": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          }
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "weights",
+                        "rationale",
+                        "dissent",
+                        "risks",
+                        "next_checks",
+                        "premise_changes",
+                        "eligibility",
+                        "execution",
+                        "market_changes",
+                        "weight_changes"
+                      ],
+                      "additionalProperties": false,
+                      "allOf": [
+                        {
+                          "if": {
+                            "properties": {
+                              "action": {
+                                "const": "defer"
+                              }
+                            }
+                          },
+                          "then": {
+                            "properties": {
+                              "eligibility": {
+                                "const": "blocked"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "valuation": {
+                      "type": "object",
+                      "properties": {
+                        "nav": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "weights": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          }
+                        },
+                        "values": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number",
+                            "minimum": 0
+                          }
+                        }
+                      },
+                      "required": [
+                        "nav",
+                        "weights",
+                        "values"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "perspectives": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "thesis": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16000
+                          },
+                          "weights": {
+                            "type": "object",
+                            "minProperties": 1,
+                            "additionalProperties": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1
+                            }
+                          },
+                          "evidence_ids": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 16000
+                            },
+                            "maxItems": 120
+                          },
+                          "decision_basis": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 16000
+                            },
+                            "maxItems": 120
+                          },
+                          "changes_since_previous": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 16000
+                            },
+                            "maxItems": 120
+                          },
+                          "assumptions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 16000
+                            },
+                            "maxItems": 120
+                          },
+                          "risks": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 16000
+                            },
+                            "maxItems": 120
+                          },
+                          "falsifiers": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 16000
+                            },
+                            "maxItems": 120
+                          },
+                          "next_checks": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 16000
+                            },
+                            "maxItems": 120
+                          }
+                        },
+                        "required": [
+                          "thesis",
+                          "weights",
+                          "evidence_ids",
+                          "assumptions",
+                          "risks",
+                          "falsifiers",
+                          "next_checks"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "funding": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "proposal_capital": {
+                              "type": "number"
+                            },
+                            "actual_nav": {
+                              "type": "number"
+                            },
+                            "additional_funding_needed": {
+                              "type": "number"
+                            },
+                            "amount_outside_proposal": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "proposal_capital",
+                            "actual_nav",
+                            "additional_funding_needed",
+                            "amount_outside_proposal"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "as_of",
+                    "proposal",
+                    "valuation",
+                    "perspectives",
+                    "funding"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "funding": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "proposal_capital": {
+                      "type": "number"
+                    },
+                    "actual_nav": {
+                      "type": "number"
+                    },
+                    "additional_funding_needed": {
+                      "type": "number"
+                    },
+                    "amount_outside_proposal": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "proposal_capital",
+                    "actual_nav",
+                    "additional_funding_needed",
+                    "amount_outside_proposal"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "validation": {
+              "type": "object",
+              "properties": {
+                "numeric": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "passed": {
+                        "type": "boolean"
+                      },
+                      "errors": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "scenario_loss_fraction": {
+                        "type": "number"
+                      },
+                      "cash_reserved": {
+                        "type": "number"
+                      },
+                      "limitation": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "version": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "status": {
+                        "enum": [
+                          "pass",
+                          "blocked",
+                          "needs_review"
+                        ]
+                      },
+                      "missing": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "warnings": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "metrics": {
+                        "type": "object",
+                        "properties": {
+                          "capital": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "scenario_loss_amount": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "max_position_fraction": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "position_hhi": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "effective_positions": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "unknown_sector_fraction": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "cash_months_of_expenses": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "monthly_surplus": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "monthly_contribution": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "known_weighted_expense_ratio": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "unknown_fee_fraction": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "one_way_turnover": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "sector_exposures": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "number"
+                            }
+                          },
+                          "asset_classes": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "number"
+                            }
+                          },
+                          "currencies": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "number"
+                            }
+                          }
+                        },
+                        "required": [
+                          "capital",
+                          "scenario_loss_amount",
+                          "max_position_fraction",
+                          "position_hhi",
+                          "effective_positions",
+                          "unknown_sector_fraction",
+                          "cash_months_of_expenses",
+                          "monthly_surplus",
+                          "monthly_contribution",
+                          "known_weighted_expense_ratio",
+                          "unknown_fee_fraction",
+                          "one_way_turnover",
+                          "sector_exposures",
+                          "asset_classes",
+                          "currencies"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "historical": {
+                        "type": "object",
+                        "properties": {
+                          "status": {
+                            "enum": [
+                              "available",
+                              "unavailable"
+                            ]
+                          },
+                          "annualized_volatility": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "sharpe": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "max_drawdown": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "benchmark_beta": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "pairwise_correlations": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "observations": {
+                            "type": "integer",
+                            "minimum": 2
+                          },
+                          "start": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "end": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "source": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "method": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "status",
+                          "annualized_volatility",
+                          "sharpe",
+                          "max_drawdown",
+                          "benchmark_beta",
+                          "pairwise_correlations"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "limitations": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    },
+                    "required": [
+                      "passed",
+                      "errors",
+                      "scenario_loss_fraction",
+                      "cash_reserved",
+                      "limitation",
+                      "version",
+                      "status",
+                      "missing",
+                      "warnings",
+                      "metrics",
+                      "historical",
+                      "limitations"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "critique": {
+                  "type": "object",
+                  "properties": {
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 16000
+                      },
+                      "maxItems": 120
+                    },
+                    "unsupported_claims": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 16000
+                      },
+                      "maxItems": 120
+                    },
+                    "qualitative_pass": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 16000
+                    }
+                  },
+                  "required": [
+                    "issues",
+                    "unsupported_claims",
+                    "qualitative_pass",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                },
+                "final_numeric": {
+                  "type": "object",
+                  "properties": {
+                    "passed": {
+                      "type": "boolean"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "scenario_loss_fraction": {
+                      "type": "number"
+                    },
+                    "cash_reserved": {
+                      "type": "number"
+                    },
+                    "limitation": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "status": {
+                      "enum": [
+                        "pass",
+                        "blocked",
+                        "needs_review"
+                      ]
+                    },
+                    "missing": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "metrics": {
+                      "type": "object",
+                      "properties": {
+                        "capital": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "scenario_loss_amount": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "max_position_fraction": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "position_hhi": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "effective_positions": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "unknown_sector_fraction": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "cash_months_of_expenses": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "monthly_surplus": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "monthly_contribution": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "known_weighted_expense_ratio": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "unknown_fee_fraction": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "one_way_turnover": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sector_exposures": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          }
+                        },
+                        "asset_classes": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          }
+                        },
+                        "currencies": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          }
+                        }
+                      },
+                      "required": [
+                        "capital",
+                        "scenario_loss_amount",
+                        "max_position_fraction",
+                        "position_hhi",
+                        "effective_positions",
+                        "unknown_sector_fraction",
+                        "cash_months_of_expenses",
+                        "monthly_surplus",
+                        "monthly_contribution",
+                        "known_weighted_expense_ratio",
+                        "unknown_fee_fraction",
+                        "one_way_turnover",
+                        "sector_exposures",
+                        "asset_classes",
+                        "currencies"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "historical": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "enum": [
+                            "available",
+                            "unavailable"
+                          ]
+                        },
+                        "annualized_volatility": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sharpe": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "max_drawdown": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "benchmark_beta": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "pairwise_correlations": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "observations": {
+                          "type": "integer",
+                          "minimum": 2
+                        },
+                        "start": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "end": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "source": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "method": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "annualized_volatility",
+                        "sharpe",
+                        "max_drawdown",
+                        "benchmark_beta",
+                        "pairwise_correlations"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "limitations": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "required": [
+                    "passed",
+                    "errors",
+                    "scenario_loss_fraction",
+                    "cash_reserved",
+                    "limitation",
+                    "version",
+                    "status",
+                    "missing",
+                    "warnings",
+                    "metrics",
+                    "historical",
+                    "limitations"
+                  ],
+                  "additionalProperties": false
+                },
+                "final_critique": {
+                  "type": "object",
+                  "properties": {
+                    "issues": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 16000
+                      },
+                      "maxItems": 120
+                    },
+                    "unsupported_claims": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 16000
+                      },
+                      "maxItems": 120
+                    },
+                    "qualitative_pass": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 16000
+                    }
+                  },
+                  "required": [
+                    "issues",
+                    "unsupported_claims",
+                    "qualitative_pass",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "numeric",
+                "critique",
+                "final_numeric",
+                "final_critique"
+              ],
+              "additionalProperties": false
+            },
+            "performance": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "required": [
+                    "start_nav",
+                    "end_nav",
+                    "pnl",
+                    "modified_dietz"
+                  ],
+                  "properties": {
+                    "start_nav": {
+                      "type": "number"
+                    },
+                    "end_nav": {
+                      "type": "number"
+                    },
+                    "pnl": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "modified_dietz": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "base_currency": {
+              "type": "string",
+              "minLength": 1
+            },
+            "next_evaluation": {
+              "type": "string",
+              "minLength": 1
+            },
+            "next_rebalance": {
+              "type": "string",
+              "minLength": 1
+            },
+            "criteria": {
+              "type": "object"
+            },
+            "prices": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "symbol",
+                  "price",
+                  "source",
+                  "observed_at"
+                ]
+              }
+            }
+          },
+          "required": [
+            "actual",
+            "proposal",
+            "previous",
+            "funding",
+            "validation",
+            "performance",
+            "base_currency",
+            "next_evaluation",
+            "next_rebalance",
+            "criteria",
+            "prices"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run",
+    "components",
+    "edges",
+    "sources",
+    "portfolio",
+    "extensions"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:workbench:1.0.0"
+}

@@ -6,8 +6,10 @@ import sys
 import urllib.request
 from pathlib import Path
 from .domain import dumps, required, texts, weights
+from .registry import agent, personas, resource
+from .contracts import output_schema, validate
 
-PERSONAS = ('buffett','marks','bogle')
+PERSONAS = personas()  # Compatibility alias; orchestration resolves the live catalogue.
 CONTRACTS = {
  'context': {'summary':'string','constraints':['string'],'missing':['string']},
  'evidence': {'summary':'string','facts':['fact id'],'drivers':['string'],
@@ -27,7 +29,8 @@ CONTRACTS = {
 
 
 def validate_output(role, obj, payload):
-    kind = 'perspective' if role in PERSONAS else role
+    kind = agent(role)['kind']
+    validate(obj,output_schema(role))
     schema = CONTRACTS[kind]
     required(obj, list(schema))
     for key, example in schema.items():
@@ -38,7 +41,7 @@ def validate_output(role, obj, payload):
     if kind in {'perspective','leader'}: weights(obj['weights'])
     if kind == 'leader' and obj['action'] not in {'hold','adjust','defer'}: raise ValueError('Invalid action')
     if kind == 'reflection':
-        required(obj['perspective_review'],PERSONAS)
+        required(obj['perspective_review'],personas())
         if any(not isinstance(v,str) or not v for v in obj['perspective_review'].values()): raise ValueError('Invalid perspective review')
     if kind == 'memory' and not isinstance(obj['operations'],list): raise ValueError('operations must be list')
     if kind in {'perspective','evidence'}:
@@ -79,12 +82,16 @@ class DemoModel:
     mode = 'demo'
     identity = {'mode':'demo','model':'synthetic-fixture-v1'}
     def complete(self, role, guide, p, contract):
+        if contract.get('$id')=='urn:mara:dialogue-answer:1.0.0':
+            return {'answer':'합성 대화 예시예요. '+role+' 역할에 전달된 질문: '+p['question']+'\n이 실행의 판단 근거와 반대 조건을 함께 확인할 수 있어요. 실제 모델 응답이나 투자 분석이 아니에요.',
+                'evidence_ids':[f['id'] for f in p['sources'][:2]],'uncertainties':['합성 데이터로 화면과 저장 흐름만 확인해요.'],
+                'next_questions':['이 판단을 바꿀 조건은 무엇인가요?']}
         if role == 'context': return {'summary':'DEMO: supplied context','constraints':p['profile']['constraints'],'missing':[]}
         if role == 'evidence': return {'summary':'모의 시장 자료를 비교하는 동작 예시예요. 실제 시황 분석이 아니에요.',
             'facts':[x['id'] for x in p['market']['facts']], 'drivers':['합성 자료의 가격과 위험 가정을 확인해요.'],
             'changes':['DEMO: compare supplied snapshots'], 'portfolio_implications':['실제 자금 운용 판단에 사용하지 않아요.'],
             'uncertainties':['Synthetic fixture, not live research']}
-        if role in PERSONAS:
+        if role in personas():
             return {'thesis':'DEMO '+role, 'weights':p['valuation']['weights'],
                     'evidence_ids':[f['id'] for f in p['market']['facts']],
                     'decision_basis':['DEMO: 현재 비중을 그대로 반환하는 연결 예시예요.'],
@@ -97,7 +104,7 @@ class DemoModel:
                     'next_checks':['Verify live evidence'], 'premise_changes':['Compare prior report'], 'validation_response':'DEMO only'}
         if role == 'reflection': return {'investment_outcome':'DEMO: see deterministic performance',
                     'process_evaluation':'DEMO: no investment skill inference',
-                    'perspective_review':{r:'Insufficient observation for philosophy changes' for r in PERSONAS},
+                    'perspective_review':{r:'Insufficient observation for philosophy changes' for r in personas()},
                     'lessons':['Check source freshness before analysis'], 'guide_change_proposals':[]}
         return {'operations':[], 'conflicts':[], 'summary':'DEMO no invented lessons'}
 
@@ -109,15 +116,13 @@ class Agents:
     def guide(self, role):
         overrides = [e for e in self.s.events('guide',self.as_of) if e['body']['role'] == role]
         if overrides: return overrides[-1]['body']['text']
-        folder = 'personas' if role in PERSONAS else 'roles'
-        path = Path(__file__).resolve().parent.parent/'guides'/folder/(role+'.md')
-        if not path.exists(): path = Path(sys.prefix)/'share/mara/guides'/folder/(role+'.md')
-        return path.read_text()
+        return resource(agent(role)['guide']).read_text()
 
     def call(self, role, payload):
         guide = self.guide(role)
+        guide += '\n공통 기억 규칙: needs_revalidation=true인 보호 지식은 재검토 대상으로 보존한 기록이에요. 현재 사실로 확정하지 말고 적용 조건과 반증을 확인해요.'
         if len(guide) > 22000 or len(dumps(payload)) > 100000: raise ValueError('Role context budget exceeded; curate evidence')
-        contract = CONTRACTS['perspective' if role in PERSONAS else role]
+        contract = output_schema(role)
         iid = self.s.append('agent_input', {'role':role, 'guide':guide,
             'guide_hash':hashlib.sha256(guide.encode()).hexdigest(),'provider':self.model.identity,
             'payload':payload,'contract':contract},self.as_of,self.run_id)

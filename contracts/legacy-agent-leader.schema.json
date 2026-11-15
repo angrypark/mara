@@ -1,0 +1,78 @@
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "enum": [
+        "hold",
+        "adjust",
+        "defer"
+      ],
+      "type": "string"
+    },
+    "weights": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16000
+    },
+    "dissent": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16000
+      },
+      "maxItems": 120
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16000
+      },
+      "maxItems": 120
+    },
+    "next_checks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16000
+      },
+      "maxItems": 120
+    },
+    "premise_changes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16000
+      },
+      "maxItems": 120
+    },
+    "validation_response": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16000
+    }
+  },
+  "required": [
+    "action",
+    "weights",
+    "rationale",
+    "dissent",
+    "risks",
+    "next_checks",
+    "premise_changes"
+  ],
+  "additionalProperties": false
+}

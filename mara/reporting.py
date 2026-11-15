@@ -9,6 +9,9 @@ def present(session,row):
     market=session.get(r['market_id'])['body'];profile=session.get(r['profile_id'])['body']
     previous=session.get(r['previous_id']) if r.get('previous_id') else None
     prior_market=session.get(previous['body']['market_id'])['body'] if previous else None
+    started=session.store.db.execute('SELECT * FROM events WHERE owner=? AND run_id=? AND kind=? ORDER BY seq LIMIT 1',
+        (session.owner,r['run_id'],'run_started')).fetchone()
+    registry=session.decode(started)['body'].get('agent_registry',[]) if started else []
     analyses={};provenance={};memory=[]
     events=session.store.db.execute('SELECT * FROM events WHERE owner=? AND run_id=? AND kind=? ORDER BY seq',
         (session.owner,r['run_id'],'agent_output')).fetchall()
@@ -30,7 +33,7 @@ def present(session,row):
     result['view']={'version':1,'kind':'revision' if r.get('revision_of') else 'weekly' if previous else 'initial',
         'base_currency':profile['base_currency'],'context':analyses.get('context'),
         'market_analysis':analyses.get('evidence'),'sources':facts,'prices':prices,
-        'expired_source_count':len(market['facts'])-len(facts),'agent_records':provenance,
+        'expired_source_count':len(market['facts'])-len(facts),'agent_records':provenance,'agent_registry':registry,
         'memory':memory,'pruning':session.get(r['pruning_audit_id'])['body'],
         'criteria':{key:profile.get(key) for key in ['goal','horizon_months','cash_need','max_loss_fraction','max_position_fraction','criteria']},
         'previous':{'id':previous['id'],'as_of':previous['effective'],

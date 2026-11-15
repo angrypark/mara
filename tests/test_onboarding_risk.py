@@ -102,6 +102,27 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(revised['revision_of'],r['event_id']);self.assertIsNone(revised['performance'])
         self.assertEqual(len(self.app.state()['history']),2)
 
+    def test_actual_generation_coverage_reaches_every_role_and_blocks_unsupported_allocation(self):
+        r=self.app.generate(self.value,self.snapshot)
+        self.assertEqual(r['proposal']['action'],'defer')
+        self.assertEqual(r['proposal']['eligibility'],'blocked')
+        self.assertTrue(any('기업·시장' in x for x in r['validation']['final_numeric']['missing']))
+        with self.app.session() as s:
+            for event in s.events('agent_input'):
+                self.assertFalse(event['body']['payload']['market']['coverage']['actionable_risky_allocation'])
+            self.assertEqual(s.get(r['market_id'])['body']['coverage']['status'],'limited')
+
+    def test_usd_cash_is_separate_and_foreign_cap_cannot_be_bypassed(self):
+        class Hold(DemoModel):mode='live';identity={'mode':'live','model':'test-hold'}
+        self.app.model_factory=Hold
+        value=dict(self.value,cash_usd=100,cash_krw=100000,capital_amount=520000,max_foreign_fraction=0)
+        r=self.app.generate(value,self.snapshot)
+        self.assertEqual(r['valuation']['values']['USD_CASH'],140000)
+        self.assertEqual(r['valuation']['values']['CASH'],100000)
+        self.assertAlmostEqual(r['validation']['final_numeric']['metrics']['currencies']['USD'],420000/520000)
+        self.assertIn('외화 표시 자산 비중 상한 초과',r['validation']['final_numeric']['errors'])
+        self.assertEqual(r['proposal']['action'],'defer')
+
     def test_zero_actual_is_not_fabricated_cash(self):
         class Empty(ReadOnlyBroker):
             def holdings(self):return {'items':[]}

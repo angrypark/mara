@@ -7,6 +7,7 @@ import os
 import secrets
 import sys
 import threading
+from contextlib import contextmanager
 from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -16,6 +17,9 @@ from .store import Store
 from .connection import status as connection_status
 from .onboarding import PortfolioSetup,InputError
 from .reporting import present
+from .workbench import runs, project
+from .dialogue import Dialogues, DialogueError
+from .contracts import schema
 
 
 def resource(relative):
@@ -37,7 +41,7 @@ class Application:
         self.mutex=threading.RLock()
         self.nonce=secrets.token_urlsafe(32)
         # Serve the UI from the same process version as its API, even while files are edited.
-        self.assets={name:resource('web/'+name).read_text() for name in ['dashboard.html','dashboard.js','report.js','dashboard.css']}
+        self.assets={name:resource('web/'+name).read_text() for name in ['dashboard.html','dashboard.js','report.js','workbench.js','dashboard.css']}
         self.last_error=None
         config=self.directory/'demo-session.json'
         db=Store(self.path)
@@ -47,6 +51,21 @@ class Application:
         db.session(self.token)  # fail closed for mismatched database/config
         db.close()
         self.setup=PortfolioSetup(self.directory)
+        self.dialogues={'portfolio':Dialogues(self.setup.session,self.setup.analysis_model),
+                        'demo':Dialogues(self.demo_session,DemoModel)}
+
+    @contextmanager
+    def demo_session(self):
+        db=Store(self.path)
+        try:yield db.session(self.token)
+        finally:db.close()
+
+    def session_for(self,scope):
+        if scope not in self.dialogues:raise PermissionError('Scope unavailable')
+        return self.setup.session() if scope=='portfolio' else self.demo_session()
+
+    def workbench(self,scope,run_id=None):
+        with self.session_for(scope) as s:return project(s,run_id) if run_id else {'runs':runs(s)}
 
     def recover_after_restart(self):
         # Call only after holding the exclusive process flock. This DB is demo-only.
@@ -54,6 +73,7 @@ class Application:
         try: db.session(self.token).recover('Demo service restart under exclusive process lock',date.today().isoformat())
         finally: db.close()
         self.setup.recover()
+        for manager in self.dialogues.values():manager.recover()
 
     def run_demo(self, next_week=False):
         with self.mutex:
@@ -138,9 +158,18 @@ def make_server(app,port):
                     return self.send(200,page,'text/html; charset=utf-8')
                 if self.path=='/dashboard.js': return self.send(200,app.assets['dashboard.js'],'text/javascript; charset=utf-8')
                 if self.path=='/report.js': return self.send(200,app.assets['report.js'],'text/javascript; charset=utf-8')
+                if self.path=='/workbench.js': return self.send(200,app.assets['workbench.js'],'text/javascript; charset=utf-8')
                 if self.path=='/dashboard.css': return self.send(200,app.assets['dashboard.css'],'text/css; charset=utf-8')
                 if self.path=='/health': return self.send(200,{'status':'ok','mode':'portfolio','live_trading':False})
                 if self.path=='/api/state': return self.send(200,app.state())
+                parts=self.path.strip('/').split('/')
+                if parts[:2]==['api','contracts'] and len(parts)==3:
+                    try:return self.send(200,schema(parts[2]))
+                    except (ValueError,OSError):return self.send(404,{'error':'Unknown contract'})
+                if parts[:2]==['api','workbench'] and len(parts) in (3,4):
+                    return self.send(200,app.workbench(parts[2],parts[3] if len(parts)==4 else None))
+                if parts[:2]==['api','dialogue'] and len(parts)==5 and parts[2] in app.dialogues:
+                    return self.send(200,app.dialogues[parts[2]].read(parts[3],parts[4]))
                 if self.path.startswith('/api/portfolio/report/'): return self.send(200,app.setup.report(self.path.rsplit('/',1)[-1]))
                 if self.path.startswith('/api/report/'): return self.send(200,app.report(self.path.rsplit('/',1)[-1]))
                 self.send(404,{'error':'Not found'})
@@ -152,6 +181,7 @@ def make_server(app,port):
                 return self.send(403,{'error':'화면이 갱신되었거나 요청 출처를 확인할 수 없어요. 화면을 새로고침한 뒤 다시 시도해주세요.'})
             routes={'/api/setup/draft':app.setup.draft,'/api/setup/model':app.setup.save_model,
                     '/api/setup/generate':app.setup.start,'/api/setup/holdings':lambda body:app.setup.refresh()}
+            for scope,manager in app.dialogues.items():routes['/api/dialogue/'+scope]=manager.start
             if self.path not in routes and self.path!='/api/demo-next': return self.send(404,{'error':'No such action'})
             try:
                 if self.headers.get('Transfer-Encoding'): raise InputError('지원하지 않는 전송 형식이에요.')
@@ -164,8 +194,9 @@ def make_server(app,port):
                 self.connection.settimeout(10)
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict): raise InputError('입력 형식을 확인해주세요.')
-                self.send(202 if self.path=='/api/setup/generate' else 200,routes[self.path](body))
-            except InputError as exc: self.send(400,{'error':str(exc)})
+                self.send(202 if self.path=='/api/setup/generate' or self.path.startswith('/api/dialogue/') else 200,routes[self.path](body))
+            except (InputError,DialogueError) as exc: self.send(400,{'error':str(exc)})
+            except PermissionError:self.send(404,{'error':'선택한 실행 또는 에이전트를 찾을 수 없어요.'})
             except (ValueError,UnicodeError): self.send(400,{'error':'입력 형식을 확인해주세요.'})
             except Exception: self.send(503,{'error':'처리하지 못했어요. 연결 설정을 확인하고 다시 시도해주세요.'})
     return ThreadingHTTPServer(('127.0.0.1',port),Handler)

@@ -300,10 +300,21 @@ class PortfolioSetup:
             raise InputError('유효한 환율을 받지 못했어요. 잠시 후 다시 시도해주세요.')
         rate=numeric(fx['midRate'],'환율')
         if rate<=0: raise InputError('환율이 올바르지 않아요.')
-        actual={'as_of':today,'base_currency':'KRW','cash':cash['KRW']+cash['USD']*rate,
+        actual={'as_of':today,'base_currency':'KRW','cash':cash['KRW'],
             'cash_components':cash,'positions':positions,'rationale':value['rationale'],
             'last_rebalanced':value['last_rebalanced'],'snapshot_id':snapshot['id'],'cashflows_reconciled':False}
         m={'as_of':today,'base_currency':'KRW','prices':{},'assets':{},'facts':[]}
+        # USD cash is a distinct FX-exposed asset; CASH always denotes base-currency cash.
+        if cash['USD']:actual['positions']['USD_CASH']=cash['USD']
+        m['prices']['USD_CASH']={'price':rate,'observed_at':today,'known_at':today,'source':SOURCE}
+        m['assets']['USD_CASH']={'market':'US','currency':'USD','kind':'cash','asset_class':'cash',
+            'stress_loss':0.2,'stress_assumption':'USD의 KRW 환산 가치 20% 하락 가정. 예측이나 손실 한도가 아니에요.',
+            'liquid':True,'expense_ratio':0,'eligible':True,'sector_exposures':{},'sector_source':SOURCE,
+            'sector_as_of':today,'sector_valid_until':today,'sector_complete':True}
+        m['coverage']={'status':'limited','available':['종목 기본 정보','시세','토스 섹터 분류','USD/KRW 환율'],
+            'missing':['기업 가치 평가 자료','거시·산업·지정학 뉴스','ETF 내부 구성','거래 비용·세금','거래 유동성','동일 통화 과거 총수익률'],
+            'actionable_risky_allocation':False,
+            'reason':'현재 연결은 기본 조회 자료예요. 가격·섹터만으로 저평가나 전망을 확인할 수 없어 위험자산 제안을 확정하지 않아요.'}
         p['candidate_screen']={'automatic':automatic,'symbols':candidates,
             'method':'현재 보유 + 선호 섹터별 시총 상위 3개 + 대분류별 상위 2개에서 제외 섹터 제거 후 신규 후보 최대 30개' if automatic else '사용자 지정 후보 + 현재 보유',
             'limitation':'전체 시장 탐색이 아니며 대형주 편향이 있어요. 자동 후보에는 ETF가 포함되지 않아요. 기업 가치·뉴스 추가 검토가 필요해요.'}

@@ -66,7 +66,7 @@ def evaluate(w, p, m, capital, actual=None):
     for symbol,weight in w.items():
         if not weight: continue
         if symbol=='CASH':
-            classes['cash']=weight; currencies[p['base_currency']]=currencies.get(p['base_currency'],0)+weight
+            classes['cash']=classes.get('cash',0)+weight; currencies[p['base_currency']]=currencies.get(p['base_currency'],0)+weight
             continue
         a=m['assets'].get(symbol,{})
         kind=a.get('asset_class','unknown')
@@ -99,7 +99,11 @@ def evaluate(w, p, m, capital, actual=None):
             if sector in c['excluded_sectors'] and weight>1e-9: errors.append('제외 섹터 포함: '+sector)
         if unknown_sector and (c['max_sector_fraction']<1 or c['excluded_sectors']):
             missing.append('ETF 내부 구성 또는 섹터 자료가 부족해 섹터 제한을 검증할 수 없어요.')
-    risky=[v for s,v in w.items() if s!='CASH' and v>0]
+    risky=[v for s,v in w.items() if s!='CASH' and m['assets'].get(s,{}).get('asset_class')!='cash' and v>0]
+    actual_risky=any(v>0 and s!='CASH' and m['assets'].get(s,{}).get('asset_class')!='cash'
+                     for s,v in (actual or {}).get('weights',{}).items())
+    if m.get('coverage',{}).get('actionable_risky_allocation') is False and (risky or actual_risky):
+        missing.append('기본 시세·분류 자료만으로 위험자산 제안을 확정할 수 없어요. 기업·시장 근거와 거래 가능성 자료를 보강해야 해요.')
     invested=sum(risky); hhi=sum((v/invested)**2 for v in risky) if invested else None
     monthly_contribution=p['contribution_amount']*365.25/12/p['contribution_every_days']
     surplus=p['monthly_income']-p['monthly_expenses']
