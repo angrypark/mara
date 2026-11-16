@@ -34,6 +34,8 @@ CONTRACTS = {
 
 def validate_output(role, obj, payload):
     kind = agent(role)['kind']
+    from .judgment_reports import validate_report
+    if isinstance(obj,dict):validate_report(obj,payload)
     validate(obj,output_schema(role))
     if payload.get('adopted_dialogue_change') and 'change_response' not in obj:raise ValueError('Explicit change_response required')
     schema = CONTRACTS[kind]
@@ -75,7 +77,7 @@ def validate_output(role, obj, payload):
         refs = obj['evidence_ids'] if kind == 'perspective' else obj['facts']
         if not set(refs) <= allowed: raise ValueError('Invented evidence ID')
         if kind == 'perspective' and allowed and not refs: raise ValueError('Evidence references required')
-    if len(dumps(obj)) > 24000: raise ValueError('Agent output too large')
+    if len(dumps(obj)) > (38000 if payload.get('narrative_contract') else 24000): raise ValueError('Agent output too large')
     return obj
 
 
@@ -172,11 +174,16 @@ class Agents:
         guide += '\n공통 기억 규칙: needs_revalidation=true인 보호 지식은 재검토 대상으로 보존한 기록이에요. 현재 사실로 확정하지 말고 적용 조건과 반증을 확인해요.'
         guide += '\n공통 인용 규칙 v1.1: evidence_ids와 facts에는 input.market.facts에 있는 id만 그대로 사용해요. actual.evidence_id, snapshot_id, 사용자 답변/프로필/이전 실행의 원본 이벤트 ID는 시장 fact ID가 아니므로 넣지 않아요. 개인 맥락은 판단 설명에서 입력 항목으로 구분해 서술해요. 자료 밖 주장은 불확실성으로 남기고 ID를 만들어내거나 단지 인용을 통과하려고 무관한 자료를 붙이지 않아요.'
         payload=copy.deepcopy(payload)
+        payload.setdefault('as_of',self.as_of)
+        if self.model.mode=='live':
+            payload['narrative_contract']='mara.judgment-report/1.0'
         if self.research_library:
             from .company_research import research_loop
             before={f['id'] for f in payload.get('market',{}).get('facts',[])}
             payload=research_loop(self.s,self.model,role,guide,payload,self.run_id,self.as_of,self.research_library)
             self.research_facts.extend(f for f in payload.get('market',{}).get('facts',[]) if f['id'] not in before)
+        if payload.get('narrative_contract'):
+            guide += '\n'+resource('guides/roles/judgment-report.md').read_text()
         if role in ('validation','leader') and payload.get('perspectives'):
             from .risk import evaluate
             from .decision import semantics
@@ -189,11 +196,18 @@ class Agents:
         current=copy.deepcopy(original)
         current['citation_scope']={'market_fact_ids':[f['id'] for f in original.get('market',{}).get('facts',[])],
             'rule':'facts/evidence_ids는 이 목록의 시장 fact ID만 사용. 개인 맥락과 보유 원본 event ID는 설명에서 별도로 구분.'}
+        if role=='evaluator':
+            from .evaluation import raw_reference_paths
+            current['citation_scope']['raw_reference_paths']=raw_reference_paths(original)
+            current['citation_scope']['raw_reference_rule']='원본 해시를 인용할 때는 위 실제 경로를 그대로 사용. 배열 위치를 추측하지 않아요. 해시는 수집 원본 식별자이며 내용의 진실성·분석 충분성 증명이 아니에요. 다른 주장은 해당 실제 입력 필드에 직접 연결하세요.'
         contract = output_schema(role)
+        if payload.get('narrative_contract'):
+            contract=copy.deepcopy(contract)
+            contract['required']=list(dict.fromkeys(contract['required']+['judgment_report']))
         # Current and previous research summaries plus independent perspectives
         # remain bounded; raw provider responses never enter this budget.
         from .context_budget import LIMITS
-        context_limit=LIMITS.get(role,256000) if payload.get('market',{}).get('research') else 100000
+        context_limit=LIMITS.get(role,256000) if payload.get('market',{}).get('research') or payload.get('narrative_contract') else 100000
         current['input_budget']={'version':'role-envelope/1.0','max_characters':context_limit,
             'knowledge_characters':6000,'previous_completed_runs':1,
             'rule':'현재 근거와 현재 관점은 자르지 않아요. 이전 기록은 역할별 투영으로 전달하고 원본은 보존해요. 상한 초과는 명시적으로 실패하며 결론을 강제하지 않아요.'}
@@ -219,7 +233,7 @@ class Agents:
                 current=copy.deepcopy(current)
                 current['output_feedback']={'code':code,'rejected_output_id':oid,'previous_output':result,
                     'instruction':'직전 자기 응답을 원본 입력과 계약에 대조하여 한 번 교정하세요. 전체 JSON을 다시 반환하세요. 무관한 인용으로 치환하거나 자료 공백·반론·위험을 숨기지 마세요. 정성 검증 통과나 매수를 강요하지 않으며 필요하면 보류하세요.'}
-                if role=='evaluator':
+                if role=='evaluator' or code=='judgment_report':
                     # The evaluator already has this payload and its own rejected
                     # paths. Keep precise repair diagnostics private to this call.
                     current['output_feedback']['validation_error']=str(exc)[:5000]

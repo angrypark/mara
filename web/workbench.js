@@ -143,6 +143,13 @@ window.MaraWorkbench=(()=>{
   function choose(id,stage=null){saveDraft();selected=id;selectedStage=stage;tab='analysis';epoch++;chatSignature='';nodes();pane();resetChat();loadChat();$('wb-title').focus({preventScroll:true});if(innerWidth<1100)$('wb-title').scrollIntoView({block:'start',behavior:'smooth'})}
   function setTab(name){tab=name;pane()}
   function sourceButtons(ids){const row=el('div','source-chips');for(const id of ids)row.append(button(id,()=>{setTab('sources');document.getElementById('wb-source-'+id)?.scrollIntoView({block:'nearest',behavior:'smooth'})},'source-chip'));return row}
+  function judgmentReport(root,report){
+    if(!report)return;const article=el('article','judgment-report');
+    article.append(el('h3','',report.title),el('p','hint',report.as_of+' · 상세 판단 리포트'));
+    const decision=doc.portfolio?.proposal;article.append(el('p','notice','이 문서는 선택한 역할·단계의 의견이에요. 공식 최종 상태: '+(decision?({hold:'유지',adjust:'조정 제안',defer:'보류'}[decision.action]||decision.action):'판단 진행 중')+' · 주문 지시가 아니에요. 리더 종합안도 최종 검증 결과와 함께 읽어주세요.'));
+    for(const [key,label] of [['portfolio_context','현재 포트폴리오와 투자 맥락'],['market_context','현재 시황과 투자 영향'],['decision_method','검토 기준과 판단 절차'],['conclusion','이 역할의 최종 의견']]){const section=el('section');section.append(el('h4','',label));for(const paragraph of report[key].split(/\n\s*\n/))section.append(el('p','',paragraph));article.append(section)}
+    article.append(sourceButtons(report.evidence_ids||[]));root.append(article);
+  }
   function pane(){
     const c=current(),root=$('wb-pane');root.replaceChildren();
     $('wb-role').textContent=c?c.role+' / '+(statuses[c.status]||c.status):'PORTFOLIO / OVERVIEW';
@@ -160,6 +167,8 @@ window.MaraWorkbench=(()=>{
       if(c){root.append(el('h4','','분석 당시 전달한 입력'),el('p','hint','실행에 고정된 입력이에요. 대화에서 한 설명은 투자 설정을 자동 변경하지 않아요.'),objectView(c.inputs))}return;
     }
     if(!c){overview(root);return}
+    if(c.output?.judgment_report)judgmentReport(root,c.output.judgment_report);
+    else root.append(el('p','hint','이 실행에는 새 형식의 상세 판단 리포트가 없어요. 아래는 당시 저장된 원문이며 새 내용으로 보충하지 않았어요.'));
     if(c.id==='evaluator'){qualityView(root);return}
     if(c.extensions?.research_activity?.length){const activity=el('details','wb-block');activity.append(el('summary','','추가 기업 조사 · '+c.extensions.research_activity.filter(x=>x.kind==='research_tool_result').length+'개 도구 결과'),objectView(c.extensions.research_activity));root.append(activity)}
     const summary=el('div','wb-summary');summary.append(chip(statuses[c.status],c.status),el('p','',c.summary));root.append(summary);
@@ -197,9 +206,9 @@ window.MaraWorkbench=(()=>{
     root.append(el('p','hint',value.rule));
   }
   function household(root,value){
-    const labels={property_value:'부동산 시가',mortgage_balance:'담보대출 잔액',property_equity:'부동산 자기자본',outside_emergency_cash:'별도 비상 현금',monthly_debt_payment:'월 대출 상환액',monthly_surplus_before_investing:'납입 전 월 잉여',monthly_contribution:'월 납입 계획',monthly_remaining_after_investing:'납입 후 월 잔여'};
+    const labels={property_value:'부동산 시가',mortgage_balance:'담보대출 잔액',property_equity:'부동산 자기자본',outside_emergency_cash:'별도 비상 현금',reported_liquid_cash:'사용자 진술 전체 현금 (합산 안 함)',monthly_debt_payment:'월 대출 상환액',monthly_surplus_before_investing:'납입 전 월 잉여',monthly_contribution:'월 납입 계획',monthly_remaining_after_investing:'납입 후 월 잔여'};
     const unit=value.base_currency==='KRW'?'원':' '+(value.base_currency||'');const dl=el('dl','wb-data');for(const [key,label] of Object.entries(labels)){dl.append(el('dt','',label),el('dd','',value[key]==null?'미확인':Number(value[key]).toLocaleString('ko-KR')+unit))}root.append(dl);
-    root.append(el('p','hint',value.debt_payment_in_expenses==='yes'?'대출 상환은 월 지출에 포함되어 다시 차감하지 않았어요.':value.debt_payment_in_expenses==='no'?'대출 상환을 별도 지출로 반영해요.':'대출 상환의 지출 포함 여부가 미확인이에요.'),el('p','hint',value.limits));
+    root.append(el('p','hint',value.debt_payment_in_expenses==='yes'?'대출 상환은 월 지출에 포함되어 다시 차감하지 않았어요.':value.debt_payment_in_expenses==='no'?'대출 상환을 별도 지출로 반영해요.':'대출 상환의 지출 포함 여부가 미확인이에요.'),el('p','hint',value.limits));if(value.reported_liquid_cash_scope)root.append(el('p','hint',value.reported_liquid_cash_scope));
   }
   function researchTools(root,value){
     const labels={collected:'수집됨',failed:'조회 실패',skipped:'이번 범위에서 제외'};

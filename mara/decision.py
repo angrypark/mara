@@ -28,6 +28,8 @@ def household(profile):
         'property_equity':property_value-debt if property_value is not None and debt is not None else None,
         'loan_to_value':debt/property_value if property_value and debt is not None else None,
         'outside_emergency_cash':h.get('outside_emergency_cash'),
+        'reported_liquid_cash':h.get('reported_liquid_cash'),
+        'reported_liquid_cash_scope':'사용자 진술 전체 유동 현금. 계좌 현금·별도 비상금과 포함 관계가 있어 합산하지 않음. 목적별 필요액·즉시 사용 가능액 확인과 별개.',
         'monthly_debt_payment':payment,'debt_payment_in_expenses':included,
         'monthly_surplus_before_investing':surplus,'monthly_contribution':contributions(profile)['monthly_amount'],
         'monthly_remaining_after_investing':surplus-contributions(profile)['monthly_amount'],
@@ -135,6 +137,9 @@ def semantics(profile,market):
         'cash':'CASH는 기준통화 현금이며 종목·ETF 하나의 집중 상한 대상에서 제외. USD_CASH는 환율 노출을 가진 현금.',
         'position_limit':'max_position_fraction은 비현금 상품 하나의 상한. ETF 내부 분산과 상품 비중 상한은 별개.',
         'contribution':contributions(profile),'household':household(profile),
+        'contribution_mandate':{'preference':profile.get('contribution_risk_preference','inherit'),
+            'scope':'향후 소득의 신규 납입 배분 선호. 기존 보유 현금 전액 투입 지시가 아님.',
+            'rule':'growth이면 현재 한도 안에서 더 높은 위험자산 대안을 실제 비교. 낮은 비중을 택하면 구체적인 한도·근거·트레이드오프를 제시. 비상금 개월 수를 사용자 의무로 신설하거나 고소득을 무위험 소득으로 가정하지 않음. 손실·상품·섹터 등 기존 수치 제약은 변경하지 않음.'},
         'candidate_readiness':{s:asset_requirements(market,s) for s in market['assets'] if s!='USD_CASH'} if market.get('coverage',{}).get('proposal_policy')==POLICY else {},
         'decision_rule':'개인 적합성·실제 제약 위반·제안의 핵심 주장 근거 부족은 보류. 개별주 가치판단과 광범위 지수 적립의 근거 기준을 구분. 완전한 미래 예측이나 모든 지표의 존재는 요구하지 않아요.',
         'funding':'제안 금액·현재 보유·실제 사용 가능한 현금·향후 월소득은 서로 달라요. 부동산 자기자본을 주식 투자 현금에 더하지 않고 첫 납입을 정기 납입과 중복 합산하지 않아요.'}

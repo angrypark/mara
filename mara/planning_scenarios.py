@@ -22,12 +22,13 @@ def joint_household(profile,household,capital,equity,foreign,foreign_equity,mont
             'proposal_loss_if_funded':-capital*portfolio_return,
             'cash_needed_if_contributions_paused':deficit,
             'gap_against_reported_account_cash_only':gap,
+            'gap_against_declared_total_liquid_cash':max(0,deficit-household['reported_liquid_cash']) if household.get('reported_liquid_cash') is not None else None,
             'monthly_affordable_contribution_before_reserve_replenishment':max(0,income-expenses_stressed),
             'income_needed_to_resume_planned_contribution':expenses_stressed+monthly,
             'income_needed_with_six_month_cash_gap_replenishment':expenses_stressed+monthly+gap/6,
             'action_boundary':'납입 가능액은 필수 지출 이후 잉여. 이미 사용한 현금 보충을 우선하면 재개 가능액이 더 낮아짐. 실제 소득·잔고 변화 확인 후 재평가.'})
     return {'scenarios':rows,'scope':'6개월 동시 충격 가정. 부동산 평가손실·조건부 제안 손실·생활비 지급을 별도 표시하며 합산 현금 부족액으로 부르지 않음.',
-        'liquidity_basis':'확인된 계좌 현금만 비교. 외부 비상금·부동산 매각·미입금 예정 납입은 더하지 않음. 이미 지출에 포함한 기존 원리금은 다시 차감하지 않음.',
+        'liquidity_basis':'계좌 현금과 사용자 진술 전체 현금을 별도로 비교하고 합산하지 않음. 전체 현금은 별도 목적·실제 사용 가능액 미확인. 외부 비상금·부동산 매각·미입금 예정 납입을 더하지 않음. 이미 지출에 포함한 기존 원리금은 다시 차감하지 않음.',
         'limitations':'충격 확률·최악 손실·강제 매도 예측 아님. 금리 +2%p는 대출 원금 고정 단순 이자 추가 가정이며 실제 금리 유형/원리금 상환 조건은 미확인. 6개월은 연구 시나리오이지 사용자에게 새로 부과한 의무 비상금 기간이 아님.'}
 
 

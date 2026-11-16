@@ -60,6 +60,16 @@ class CodexTests(unittest.TestCase):
         with self.assertRaises(CodexError) as cm:self.model(malformed).complete('context','',{},CONTRACTS['context'])
         self.assertNotIn('private malformed',str(cm.exception))
 
+    def test_narrative_provider_bound_matches_validated_output_budget(self):
+        result={'text':'가'*30000}
+        def runner(command,*args):
+            self.reply(command,result);return json.dumps({'type':'turn.completed'})
+        model=self.model(runner)
+        self.assertEqual(model.complete('leader','',{'narrative_contract':'mara.judgment-report/1.0'},{}),result)
+        with self.assertRaises(CodexError):model.complete('leader','',{}, {})
+        result['text']='가'*39000
+        with self.assertRaises(CodexError):model.complete('leader','',{'narrative_contract':'mara.judgment-report/1.0'}, {})
+
     def test_logged_out_and_unsupported_cli_fail_before_analysis(self):
         for update in [{'installed':False},{'compatible':False},{'authenticated':False}]:
             with patch('mara.codex_model.status',return_value=dict(READY,**update)):

@@ -4,6 +4,7 @@ from .registry import agent
 
 
 REASONS={
+    'judgment_report':'상세 판단 리포트의 필수 내용·본문 분량·기준일·근거 연결을 충족하지 못했어요.',
     'proposal_reference':'주장 또는 대안이 실제 계산 결과와 연결되지 않아요. 리더의 계산 연결 검증 내역을 확인해주세요.',
     'market_evidence_reference':'시장 근거 목록에 없는 ID를 인용했어요.',
     'market_evidence_missing':'판단에 사용한 시장 근거 ID를 제시하지 않았어요.',
@@ -13,6 +14,7 @@ REASONS={
 
 
 def issue_code(exc):
+    if str(exc).startswith('Judgment report:'):return 'judgment_report'
     # Match only errors produced by local validation, never arbitrary exception text.
     return {'Invented evidence ID':'market_evidence_reference',
             'Evidence references required':'market_evidence_missing',

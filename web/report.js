@@ -38,7 +38,7 @@ window.MaraReport=(()=>{
     if(!box.childElementCount)box.append(el('span','hint','인용된 근거가 없어요.'));return box;
   }
   function sourcesView(sources,expired){
-    text('source-note',`이 평가에서 사용 가능한 근거 ${sources.length}개. ${expired||0}개의 만료 근거는 현재 목록에서 제외했으며 원본 실행 기록에는 보존돼요. 출처 수는 독립적인 정보의 수나 신뢰도 점수가 아니에요.`);
+    text('source-note',`이 평가에서 사용 가능한 근거 ${sources.length}개. ${expired||0}개의 만료 근거는 현재 목록에서 제외했으며 원본 실행 기록에는 보존돼요. 출처 수는 독립적인 정보의 수나 신뢰도 점수가 아니에요. 인쇄본에는 출처·시점·한계를 싣고 원문 상세는 화면에서 확인해요.`);
     $('source-list').replaceChildren(...sources.map((s,i)=>{
       const card=el('article','source-card');card.id=sourceId(i);
       card.append(el('h3','',`${i+1}. ${s.topic||s.id}`),el('p','hint',`발표 ${s.published_at} · 인지 ${s.known_at} · 유효 ${s.valid_until}`));
@@ -96,6 +96,13 @@ window.MaraReport=(()=>{
     text('action',action[p.action]||p.action);$('action').dataset.status=p.action;text('rationale',p.rationale);
     text('report-context',v.context?.summary||v.criteria?.goal||'당시 투자 맥락은 원본 실행 기록에서 확인해요.');
     let structured=$('structured-report');if(!structured){structured=el('div');structured.id='structured-report';$('report-context').after(structured)}structured.replaceChildren();
+    const reports=v.judgment_reports||[];
+    if(reports.length){structured.append(el('h3','','역할별 상세 판단 리포트'),el('p','notice',v.judgment_report_status?.rule||'각 역할·단계의 원문 의견이며 공식 최종 상태와 함께 읽어주세요.'));
+      for(const item of reports){const report=item.report,article=el('article','judgment-report');article.dataset.role=item.role;article.dataset.stage=item.stage;
+        article.append(el('h3','',report.title),el('p','hint',report.as_of+' · '+item.role+' / '+item.stage),el('p','notice','공식 최종 상태: '+(action[p.action]||p.action)+' · 이 문서는 해당 단계의 의견이며 주문 지시가 아니에요.'));
+        for(const [key,label] of [['portfolio_context','현재 포트폴리오와 투자 맥락'],['market_context','현재 시황과 투자 영향'],['decision_method','검토 기준과 판단 절차'],['conclusion','이 역할의 최종 의견']]){const section=el('section');section.append(el('h4','',label));for(const paragraph of report[key].split(/\n\s*\n/))section.append(el('p','',paragraph));article.append(section)}
+        article.append(sourceLinks(report.evidence_ids,sources));structured.append(article)}
+    }else structured.append(el('p','hint','이전 형식의 보고서예요. 당시 작성된 요약을 아래에 보존하며 새 상세 본문을 소급해서 만들지 않았어요.'));
     if(p.investment_case){
       const c=p.investment_case;structured.append(el('h3','','승인 전에 읽을 핵심 판단'));
       for(const line of c.key_points)structured.append(el('p','',line));

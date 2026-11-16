@@ -32,6 +32,10 @@ def build(profile,actual,market,valuation,capital,selected=None):
             'cash_consumption_if_contributions_pause_6m':max(0,-surplus)*6,
             'reported_account_cash_months_if_income_stops':cash/expenses if expenses else None,
             'affordable_contribution_before_reserve_replenishment':max(0,surplus)})
+    declared=h.get('reported_liquid_cash')
+    for row in household_stress:
+        row['declared_total_cash_months_if_income_stops']=declared/expenses if declared is not None and expenses else None
+        row['gap_against_declared_total_cash_if_contributions_pause_6m']=max(0,row['cash_consumption_if_contributions_pause_6m']-declared) if declared is not None else None
     h.update(stress=household_stress,reported_account_cash=cash,reported_outside_emergency_cash=outside,
         reserve_scope='외부 비상금과 계좌 현금의 중복 여부를 가정하지 않고 별도 표시. 입금 전 예정 납입·부동산 자기자본은 유동성에 더하지 않음.',
         property_stress=[{'property_change_assumption':x,'equity_after_shock':h['property_value']*(1+x)-h['mortgage_balance'],
@@ -47,6 +51,8 @@ def build(profile,actual,market,valuation,capital,selected=None):
                 allocations[symbol+'_'+str(round(weight*100))]={symbol:weight,'CASH':1-weight}
     if {'ITOT','IVV'}<=histories.keys() and {'ITOT','IVV'}<=market['assets'].keys():
         allocations['ITOT_40_IVV_10']={'ITOT':.4,'IVV':.1,'CASH':.5}
+    if profile.get('contribution_risk_preference')=='growth' and {'ITOT','IVV'}<=histories.keys() and {'ITOT','IVV'}<=market['assets'].keys():
+        allocations['growth_80_diagnostic']={'ITOT':.4,'IVV':.4,'CASH':.2}
     if selected is not None and all(s in histories or s=='CASH' for s,w in selected.items() if w>0):allocations['proposal']=selected
     if valuation['weights'] and all(s in histories or s=='CASH' for s,w in valuation['weights'].items() if w>0):allocations['actual_weights_proxy']=valuation['weights']
     comparison={'available':False,'reason':'선택 자산과 비교 대안의 검증된 월별 NAV 총수익률을 확보하지 못했어요.'}

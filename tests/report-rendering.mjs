@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { Window } from '../.local/test-ui/node_modules/happy-dom/lib/index.js';
-const fixture=JSON.parse(execFileSync('python3',['-c',"import runpy; runpy.run_path('tests/report_fixture.py', run_name='__main__')"],{encoding:'utf8'}));
+const fixture=JSON.parse(execFileSync('python3',['-c',"import runpy; runpy.run_path('tests/report_fixture.py', run_name='__main__')"],{maxBuffer:16*1024*1024,encoding:'utf8'}));
 const html=await readFile('web/dashboard.html','utf8'),reportScript=await readFile('web/report.js','utf8'),dashboard=await readFile('web/dashboard.js','utf8');
 const tick=()=>new Promise(r=>setTimeout(r,0));
 function setup(){
@@ -98,5 +98,6 @@ test('printable structured claims quality gates and historical units remain visi
     delete r.view.quality_evaluation.score.strict_pass;r.view.quality_evaluation.rubric.version='1.0.0';h.render(r);assert.match(h.$('structured-report').textContent,/엄격 기준 미평가/);assert.doesNotMatch(h.$('structured-report').textContent,/엄격 기준 미충족/);h.render(fixture.initial);assert.doesNotMatch(h.$('structured-report').textContent,/Synthetic claim/);
   }finally{await h.close()}
 });
+test('all full reports print the four sections and preserve stage and final status',async()=>{const h=setup();try{const r=structuredClone(fixture.weekly),report={title:'Full expert report',as_of:r.body.as_of,portfolio_context:'Actual portfolio context',market_context:'Market basis',decision_method:'Public criteria and alternatives',conclusion:'Stage opinion',evidence_ids:[]};r.body.proposal.action='defer';r.view.judgment_reports=[{role:'validation',stage:'perspective_validation',report},{role:'validation',stage:'final_validation',report:{...report,title:'Final validation report'}}];const before=JSON.stringify(r);h.render(r);const reports=h.$('structured-report').querySelectorAll('.judgment-report');assert.equal(reports.length,2);for(const article of reports){assert.equal(article.querySelectorAll('section').length,4);assert.match(article.textContent,/공식 최종 상태: 보류/)}assert.equal(JSON.stringify(r),before);h.render(fixture.initial);assert.equal(h.$('structured-report').querySelectorAll('.judgment-report').length,0)}finally{await h.close()}});
 for(const {name,run} of cases){await run();console.log('PASS '+name)}
 console.log(cases.length+' report rendering tests passed');

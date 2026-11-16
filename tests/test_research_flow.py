@@ -6,7 +6,8 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
-from mara.agents import DemoModel,Agents
+from mara.agents import Agents
+from narrative_fixture import ReportingDemoModel as DemoModel
 from mara.company_research import CompanyLibrary,ResearchTools,owner_value,research_loop,quality
 from mara.decision_actions import DecisionActions
 from mara.dialogue import DialogueError

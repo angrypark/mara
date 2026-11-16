@@ -30,10 +30,16 @@ FIELDS={'goal','horizon_months','total_assets','monthly_income','monthly_expense
     'risk_level','preferred_sectors','excluded_sectors','max_sector_fraction','max_equity_fraction',
     'min_cash_fraction','max_foreign_fraction','snapshot_id','confirmed','revision_reason','context_notes',
     'contribution_schedule','funding_source','horizon_purpose','property_value','mortgage_balance',
-    'monthly_debt_payment','mortgage_rate','outside_emergency_cash','debt_payment_in_expenses'}
+    'monthly_debt_payment','mortgage_rate','outside_emergency_cash','debt_payment_in_expenses',
+    'reported_liquid_cash','contribution_risk_preference'}
 
 
 class InputError(ValueError): pass
+
+
+def proposal_amount(amount,nav,mode,source):
+    # Future salary is a separate contribution sleeve, never existing NAV plus salary.
+    return amount if source=='future_income' or mode=='total' else nav+amount
 
 
 def numeric(value,label,maximum=None,integer=False):
@@ -80,7 +86,8 @@ def inputs(value,snapshot,cap,now):
     p.update(contribution_schedule=v.get('contribution_schedule','days'),
              funding_source=v.get('funding_source','undecided'),horizon_purpose=v.get('horizon_purpose','unknown'))
     p['household']={key:None if v.get(key) in (None,'') else numeric(v[key],key,1 if key=='mortgage_rate' else None)
-        for key in ['property_value','mortgage_balance','monthly_debt_payment','mortgage_rate','outside_emergency_cash']}
+        for key in ['property_value','mortgage_balance','monthly_debt_payment','mortgage_rate','outside_emergency_cash','reported_liquid_cash']}
+    p['contribution_risk_preference']=v.get('contribution_risk_preference','inherit')
     p['household']['debt_payment_in_expenses']=v.get('debt_payment_in_expenses','unknown')
     p['criteria']={key:v.get(key) for key in ['risk_level','preferred_sectors','excluded_sectors']}
     p['criteria'].update({key:numeric(v.get(key),key,1) for key in ['max_sector_fraction','max_equity_fraction','min_cash_fraction','max_foreign_fraction']})
@@ -404,7 +411,7 @@ class PortfolioSetup:
                 self.research_factory(self.directory/'research',now=captured).enrich(
                     m,list(dict.fromkeys(list(positions)+candidates)),b,progress)
         d.market(m); nav=d.valuation(actual,m,allow_empty=True)['nav']
-        p['proposal_capital']=amount if value['capital_mode']=='total' else nav+amount
+        p['proposal_capital']=proposal_amount(amount,nav,value['capital_mode'],p['funding_source'])
         p['funding_mode']=value['capital_mode']
         if not 0<p['proposal_capital']<=self.capital_limit(): raise InputError('기존 보유와 추가 자금을 합친 제안 총액이 운용 한도를 넘어요.')
         if p['proposal_capital']>p['total_assets'] and p['funding_source']!='future_income':

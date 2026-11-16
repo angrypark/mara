@@ -8,7 +8,7 @@ import urllib.error
 from datetime import date,datetime,timedelta,timezone
 from pathlib import Path
 from unittest.mock import patch
-from mara.agents import DemoModel
+from narrative_fixture import ReportingDemoModel as DemoModel,with_reports
 from mara.engine import ContextNeedsInput
 from mara.connection import save_private
 from mara.domain import market,profile
@@ -63,6 +63,8 @@ class SetupTests(unittest.TestCase):
         save_private(root/'toss/credentials.json',{'client_id':'fake','client_secret':'fake-secret','account_seq':1})
         save_private(root/'toss/policy.json',{'max_capital_krw':30000000})
         self.app=PortfolioSetup(root/'service',ReadOnlyBroker,TestModel,research_factory=None)
+        original_model=self.app.analysis_model
+        self.app.analysis_model=lambda:with_reports(original_model())
         self.snap=self.app.refresh()
         with self.app.session() as s:self.snapshot=s.get(self.snap['id'])
         self.value=form(self.snap)

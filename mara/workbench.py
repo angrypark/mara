@@ -59,7 +59,7 @@ def run_state(events,session=None):
 def blocks(output):
     result=[]
     for key,value in (output or {}).items():
-        if key=='evidence_ids':continue
+        if key in ('evidence_ids','judgment_report'):continue
         kind='weights' if key=='weights' else 'text' if isinstance(value,str) else 'list' if isinstance(value,list) and all(isinstance(x,str) for x in value) else 'object'
         result.append({'key':key,'title':LABELS.get(key,key),'kind':kind,'value':value})
     return result
@@ -165,7 +165,7 @@ def project(s,run_id):
         if role=='validation' and completed:
             for key in ('numeric','final_numeric'):rendered.append({'key':key,'title':LABELS[key],'kind':'object','value':completed['body']['validation'][key]})
         if role=='memory' and completed:rendered.append({'key':'pruning','title':LABELS['pruning'],'kind':'object','value':report['view']['pruning']})
-        refs=[x for x in (value or {}).get('evidence_ids',(value or {}).get('facts',[])) if x in source_ids]
+        refs=list(dict.fromkeys(x for x in list((value or {}).get('evidence_ids',(value or {}).get('facts',[])))+list((value or {}).get('judgment_report',{}).get('evidence_ids',[])) if x in source_ids))
         payload=inp['body']['payload'] if inp else {'profile':profile,'market_id':basis['market_id'],'note':'역할별 입력 기록 없음. 이 실행의 공통 맥락만 표시해요.'}
         components.append(dict(id=role,role=meta['role'],kind=meta['kind'],label=meta['label'],description=meta['description'],
             status=status,summary=summary,blocks=rendered,inputs=payload,output=value,source_ids=refs,
@@ -230,7 +230,7 @@ def project(s,run_id):
                         if any(x.get('passed') is False for x in numeric):status='blocked';summary='수치 검증에서 충족되지 않은 조건이 있어요. '+summary
                     except (ValueError,KeyError,TypeError):value=None;status='running' if state=='running' else 'failed';summary='이 단계의 응답은 계약 검증을 통과하지 못했어요.'
             snapshot={'label':label,'status':status,'summary':summary,'output':value,'inputs':latest['body']['payload'] if latest else {},
-                'blocks':blocks(value),'records':stage_records,'source_ids':[],
+                'blocks':blocks(value),'records':stage_records,'source_ids':[x for x in (value or {}).get('judgment_report',{}).get('evidence_ids',[]) if x in source_ids],
                 'source_output_id':result_event['id'] if result_event else None,'stage':stage}
         flow.append({'id':id,'agent_id':role,'label':label,'status':status,'depends_on':depends,'record_ids':[r['output_id'] for r in stage_records],'snapshot':snapshot})
     node('reflection','reflection','지난 결과·과정 회고',[]);node('memory','memory','기억 정리·pruning',['reflection'])

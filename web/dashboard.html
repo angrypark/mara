@@ -30,9 +30,12 @@
 <label>포트폴리오 밖 별도 비상 현금 (원, 선택)<input name="outside_emergency_cash" type="number" min="0" step="1"><small>현재 실제 보유 현금과 중복하지 않아요. 미확인은 빈칸, 없으면 0.</small></label>
 <label>포트폴리오 안에 남길 필요 현금 (원)<input name="cash_need" type="number" min="0" step="1" required><small>비상금·예정 인출액. 포트폴리오 밖의 별도 현금은 제약에 적어요.</small></label>
 <label>현금이 필요한 날짜<input name="cash_need_date" type="date" required><small>필요 현금이 0이면 투자 목표 시점.</small></label>
+<label>전체 보유 현금 (원, 선택)<input name="reported_liquid_cash" type="number" min="0" step="1"><small>모든 계좌를 포함한 사용자 진술 총액이에요. 아래 계좌 현금·별도 비상금과 합산하지 않으며 투자할 금액과 달라요.</small></label>
 <label class="wide" id="context-notes-field">추가 설명 (선택)<textarea name="context_notes" id="context-notes" maxlength="4000" placeholder="추가 투자금의 출처와 투입 시점, 투자 기간 뒤의 계획, 별도 비상금·부채 등 판단에 필요한 맥락이나 에이전트 질문에 대한 답을 적어주세요."></textarea><small>보충 설명과 정정할 내용을 적어주세요. 이전 설명과 질문별 답변도 다음 분석에 함께 전달해요. 에이전트의 확인 질문은 화면 아래에서 바로 답할 수 있어요.</small></label>
 </div></section>
 <section id="criteria"><h2>2. 섹터와 위험 기준</h2><p class="hint">선호는 분석 시 고려하고, 제외·비중 상한은 검증 조건으로 적용해요. 비율은 전체 제안 운용액 기준이에요.</p><div class="fields">
+<p class="hint wide">재원이 향후 소득이면 운용액은 첫 신규 납입금이에요. 기존 보유 포함/추가 선택과 관계없이 기존 계좌 평가액을 더하지 않아요.</p>
+<label>신규 납입 투자 성향<select name="contribution_risk_preference"><option value="inherit">전체 위험 선호와 동일</option><option value="growth">신규 납입은 적극적으로 성장 추구</option></select><small>기존 현금의 일괄 투자 지시가 아니며 손실·종목·섹터 한도는 유지해요.</small></label>
 <label>위험 선호<select name="risk_level" required><option value="">선택해주세요</option><option value="conservative">안정 우선</option><option value="balanced">위험과 성장의 균형</option><option value="growth">성장 우선</option></select><small>이 선택만으로 수치 제한을 자동 결정하지 않아요.</small></label>
 <label>감당 가능한 손실 (%)<input name="max_loss_fraction" data-percent type="number" min="0" max="100" step="0.1" required><small>시나리오 비교 기준이며 손실 상한 보장은 아니에요.</small></label>
 <label>종목·ETF 하나의 최대 비중 (%)<input name="max_position_fraction" data-percent type="number" min="0" max="100" step="0.1" required><small>원화·달러 현금은 제외해요. ETF의 내부 분산과 이 상품 비중 상한은 별개예요.</small></label>

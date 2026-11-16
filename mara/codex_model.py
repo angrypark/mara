@@ -125,10 +125,10 @@ class CodexModel:
                     if item.get('type')=='error':raise CodexError('Codex 실행 진단에서 문제가 발생했어요. CLI 버전과 실행 설정을 확인해주세요.')
                     if item and item.get('type') not in {'agent_message','reasoning','todo_list'}:
                         raise CodexError('분석 범위 밖의 Codex 도구 호출이 감지돼 결과를 사용하지 않았어요.')
-                if not completed or not answer.exists() or answer.stat().st_size>131072:raise ValueError()
+                if not completed or not answer.exists() or answer.stat().st_size>(524288 if payload.get('narrative_contract') else 131072):raise ValueError()
                 raw=json.loads(answer.read_text())['result_json']
                 result=json.loads(raw)
-                if not isinstance(result,dict) or len(dumps(result))>24000:raise ValueError()
+                if not isinstance(result,dict) or len(dumps(result))>(38000 if payload.get('narrative_contract') else 24000):raise ValueError()
                 return result
             except (ValueError,KeyError,TypeError,OSError):
                 raise CodexError('Codex 분석 결과가 필요한 JSON 형식에 맞지 않아요. 다시 시도해주세요.') from None

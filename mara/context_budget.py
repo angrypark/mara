@@ -2,8 +2,8 @@
 import copy
 
 # Reserve space for the immediate campaign parent and one format-repair output.
-LIMITS={'context':352000,'evidence':352000,'buffett':384000,'marks':384000,'bogle':384000,
-        'reflection':384000,'memory':384000,'validation':512000,'leader':512000,'evaluator':512000}
+LIMITS={'context':512000,'evidence':512000,'buffett':640000,'marks':640000,'bogle':640000,
+        'reflection':768000,'memory':640000,'validation':1024000,'leader':1024000,'evaluator':1024000}
 PROPOSAL=('action','weights','rationale','dissent','risks','next_checks','premise_changes','validation_response','eligibility')
 
 

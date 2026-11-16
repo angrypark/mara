@@ -59,10 +59,11 @@ def profile(p):
     if 'household' in p:
         h=p['household']
         if not isinstance(h,dict):raise ValueError('Invalid household')
-        for k in ['property_value','mortgage_balance','monthly_debt_payment','outside_emergency_cash']:
+        for k in ['property_value','mortgage_balance','monthly_debt_payment','outside_emergency_cash','reported_liquid_cash']:
             if h.get(k) is not None:number(h[k])
         if h.get('mortgage_rate') is not None:number(h['mortgage_rate'],0,1)
         if h.get('debt_payment_in_expenses','unknown') not in {'yes','no','unknown'}:raise ValueError('Invalid debt payment scope')
+    if p.get('contribution_risk_preference','inherit') not in {'inherit','growth'}:raise ValueError('Invalid contribution risk preference')
     if 'criteria' in p:
         c=p['criteria']
         required(c,['risk_level','preferred_sectors','excluded_sectors','max_sector_fraction',

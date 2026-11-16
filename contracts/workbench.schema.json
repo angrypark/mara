@@ -455,6 +455,65 @@
                               "maxLength": 4000
                             }
                           }
+                        },
+                        "judgment_report": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "$id": "urn:mara:judgment-report:1.0",
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "schema_version",
+                            "title",
+                            "as_of",
+                            "portfolio_context",
+                            "market_context",
+                            "decision_method",
+                            "conclusion",
+                            "evidence_ids"
+                          ],
+                          "properties": {
+                            "schema_version": {
+                              "const": "mara.judgment-report/1.0"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "portfolio_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "market_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "decision_method": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "conclusion": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "evidence_ids": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 120,
+                              "uniqueItems": true
+                            }
+                          }
                         }
                       },
                       "required": [
@@ -556,6 +615,65 @@
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 4000
+                            }
+                          }
+                        },
+                        "judgment_report": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "$id": "urn:mara:judgment-report:1.0",
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "schema_version",
+                            "title",
+                            "as_of",
+                            "portfolio_context",
+                            "market_context",
+                            "decision_method",
+                            "conclusion",
+                            "evidence_ids"
+                          ],
+                          "properties": {
+                            "schema_version": {
+                              "const": "mara.judgment-report/1.0"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "portfolio_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "market_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "decision_method": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "conclusion": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "evidence_ids": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 120,
+                              "uniqueItems": true
                             }
                           }
                         }
@@ -686,6 +804,65 @@
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 4000
+                            }
+                          }
+                        },
+                        "judgment_report": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "$id": "urn:mara:judgment-report:1.0",
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "schema_version",
+                            "title",
+                            "as_of",
+                            "portfolio_context",
+                            "market_context",
+                            "decision_method",
+                            "conclusion",
+                            "evidence_ids"
+                          ],
+                          "properties": {
+                            "schema_version": {
+                              "const": "mara.judgment-report/1.0"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "portfolio_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "market_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "decision_method": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "conclusion": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "evidence_ids": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 120,
+                              "uniqueItems": true
                             }
                           }
                         }
@@ -830,6 +1007,65 @@
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 4000
+                            }
+                          }
+                        },
+                        "judgment_report": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "$id": "urn:mara:judgment-report:1.0",
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "schema_version",
+                            "title",
+                            "as_of",
+                            "portfolio_context",
+                            "market_context",
+                            "decision_method",
+                            "conclusion",
+                            "evidence_ids"
+                          ],
+                          "properties": {
+                            "schema_version": {
+                              "const": "mara.judgment-report/1.0"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "portfolio_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "market_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "decision_method": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "conclusion": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "evidence_ids": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 120,
+                              "uniqueItems": true
                             }
                           }
                         }
@@ -1199,6 +1435,65 @@
                             "scope_limits"
                           ],
                           "additionalProperties": false
+                        },
+                        "judgment_report": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "$id": "urn:mara:judgment-report:1.0",
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "schema_version",
+                            "title",
+                            "as_of",
+                            "portfolio_context",
+                            "market_context",
+                            "decision_method",
+                            "conclusion",
+                            "evidence_ids"
+                          ],
+                          "properties": {
+                            "schema_version": {
+                              "const": "mara.judgment-report/1.0"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "portfolio_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "market_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "decision_method": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "conclusion": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "evidence_ids": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 120,
+                              "uniqueItems": true
+                            }
+                          }
                         }
                       },
                       "required": [
@@ -1292,6 +1587,65 @@
                               "maxLength": 4000
                             }
                           }
+                        },
+                        "judgment_report": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "$id": "urn:mara:judgment-report:1.0",
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "schema_version",
+                            "title",
+                            "as_of",
+                            "portfolio_context",
+                            "market_context",
+                            "decision_method",
+                            "conclusion",
+                            "evidence_ids"
+                          ],
+                          "properties": {
+                            "schema_version": {
+                              "const": "mara.judgment-report/1.0"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "portfolio_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "market_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "decision_method": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "conclusion": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "evidence_ids": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 120,
+                              "uniqueItems": true
+                            }
+                          }
                         }
                       },
                       "required": [
@@ -1366,6 +1720,65 @@
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 4000
+                            }
+                          }
+                        },
+                        "judgment_report": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "$id": "urn:mara:judgment-report:1.0",
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "schema_version",
+                            "title",
+                            "as_of",
+                            "portfolio_context",
+                            "market_context",
+                            "decision_method",
+                            "conclusion",
+                            "evidence_ids"
+                          ],
+                          "properties": {
+                            "schema_version": {
+                              "const": "mara.judgment-report/1.0"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "portfolio_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "market_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "decision_method": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "conclusion": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "evidence_ids": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 120,
+                              "uniqueItems": true
                             }
                           }
                         }
@@ -1685,6 +2098,65 @@
                           },
                           "maxItems": 12,
                           "minItems": 12
+                        },
+                        "judgment_report": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "$id": "urn:mara:judgment-report:1.0",
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "schema_version",
+                            "title",
+                            "as_of",
+                            "portfolio_context",
+                            "market_context",
+                            "decision_method",
+                            "conclusion",
+                            "evidence_ids"
+                          ],
+                          "properties": {
+                            "schema_version": {
+                              "const": "mara.judgment-report/1.0"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "portfolio_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "market_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "decision_method": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "conclusion": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "evidence_ids": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 120,
+                              "uniqueItems": true
+                            }
+                          }
                         }
                       }
                     },
@@ -2215,6 +2687,65 @@
                     "scope_limits"
                   ],
                   "additionalProperties": false
+                },
+                "judgment_report": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "$id": "urn:mara:judgment-report:1.0",
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "schema_version",
+                    "title",
+                    "as_of",
+                    "portfolio_context",
+                    "market_context",
+                    "decision_method",
+                    "conclusion",
+                    "evidence_ids"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "const": "mara.judgment-report/1.0"
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "as_of": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "portfolio_context": {
+                      "type": "string",
+                      "minLength": 250,
+                      "maxLength": 3500
+                    },
+                    "market_context": {
+                      "type": "string",
+                      "minLength": 250,
+                      "maxLength": 3500
+                    },
+                    "decision_method": {
+                      "type": "string",
+                      "minLength": 250,
+                      "maxLength": 3500
+                    },
+                    "conclusion": {
+                      "type": "string",
+                      "minLength": 250,
+                      "maxLength": 3500
+                    },
+                    "evidence_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "maxItems": 120,
+                      "uniqueItems": true
+                    }
+                  }
                 }
               },
               "required": [
@@ -2630,6 +3161,65 @@
                             "scope_limits"
                           ],
                           "additionalProperties": false
+                        },
+                        "judgment_report": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "$id": "urn:mara:judgment-report:1.0",
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "schema_version",
+                            "title",
+                            "as_of",
+                            "portfolio_context",
+                            "market_context",
+                            "decision_method",
+                            "conclusion",
+                            "evidence_ids"
+                          ],
+                          "properties": {
+                            "schema_version": {
+                              "const": "mara.judgment-report/1.0"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120
+                            },
+                            "as_of": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            },
+                            "portfolio_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "market_context": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "decision_method": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "conclusion": {
+                              "type": "string",
+                              "minLength": 250,
+                              "maxLength": 3500
+                            },
+                            "evidence_ids": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 120,
+                              "uniqueItems": true
+                            }
+                          }
                         }
                       },
                       "required": [
@@ -2796,6 +3386,65 @@
                                 "type": "string",
                                 "minLength": 1,
                                 "maxLength": 4000
+                              }
+                            }
+                          },
+                          "judgment_report": {
+                            "$schema": "https://json-schema.org/draft/2020-12/schema",
+                            "$id": "urn:mara:judgment-report:1.0",
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "schema_version",
+                              "title",
+                              "as_of",
+                              "portfolio_context",
+                              "market_context",
+                              "decision_method",
+                              "conclusion",
+                              "evidence_ids"
+                            ],
+                            "properties": {
+                              "schema_version": {
+                                "const": "mara.judgment-report/1.0"
+                              },
+                              "title": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120
+                              },
+                              "as_of": {
+                                "type": "string",
+                                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                              },
+                              "portfolio_context": {
+                                "type": "string",
+                                "minLength": 250,
+                                "maxLength": 3500
+                              },
+                              "market_context": {
+                                "type": "string",
+                                "minLength": 250,
+                                "maxLength": 3500
+                              },
+                              "decision_method": {
+                                "type": "string",
+                                "minLength": 250,
+                                "maxLength": 3500
+                              },
+                              "conclusion": {
+                                "type": "string",
+                                "minLength": 250,
+                                "maxLength": 3500
+                              },
+                              "evidence_ids": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "maxItems": 120,
+                                "uniqueItems": true
                               }
                             }
                           }
@@ -3404,6 +4053,65 @@
                           "maxLength": 4000
                         }
                       }
+                    },
+                    "judgment_report": {
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "$id": "urn:mara:judgment-report:1.0",
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "schema_version",
+                        "title",
+                        "as_of",
+                        "portfolio_context",
+                        "market_context",
+                        "decision_method",
+                        "conclusion",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "schema_version": {
+                          "const": "mara.judgment-report/1.0"
+                        },
+                        "title": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "as_of": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "portfolio_context": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "market_context": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "decision_method": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "conclusion": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "maxItems": 120,
+                          "uniqueItems": true
+                        }
+                      }
                     }
                   },
                   "required": [
@@ -3904,6 +4612,65 @@
                           "maxLength": 4000
                         }
                       }
+                    },
+                    "judgment_report": {
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "$id": "urn:mara:judgment-report:1.0",
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "schema_version",
+                        "title",
+                        "as_of",
+                        "portfolio_context",
+                        "market_context",
+                        "decision_method",
+                        "conclusion",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "schema_version": {
+                          "const": "mara.judgment-report/1.0"
+                        },
+                        "title": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "as_of": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "portfolio_context": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "market_context": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "decision_method": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "conclusion": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "maxItems": 120,
+                          "uniqueItems": true
+                        }
+                      }
                     }
                   },
                   "required": [
@@ -4328,6 +5095,65 @@
                                     "type": "string",
                                     "minLength": 1,
                                     "maxLength": 4000
+                                  }
+                                }
+                              },
+                              "judgment_report": {
+                                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                "$id": "urn:mara:judgment-report:1.0",
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "schema_version",
+                                  "title",
+                                  "as_of",
+                                  "portfolio_context",
+                                  "market_context",
+                                  "decision_method",
+                                  "conclusion",
+                                  "evidence_ids"
+                                ],
+                                "properties": {
+                                  "schema_version": {
+                                    "const": "mara.judgment-report/1.0"
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120
+                                  },
+                                  "as_of": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                                  },
+                                  "portfolio_context": {
+                                    "type": "string",
+                                    "minLength": 250,
+                                    "maxLength": 3500
+                                  },
+                                  "market_context": {
+                                    "type": "string",
+                                    "minLength": 250,
+                                    "maxLength": 3500
+                                  },
+                                  "decision_method": {
+                                    "type": "string",
+                                    "minLength": 250,
+                                    "maxLength": 3500
+                                  },
+                                  "conclusion": {
+                                    "type": "string",
+                                    "minLength": 250,
+                                    "maxLength": 3500
+                                  },
+                                  "evidence_ids": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "maxItems": 120,
+                                    "uniqueItems": true
                                   }
                                 }
                               }
@@ -5065,6 +5891,65 @@
                       },
                       "maxItems": 12,
                       "minItems": 12
+                    },
+                    "judgment_report": {
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "$id": "urn:mara:judgment-report:1.0",
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "schema_version",
+                        "title",
+                        "as_of",
+                        "portfolio_context",
+                        "market_context",
+                        "decision_method",
+                        "conclusion",
+                        "evidence_ids"
+                      ],
+                      "properties": {
+                        "schema_version": {
+                          "const": "mara.judgment-report/1.0"
+                        },
+                        "title": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "as_of": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "portfolio_context": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "market_context": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "decision_method": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "conclusion": {
+                          "type": "string",
+                          "minLength": 250,
+                          "maxLength": 3500
+                        },
+                        "evidence_ids": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "maxItems": 120,
+                          "uniqueItems": true
+                        }
+                      }
                     }
                   }
                 },
@@ -6398,6 +7283,16 @@
           "type": "string"
         },
         "base_currency": {
+          "type": "string"
+        },
+        "reported_liquid_cash": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reported_liquid_cash_scope": {
           "type": "string"
         }
       },

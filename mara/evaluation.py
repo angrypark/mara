@@ -12,6 +12,18 @@ from .contracts import ContractError
 def rubric():return json.loads(resource('resources/evaluation-rubric.json').read_text())
 
 
+def raw_reference_paths(payload):
+    """Exact raw-evidence pointers; hashes identify captures, not claim truth."""
+    market=payload.get('market',{});result=[]
+    for prefix,rows in [('/market/facts',market.get('facts',[])),
+                        ('/market/research/calls',market.get('research',{}).get('calls',[]))]:
+        for i,row in enumerate(rows):
+            for j,ref in enumerate(row.get('raw_refs',[])):
+                if isinstance(ref,dict) and ref.get('sha256'):
+                    result.append(f'{prefix}/{i}/raw_refs/{j}/sha256')
+    return result
+
+
 def pointer(value,path):
     if not any(path.startswith('/'+k+'/') for k in ('report','profile','market','role_outputs')):
         raise ContractError('Evaluation reference '+repr(path)+' must select a field below /report, /profile, /market or /role_outputs; use e.g. /profile/goal, not the whole /profile object')
@@ -57,7 +69,7 @@ def evaluator_fingerprint(s,model,as_of,guide_text=None):
     specification={'rubric_hash':hashlib.sha256(dumps(r).encode()).hexdigest(),'guide':hashlib.sha256((guide_text if guide_text is not None else evaluator.guide('evaluator')).encode()).hexdigest(),
         'skills':for_role('evaluator'),'model':model.identity,
         'implementation':{p:hashlib.sha256(resource(p).read_bytes()).hexdigest() for p in ('mara/evaluation.py','mara/strict_evaluation.py','mara/quantitative_verifier.py','mara/coverage.py','mara/decision.py','mara/agents.py','mara/contracts.py','contracts/agent-evaluator.schema.json')},
-        'appended_guide_dependencies':{p:hashlib.sha256(resource(p).read_bytes()).hexdigest() for p in ('guides/roles/research-tools.md','guides/roles/analysis-exhibits.md')},
+        'appended_guide_dependencies':{p:hashlib.sha256(resource(p).read_bytes()).hexdigest() for p in ('guides/roles/research-tools.md','guides/roles/analysis-exhibits.md','guides/roles/judgment-report.md','mara/judgment_reports.py','contracts/judgment-report.schema.json')},
         'reference_guide':hashlib.sha256(resource('guides/portfolio-report-benchmarks.md' if r['version'].startswith('2.') else 'guides/reference-reports.md').read_bytes()).hexdigest()}
     return hashlib.sha256(dumps(specification).encode()).hexdigest()
 
