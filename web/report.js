@@ -94,6 +94,7 @@ window.MaraReport=(()=>{
     text('report-title',(prior?'주간 분석':'초기 포트폴리오')+' 리포트');
     text('report-period',(prior?prior.as_of+' → ':'')+r.as_of+' · 기준통화 '+currency+(r.revision_reason?' · 수정 이유: '+r.revision_reason:''));
     text('action',action[p.action]||p.action);$('action').dataset.status=p.action;text('rationale',p.rationale);
+    let budgetNotice=$('risk-budget-notice');if(!budgetNotice){budgetNotice=el('p','notice');budgetNotice.id='risk-budget-notice';$('report-context').before(budgetNotice)}const budget=r.risk_budget;budgetNotice.hidden=budget?.scope!=='analysis_only';budgetNotice.textContent=budget?.scope==='analysis_only'?`분석 전용 · 이번 제안의 충격 비교 예산 ${pct(budget.effective_fraction)} / 기존 기준 ${pct(budget.reference_fraction)}. 실제 감내손실은 미확인이고 이 보고서로 주문 계획을 만들 수 없어요.`:'';
     text('report-context',v.context?.summary||v.criteria?.goal||'당시 투자 맥락은 원본 실행 기록에서 확인해요.');
     let structured=$('structured-report');if(!structured){structured=el('div');structured.id='structured-report';$('report-context').after(structured)}structured.replaceChildren();
     const reports=v.judgment_reports||[];

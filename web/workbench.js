@@ -37,6 +37,7 @@ window.MaraWorkbench=(()=>{
     if(selected!=='overview'&&!current())selected='overview';
     $('wb-run-state').textContent=statuses[d.run.status];$('wb-run-state').dataset.status=d.run.status;
     $('wb-run-note').textContent=(d.run.mode==='demo'?'합성 데모 · 실제 분석 아님 · ':'')+d.run.as_of+' · '+d.run.message;
+    let riskBanner=$('wb-risk-scope');if(!riskBanner){riskBanner=el('p','notice');riskBanner.id='wb-risk-scope';$('wb-run-note').after(riskBanner)}const riskBudget=d.portfolio?.risk_budget||d.extensions?.analysis?.risk_budget;riskBanner.hidden=riskBudget?.scope!=='analysis_only';riskBanner.textContent=riskBudget?.scope==='analysis_only'?`분석 전용 · 이번 제안의 충격 비교 예산 ${pct(riskBudget.effective_fraction)} / 기존 기준 ${pct(riskBudget.reference_fraction)}. 실제 감내손실 확인이나 주문 가능한 제안이 아니에요.`:'';
     $('wb-contract-tag').textContent='v'+d.schema_version.split('/')[1]+' · '+d.components.length+'개 역할';
     nodes();pane();
   }
@@ -248,6 +249,7 @@ window.MaraWorkbench=(()=>{
     const strip=el('div','wb-progress');strip.append(el('span','',finished+' / '+doc.components.length+' 역할 기록'),bar(finished/doc.components.length));root.append(strip);
     if(!p){qualityView(root);root.append(el('p','wb-summary',doc.run.message),el('p','hint','아직 종합된 제안이 없어요. 왼쪽 역할을 선택하면 완료한 분석과 추가 확인을 볼 수 있어요.'));return}
     quantitativeView(root);qualityView(root);
+    if(p.risk_budget?.scope==='analysis_only'){const b=p.risk_budget;root.append(el('p','notice',`분석 전용 · 이번 제안의 충격 비교 예산 ${pct(b.effective_fraction)} / 기존 기준 ${pct(b.reference_fraction)}. 실제 감내손실 확인이나 주문 가능한 제안이 아니에요.`))}
     const pr=p.proposal,capital=p.funding?.proposal_capital??p.actual.nav;
     const decision=el('div','wb-summary');decision.append(chip(actions[pr.action]||pr.action,pr.action),el('p','',pr.rationale));root.append(decision);
     if(pr.decision_status){const detail=el('details','wb-block');detail.open=pr.action==='defer';detail.append(el('summary','','판단 상태와 남은 확인'));decisionStatus(detail,pr.decision_status);root.append(detail)}

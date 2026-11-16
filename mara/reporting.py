@@ -57,7 +57,8 @@ def present(session,row):
         'memory':memory,'pruning':session.get(r['pruning_audit_id'])['body'],
         'quality_evaluation':evaluations[-1]['body'] if evaluations else None,
         'evaluation_stability':stability_receipt(session,row['id'],evaluations[-1]['body'].get('evaluator_spec_hash') if evaluations else None),
-        'criteria':{key:profile.get(key) for key in ['goal','horizon_months','cash_need','max_loss_fraction','max_position_fraction','criteria']},
+        'risk_budget':r.get('risk_budget'),
+        'criteria':{key:profile.get(key) for key in ['goal','horizon_months','cash_need','max_loss_fraction','max_position_fraction','criteria','loss_budget_scope','analysis_loss_budget']},
         'previous':{'id':previous['id'],'as_of':previous['effective'],
             'proposal':previous['body']['proposal'],'valuation':previous['body']['valuation'],
             'perspectives':previous['body']['perspectives'],'funding':previous['body'].get('funding')} if previous else None}

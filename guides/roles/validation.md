@@ -30,3 +30,6 @@ analysis.household.joint_stress는 소득·부동산·주식/환율·가정 금�
 각 역할의 judgment_report 네 본문이 실제 입력·근거·제안 비중·행동·가정과 일치하는지 확인해요. 최소 분량 통과를 내용 충족으로 대신하지 않아요. 소제목만 맞거나 일반론·반복문으로 채운 경우, 실제 보유와 신규 납입을 혼동한 경우, 상세 결론과 weights/action이 다른 경우를 issues/findings에 명시해요. 최종 검증에서는 리더 종합안의 상세문까지 검토하며, 보류가 필요하면 공식 상태와 충돌하는 리더 문장은 채택되지 않은 의견이라는 점을 밝혀요.
 
 contribution_mandate.preference=growth이면 더 적극적인 비교 대안을 검토했는지, 기존 한도 때문에 불가하면 어떤 수치 조건이 제한하는지 확인해요. 신규 납입 선호로 사용자 손실·종목·섹터·현금 필요 조건을 바꾸지 않아요. reported_liquid_cash는 사용자 진술 전체액이며 계좌 현금과 더하거나 전액 투자 가능금/확정 비상금으로 만들지 않아요.
+
+
+분석 전용 위험 예산: decision_context.risk_budget.scope가 analysis_only면 effective_fraction은 이번 제안 원금의 충격 비교 가정이며 사용자가 수용한 손실률이 아니에요. max_loss_fraction/reference_fraction은 기존 기준으로 별도 비교해요. 더 적극적인 안을 비교할 수 있지만 실제 감내능력 확인·최대손실 보장·주문 가능으로 표현하지 않아요. 이 구분을 다음 회고와 활성 기억에서도 유지해요. 다른 현금·종목·섹터 제약은 바꾸지 않아요.

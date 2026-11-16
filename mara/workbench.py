@@ -148,7 +148,7 @@ def project(s,run_id):
             if references:
                 rendered.append({'key':'proposal_reference_validation','title':'주장·대안의 계산 연결 검증','kind':'object','value':[e['body'] for e in references]})
                 if references[-1]['body']['status']=='failed' and state=='failed':
-                    status='failed';summary=REASONS['proposal_reference']+' 이 응답은 채택되지 않았어요.'
+                    status='failed';summary=REASONS[references[-1]['body'].get('code') or 'proposal_reference']+' 이 응답은 채택되지 않았어요.'
         if role=='leader' and completed:
             final=report['body']['proposal']
             rendered.insert(0,{'key':'final_decision','title':'최종 검증을 반영한 결과 · 에이전트 초안과 구분','kind':'object',
@@ -188,7 +188,7 @@ def project(s,run_id):
         portfolio={'actual':r['valuation'],'proposal':r['proposal'],'previous':v['previous'],
             'funding':r.get('funding'),'validation':r['validation'],'performance':r['performance'],
             'base_currency':v['base_currency'],'next_evaluation':r['next_evaluation'],'next_rebalance':r['next_rebalance'],
-            'criteria':v['criteria'],'prices':v['prices']}
+            'criteria':v['criteria'],'prices':v['prices'],'risk_budget':r.get('risk_budget')}
     message={'completed':'저장된 판단을 탐색하고, 대화 변경을 새 판단에 반영할 수 있어요. 원본은 보존돼요.',
              'needs_input':'개인 맥락에 추가 확인이 필요해요. 질문을 확인하고 투자 설정에서 답을 반영해주세요.',
              'failed':'분석이 중간에 멈췄어요. 완료한 단계의 근거는 보존돼요.',

@@ -42,6 +42,10 @@ def validate_policy(policy):
 
 def build_plan(report,actual,snapshot,policy,now):
     validate_policy(policy)
+    if report.get('risk_budget',{}).get('scope')!='confirmed':
+        raise ValueError('Confirmed risk scope required; analysis-only or legacy reports cannot produce orders')
+    from .contracts import validate,schema
+    validate(report['risk_budget'],schema('risk-budget'))
     p=report['proposal']
     if p['action'] not in {'hold','adjust'} or p['eligibility']!='review_now': raise ValueError('Proposal not eligible now')
     if report['mode']!='live': raise ValueError('Synthetic proposals cannot produce broker orders')

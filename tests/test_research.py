@@ -131,7 +131,7 @@ class SourceTests(unittest.TestCase):
    from mara.decision import assessment
    self.assertTrue(assessment({'AAPL':1},m)['blockers'])
    self.assertTrue(all(c['status'] in ('failed','skipped') for c in m['research']['calls']));self.assertNotIn('secret text',json.dumps(m))
-   r.used_chars=64000
+   r.used_chars=160000
    r.record('fed','US',lambda:{'items':[],'limits':'x'},src.FED)
    self.assertEqual(r.calls[-1]['status'],'skipped')
  def test_malformed_feed_is_local_failure_and_raw_is_preserved(self):

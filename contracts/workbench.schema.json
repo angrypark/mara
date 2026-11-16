@@ -3923,6 +3923,77 @@
                           "contribution"
                         ],
                         "additionalProperties": false
+                      },
+                      "risk_budget": {
+                        "type": "object",
+                        "properties": {
+                          "scope": {
+                            "enum": [
+                              "confirmed",
+                              "analysis_only"
+                            ]
+                          },
+                          "effective_fraction": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "reference_fraction": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "reference_profile_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "source_event_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "personal_tolerance_confirmed": {
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "definition": {
+                            "type": "string"
+                          },
+                          "notice": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "scope",
+                          "effective_fraction",
+                          "reference_fraction",
+                          "personal_tolerance_confirmed",
+                          "definition",
+                          "notice"
+                        ],
+                        "additionalProperties": false,
+                        "if": {
+                          "properties": {
+                            "scope": {
+                              "const": "analysis_only"
+                            }
+                          }
+                        },
+                        "then": {
+                          "properties": {
+                            "personal_tolerance_confirmed": {
+                              "const": false
+                            }
+                          }
+                        }
+                      },
+                      "breaches_reference_loss_fraction": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -4483,6 +4554,77 @@
                         "contribution"
                       ],
                       "additionalProperties": false
+                    },
+                    "risk_budget": {
+                      "type": "object",
+                      "properties": {
+                        "scope": {
+                          "enum": [
+                            "confirmed",
+                            "analysis_only"
+                          ]
+                        },
+                        "effective_fraction": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "reference_fraction": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "reference_profile_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "source_event_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "personal_tolerance_confirmed": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "definition": {
+                          "type": "string"
+                        },
+                        "notice": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "scope",
+                        "effective_fraction",
+                        "reference_fraction",
+                        "personal_tolerance_confirmed",
+                        "definition",
+                        "notice"
+                      ],
+                      "additionalProperties": false,
+                      "if": {
+                        "properties": {
+                          "scope": {
+                            "const": "analysis_only"
+                          }
+                        }
+                      },
+                      "then": {
+                        "properties": {
+                          "personal_tolerance_confirmed": {
+                            "const": false
+                          }
+                        }
+                      }
+                    },
+                    "breaches_reference_loss_fraction": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -4760,6 +4902,81 @@
                   "observed_at"
                 ]
               }
+            },
+            "risk_budget": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "scope": {
+                      "enum": [
+                        "confirmed",
+                        "analysis_only"
+                      ]
+                    },
+                    "effective_fraction": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "reference_fraction": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "reference_profile_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source_event_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "personal_tolerance_confirmed": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "definition": {
+                      "type": "string"
+                    },
+                    "notice": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "scope",
+                    "effective_fraction",
+                    "reference_fraction",
+                    "personal_tolerance_confirmed",
+                    "definition",
+                    "notice"
+                  ],
+                  "additionalProperties": false,
+                  "if": {
+                    "properties": {
+                      "scope": {
+                        "const": "analysis_only"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "personal_tolerance_confirmed": {
+                        "const": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -6573,6 +6790,74 @@
                   "properties": {
                     "available": {
                       "type": "boolean"
+                    }
+                  }
+                },
+                "risk_budget": {
+                  "type": "object",
+                  "properties": {
+                    "scope": {
+                      "enum": [
+                        "confirmed",
+                        "analysis_only"
+                      ]
+                    },
+                    "effective_fraction": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "reference_fraction": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "reference_profile_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source_event_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "personal_tolerance_confirmed": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "definition": {
+                      "type": "string"
+                    },
+                    "notice": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "scope",
+                    "effective_fraction",
+                    "reference_fraction",
+                    "personal_tolerance_confirmed",
+                    "definition",
+                    "notice"
+                  ],
+                  "additionalProperties": false,
+                  "if": {
+                    "properties": {
+                      "scope": {
+                        "const": "analysis_only"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "personal_tolerance_confirmed": {
+                        "const": false
+                      }
                     }
                   }
                 }

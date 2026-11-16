@@ -14,7 +14,8 @@ SEC_TICKERS='https://www.sec.gov/files/company_tickers.json'
 FED='https://www.federalreserve.gov/feeds/press_monetary.xml'
 FUNDS={
  'ITOT':'https://www.ishares.com/us/products/239724/ishares-core-s-p-total-u-s-stock-market-etf',
- 'IVV':'https://www.ishares.com/us/products/239726/ishares-core-s-p-500-etf'}
+ 'IVV':'https://www.ishares.com/us/products/239726/ishares-core-s-p-500-etf',
+ 'ITA':'https://www.ishares.com/us/products/239502/ishares-u-s-aerospace-defense-etf'}
 METRICS={
  'revenue':('USD',['RevenueFromContractWithCustomerExcludingAssessedTax','Revenues','SalesRevenueNet']),
  'net_income':('USD',['NetIncomeLoss','ProfitLoss']),
@@ -208,11 +209,20 @@ def fund_profile(raw,symbol,as_of):
             if scale==.01 and not formatted.endswith('%'):raise ValueError('Percentage unit required')
             metrics[key]={'value':finite(formatted.rstrip('%'))*scale,'unit':unit,'observed_at':date,'label':item['label']}
         except (ValueError,KeyError,TypeError,AttributeError):missing.append(key)
-    return {'symbol':symbol,'name':fund['name'],'asset_class':fund.get('category'),'expense_ratio':expense,
+    result={'symbol':symbol,'name':fund['name'],'asset_class':fund.get('category'),'expense_ratio':expense,
         'issuer_metrics':metrics,'missing_issuer_metrics':missing,
         'benchmark':fields['Benchmark Index']['value'],'objective':desc[:700],
         'observed_at':dt,'expense_observed_at':as_of,'holdings_url':url,
         'limits':'보수는 조회 시점 상품 표시값으로 변경 발효일 미제공. 운용사 보수는 세금·환전·거래수수료를 포함하지 않아요. 투자 추천이나 전체 상품 비교가 아니에요.'}
+    if 'Net Assets of Fund' in fields:
+        try:
+            item=fields['Net Assets of Fund'];date=datetime.strptime(item['valueReference']['value'],'%b %d, %Y').date().isoformat()
+            if item.get('unitText')!='USD' or date!=dt or not item['value'].startswith('$'):raise ValueError('NAV unit/date unavailable')
+            result['net_assets']={'value':finite(item['value'][1:],1),'currency':'USD','observed_at':date}
+            result['net_assets_source']=FUNDS[symbol]
+        except (ValueError,KeyError,TypeError,AttributeError):
+            result['net_assets_issue']='Optional same-date USD NAV unavailable; objective/fee profile retained'
+    return result
 
 
 def fund_holdings(raw,as_of):
@@ -220,7 +230,7 @@ def fund_holdings(raw,as_of):
     observed=datetime.strptime(next(r[1] for r in lines if r and r[0]=='Fund Holdings as of'),'%b %d, %Y').date().isoformat()
     dated(observed,as_of,10)
     header=next(i for i,r in enumerate(lines) if r and r[0]=='Ticker')
-    data=[];sectors={};total=0;missing_weights=[];ended=False;seen=set()
+    data=[];sectors={};total=0;missing_weights=[];other=[];ended=False;seen=set()
     columns=lines[header]
     if len(set(columns))!=len(columns) or not {'Ticker','Asset Class','Sector','Name'}<=set(columns) or not {'Weight (%)','Market Weight'}&set(columns):raise ValueError('Incomplete holdings columns')
     for row in lines[header+1:]:
@@ -243,9 +253,11 @@ def fund_holdings(raw,as_of):
         if r.get('Asset Class')=='Equity':
             sectors[r['Sector']]=sectors.get(r['Sector'],0)+w
             data.append({'symbol':r['Ticker'],'name':r['Name'],'sector':r['Sector'],'weight':w})
+        else:other.append({'name':r['Name'],'type':r['Asset Class'],'weight':w,'notional_weight_percent':r.get('Notional Weight')})
     if not data or not 0.97<=total<=1.03:raise ValueError('incomplete fund weight coverage')
     result={'observed_at':observed,'holdings_count':len(data),'reported_weight_sum':total,
         'equity_fraction':sum(sectors.values()),'sector_weights':sectors,'missing_weight_rows':missing_weights,
+        'other_positions':other,
         'complete_reported_weights':not missing_weights,
         'complete_lookthrough':False,
         'top_holdings':sorted(data,key=lambda x:x['weight'],reverse=True)[:10],

@@ -9,6 +9,7 @@ import json
 import os
 import re
 import time
+import zipfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -34,14 +35,14 @@ TOOLS=[
  {'id':'treasury','label':'미국 국채 금리','roles':['evidence','marks','validation'],'provides':'최근 6거래일 만기별 par 금리와 장단기 차이'},
  {'id':'bls','label':'미국 물가·고용','roles':['evidence','marks','validation'],'provides':'CPI와 실업률, 최대 14개월 관측'},
  {'id':'fed','label':'연준 정책 발표','roles':['evidence','marks','validation'],'provides':'최근 공식 발표 RSS 제목·요약·날짜·원문'},
- {'id':'fund_profile','label':'ETF 상품·보수','roles':['bogle','validation'],'provides':'ITOT/IVV 운용사 투자목적·추종지수·보수'},
- {'id':'fund_holdings','label':'ETF 내부 구성','roles':['bogle','validation'],'provides':'ITOT/IVV 전체 CSV 보존, 상위 10개 및 섹터 합계'},
+ {'id':'fund_profile','label':'ETF 상품·보수','roles':['bogle','validation'],'provides':'지원 ETF 운용사 투자목적·추종지수·보수'},
+ {'id':'fund_holdings','label':'ETF 내부 구성','roles':['bogle','validation'],'provides':'지원 ETF 전체 구성 원문 보존, 상위 10개 및 섹터 합계'},
  {'id':'candles','label':'가격 이력·거래량','roles':['evidence','marks','validation'],'provides':'최대 80 수정 일봉에서 5/20/60 거래일 가격변화·평균 거래량'},
  {'id':'orderbook','label':'관측 호가','roles':['marks','validation'],'provides':'관측시각의 최우선 호가·스프레드; 체결 보장 아님'},
  {'id':'institutional_reports','label':'금융기관 주간 논평','roles':['evidence','marks','validation'],'provides':'BlackRock·Schwab 원문 HTML과 날짜·제목·도입부 발췌; 기관 전망'},
  {'id':'financial_news','label':'금융 언론 뉴스 탐색','roles':['evidence','marks','validation'],'provides':'CNBC 공식 RSS 최근 제목·발표시각·기사 링크; 본문 미검토'},
 ]
-ALLOWED={'fred.stlouisfed.org','d18rn0p25nwr6d.cloudfront.net','materials.proxyvote.com','www.bls.gov','www.sec.gov','data.sec.gov','www.ishares.com','www.federalreserve.gov','api.bls.gov','home.treasury.gov','www.blackrock.com','www.schwab.com','www.cnbc.com','www.microsoft.com','www.apple.com'}
+ALLOWED={'www.invesco.com','dng-api.invesco.com','www.ssga.com','am.jpmorgan.com','fred.stlouisfed.org','d18rn0p25nwr6d.cloudfront.net','materials.proxyvote.com','www.bls.gov','www.sec.gov','data.sec.gov','www.ishares.com','www.federalreserve.gov','api.bls.gov','home.treasury.gov','www.blackrock.com','www.schwab.com','www.cnbc.com','www.microsoft.com','www.apple.com'}
 
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
@@ -100,7 +101,7 @@ class PublicArchive:
 
 def safe_code(exc):
     if isinstance(exc,src.EvidenceError):return exc.code
-    if isinstance(exc,(json.JSONDecodeError,src.ET.ParseError)):return 'source_format_changed'
+    if isinstance(exc,(json.JSONDecodeError,src.ET.ParseError,zipfile.BadZipFile)):return 'source_format_changed'
     if isinstance(exc,(KeyError,TypeError,AttributeError)):return 'source_structure_changed'
     if isinstance(exc,StopIteration):return 'required_source_field_missing'
     if isinstance(exc,TimeoutError):return 'time_budget_or_timeout'
@@ -139,9 +140,9 @@ class Research:
                 for series in value['metrics'].values():
                     for entry in series:entry['observations']=[[row.get(k) for k in columns] for row in entry['observations']]
             text=d.dumps(value)
-            if tool=='sec_financials' and self.used_chars+len(text)>52000:
+            if tool=='sec_financials' and self.used_chars+len(text)>140000:
                 call.update(status='skipped',reason='financial_evidence_budget');return None
-            if self.used_chars+len(text)>64000:
+            if self.used_chars+len(text)>160000:
                 call.update(status='skipped',reason='active_evidence_budget');return None
             fact_id='research-'+tool+'-'+re.sub('[^A-Za-z0-9_-]','-',target)
             published=value.get('latest_filed') or value.get('observed_at') or self.as_of
@@ -158,7 +159,7 @@ class Research:
             self.used_chars+=len(text)
             call.update(status='collected',fact_ids=[fact_id],reason='검증된 요약을 분석 입력에 포함했어요.')
             return value
-        except (OSError,ValueError,KeyError,TypeError,IndexError,StopIteration,ArithmeticError,BrokerError,src.ET.ParseError,AttributeError) as exc:
+        except (OSError,ValueError,KeyError,TypeError,IndexError,StopIteration,ArithmeticError,BrokerError,src.ET.ParseError,AttributeError,zipfile.BadZipFile) as exc:
             call.update(reason=safe_code(exc));return None
         finally:
             call['raw_refs']=copy.deepcopy(self.records[start:]);self.calls.append(call)
@@ -189,7 +190,7 @@ class Research:
         # Preserve supplied order: actual holdings first, followed by the candidate screen.
         all_symbols=list(dict.fromkeys(symbols))
         selected=[s for s in all_symbols if market['assets'][s].get('kind') in {'STOCK','FOREIGN_STOCK','DEPOSITARY_RECEIPT','REIT'}][:8]
-        funds=list(src.FUNDS)
+        funds=[s for s in src.FUNDS if s in all_symbols or s in ('ITOT','IVV')]
         # Comparison research only; this does not add a tradable asset or user candidate.
         progress('공식 거시 지표와 정책 발표를 수집하고 있어요.')
         treasury_url=f'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{self.as_of[:4]}/all?type=daily_treasury_yield_curve&field_tdr_date_value={self.as_of[:4]}&page&_format=csv'
@@ -244,15 +245,30 @@ class Research:
             url=src.FUNDS[symbol]
             profile=self.record('fund_profile',symbol,lambda u=url,s=symbol:src.fund_profile(self.fetch(u),s,self.as_of),url)
             if profile:
+                profile_refs=copy.deepcopy(self.calls[-1]['raw_refs'])
                 asset=market['assets'].get(symbol)
                 if asset is not None:asset['expense_ratio']=profile['expense_ratio']
                 if asset is not None:asset['expense_source']=url
                 if asset is not None and profile['asset_class']=='Equity':asset['asset_class']='equity'
-                self.record('fund_holdings',symbol,lambda u=profile['holdings_url']:src.fund_holdings(self.fetch(u),self.as_of),profile['holdings_url'])
+                def holdings(u=profile['holdings_url'],p=profile,refs=profile_refs):
+                    raw=self.fetch(u)
+                    issue=None
+                    if p.get('net_assets'):
+                        self.records.extend(refs)
+                        from .fund_economic_exposure import holdings as economic
+                        try:return economic(raw,p,self.as_of)
+                        except (ValueError,KeyError,TypeError,StopIteration) as exc:issue=str(exc)[:200] if isinstance(exc,ValueError) else type(exc).__name__
+                    result=src.fund_holdings(raw,self.as_of)
+                    result['economic_exposure_issue']=issue or 'same_date_issuer_NAV_not_available'
+                    return result
+                self.record('fund_holdings',symbol,holdings,profile['holdings_url'])
                 # The issuer's sector taxonomy cannot silently replace Toss's
                 # user-selected exclusions; preserve unknown sector validation.
             else:
                 self.calls.append({'tool':'fund_holdings','target':symbol,'status':'skipped','reason':'fund_profile_unavailable','fact_ids':[],'raw_refs':[]})
+        from .additional_funds import collect,EXTRA
+        collect(self,market,all_symbols)
+        funds+=list(s for s in EXTRA if s in all_symbols)
         for symbol in selected:
             progress('기업 공시·재무 확인 중: '+symbol)
             cik=mapping.get(symbol.replace('.','-'))
@@ -292,7 +308,7 @@ class Research:
         manifest={'schema_version':VERSION,'owner_role':'evidence','tools':TOOLS,'calls':self.calls,
             'selection':{'company_symbols':selected,'fund_symbols':funds,'not_deeply_collected':[s for s in all_symbols if s not in selected+funds],
                 'reason':'보유 우선, 이후 입력/자동 후보 순서. 기업 최대 8개와 지원 ETF. 전체 시장 조사 아님.', 'sec_identity_mode':identity_mode,'sec_seed_as_of':seed['retrieved_at']},
-            'budget':{'max_companies':8,'max_http_requests':48,'max_seconds_before_new_request':150,'max_fact_characters':64000,'fact_characters':self.used_chars},
+            'budget':{'max_companies':8,'max_http_requests':48,'max_seconds_before_new_request':150,'max_fact_characters':160000,'fact_characters':self.used_chars},
             'collected_at':self.now.isoformat(),'raw_policy':'원문 sha256 파일 보존. 활성 요약/pruning과 별개.'}
         validate(manifest,schema('research'))
         market['facts'].extend(self.facts);market['research']=manifest

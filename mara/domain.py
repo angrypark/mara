@@ -47,6 +47,11 @@ def profile(p):
         if not isinstance(p[k], int): raise ValueError(k + ' must be integer')
     for k in ['max_loss_fraction', 'max_position_fraction']:
         number(p[k], 0, 1)
+    if p.get('loss_budget_scope','confirmed') not in {'confirmed','analysis_only'}:
+        raise ValueError('Invalid loss budget scope')
+    if p.get('analysis_loss_budget') is not None:number(p['analysis_loss_budget'],0,1)
+    if p.get('loss_budget_scope')=='analysis_only' and p.get('analysis_loss_budget') is None:
+        raise ValueError('Analysis loss budget required')
     texts(p['markets'], True)
     texts(p['constraints'])
     if not isinstance(p['goal'], str) or not p['goal'].strip(): raise ValueError('Goal required')
@@ -108,9 +113,10 @@ def market(m):
         if a.get('asset_class','unknown') not in {'equity','fixed_income','commodity','real_asset','cash','unknown'}:
             raise ValueError('Unknown asset classification')
         if 'sector_complete' in a and type(a['sector_complete']) is not bool: raise ValueError('Sector completeness must be boolean')
+        if 'sector_unknown_fraction' in a:number(a['sector_unknown_fraction'],0)
         if 'sector_exposures' in a:
             if not isinstance(a['sector_exposures'],dict): raise ValueError('Sector exposures must be a mapping')
-            for weight in a['sector_exposures'].values(): number(weight,0,1)
+            for weight in a['sector_exposures'].values(): number(weight,0)
             for key in ['sector_source','sector_as_of','sector_valid_until']:
                 if key not in a: raise ValueError('Sector source and validity required')
             if not a['sector_source'].startswith('https://'): raise ValueError('Sector source required')
@@ -150,6 +156,19 @@ def weights(w):
     if abs(sum(w.values()) - 1) > 1e-6: raise ValueError('Weights must sum to one')
 
 
+def loss_budget(p):
+    scope=p.get('loss_budget_scope','confirmed')
+    if scope not in {'confirmed','analysis_only'}:raise ValueError('Invalid loss budget scope')
+    value=p.get('analysis_loss_budget') if scope=='analysis_only' else p['max_loss_fraction']
+    number(value,0,1)
+    return {'scope':scope,'effective_fraction':value,'reference_fraction':p['max_loss_fraction'],
+            'reference_profile_id':p.get('loss_reference_profile_id'),
+            'source_event_id':p.get('context_update_event_id'),
+            'personal_tolerance_confirmed':False if scope=='analysis_only' else None,
+            'definition':'이번 제안 원금에 대한 결정론적 충격 비교. 가계 전체 손실률·최대손실 보장 아님.',
+            'notice':'분석용 위험 예산이며 사용자 확정 감내손실이 아니에요. 기존 기준도 별도 비교하고 거래 계획에는 사용할 수 없어요.' if scope=='analysis_only' else '저장된 손실 기준. 이 표시는 새로운 사용자 확인 이력이 아니에요.'}
+
+
 def suitability(w, p, m, nav):
     weights(w)
     errors = []
@@ -168,9 +187,12 @@ def suitability(w, p, m, nav):
         loss += weight * a['stress_loss']
     # Cash reserve is intentionally conservative; a liquid risky asset is not guaranteed cash.
     if liquid + 1e-6 < p['cash_need']: errors.append('Cash reserve below stated cash need')
-    if loss > p['max_loss_fraction'] + 1e-9: errors.append('Stress loss exceeds tolerance')
+    budget=loss_budget(p)
+    if loss > budget['effective_fraction'] + 1e-9:
+        errors.append('Stress loss exceeds analysis budget' if budget['scope']=='analysis_only' else 'Stress loss exceeds tolerance')
     return {'passed': not errors, 'errors': errors, 'scenario_loss_fraction': loss,
-            'cash_reserved': liquid, 'limitation': 'User-supplied stress scenario, not a worst-case guarantee. Qualitative constraints need agent review.'}
+            'risk_budget':budget,'breaches_reference_loss_fraction':loss>p['max_loss_fraction']+1e-9,
+            'cash_reserved': liquid, 'limitation': 'Deterministic stress assumptions, not a worst-case guarantee or confirmed personal suitability. Qualitative constraints need agent review.'}
 
 
 def performance(previous, current, flows, start, end):

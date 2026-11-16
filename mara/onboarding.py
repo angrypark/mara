@@ -31,7 +31,7 @@ FIELDS={'goal','horizon_months','total_assets','monthly_income','monthly_expense
     'min_cash_fraction','max_foreign_fraction','snapshot_id','confirmed','revision_reason','context_notes',
     'contribution_schedule','funding_source','horizon_purpose','property_value','mortgage_balance',
     'monthly_debt_payment','mortgage_rate','outside_emergency_cash','debt_payment_in_expenses',
-    'reported_liquid_cash','contribution_risk_preference'}
+    'reported_liquid_cash','contribution_risk_preference','loss_budget_scope','analysis_loss_budget'}
 
 
 class InputError(ValueError): pass
@@ -88,6 +88,9 @@ def inputs(value,snapshot,cap,now):
     p['household']={key:None if v.get(key) in (None,'') else numeric(v[key],key,1 if key=='mortgage_rate' else None)
         for key in ['property_value','mortgage_balance','monthly_debt_payment','mortgage_rate','outside_emergency_cash','reported_liquid_cash']}
     p['contribution_risk_preference']=v.get('contribution_risk_preference','inherit')
+    p['loss_budget_scope']=v.get('loss_budget_scope','confirmed')
+    p['analysis_loss_budget']=None if v.get('analysis_loss_budget') in (None,'') else numeric(v['analysis_loss_budget'],'분석용 손실 예산',1)
+    if p['loss_budget_scope']=='analysis_only' and p['analysis_loss_budget'] is None:raise InputError('분석 전용 손실 예산을 입력해주세요.')
     p['household']['debt_payment_in_expenses']=v.get('debt_payment_in_expenses','unknown')
     p['criteria']={key:v.get(key) for key in ['risk_level','preferred_sectors','excluded_sectors']}
     p['criteria'].update({key:numeric(v.get(key),key,1) for key in ['max_sector_fraction','max_equity_fraction','min_cash_fraction','max_foreign_fraction']})
@@ -194,8 +197,16 @@ class PortfolioSetup:
             save_private(self.model_path,{'provider':'openai','model':model,'api_key':key.strip()})
         return self.model_state()
 
-    def draft(self,value):
+    def scoped_input(self,value):
         value=clean_draft(value)
+        with self.session() as s:
+            prior=s.latest('profile')
+            if prior and prior['body'].get('loss_budget_scope')=='analysis_only' and 'loss_budget_scope' not in value:
+                value.update(loss_budget_scope='analysis_only',analysis_loss_budget=prior['body']['analysis_loss_budget'])
+        return value
+
+    def draft(self,value):
+        value=self.scoped_input(value)
         # Confirmation is per generation, not a durable authorization.
         value['confirmed']=False
         with self.session() as s: eid=s.append('onboarding_draft',value,date.today().isoformat())
@@ -262,7 +273,13 @@ class PortfolioSetup:
         root=self.directory/'company-research'/'raw' if company_refs else self.directory/'research'
         raw=(root/(sha+'.raw')).read_bytes()
         if digest(raw)!=sha:raise ValueError('Archive hash mismatch')
-        return {'schema_version':'mara.research-raw/1.0.0','provenance':refs[0],'all_occurrences':refs,'text':raw.decode('utf-8-sig')}
+        result={'schema_version':'mara.research-raw/1.0.0','provenance':refs[0],'all_occurrences':refs}
+        try:result['text']=raw.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            import base64
+            result.update(text='보존된 바이너리 원문이에요. 원본 파일은 base64 값으로 손실 없이 복원할 수 있어요.',
+                encoding='base64',data=base64.b64encode(raw).decode('ascii'))
+        return result
 
     def job(self,jid,status,message,**kwargs):
         with self.session() as s: s.append('onboarding_job',dict(id=jid,status=status,message=message,**kwargs),date.today().isoformat())
@@ -293,7 +310,7 @@ class PortfolioSetup:
                         'reason':'Show the validated context questions previously hidden as a generic failure'},date.today().isoformat())
 
     def start(self,value):
-        value=clean_draft(value)
+        value=self.scoped_input(value)
         with self.guard:
             if self.thread and self.thread.is_alive(): raise InputError('이미 포트폴리오를 분석하고 있어요.')
             with self.session() as s:
@@ -327,8 +344,14 @@ class PortfolioSetup:
             self.job(jid,'failed','생성하지 못했어요. 토스 연결·모델 설정·시장 자료를 확인한 뒤 다시 시도해주세요.',error_type=type(exc).__name__)
 
     def generate(self,value,snapshot,progress=lambda msg:None):
+        value=self.scoped_input(value)
         now=datetime.now(timezone.utc); today=now.astimezone(KST).date().isoformat()
         p,cash,amount,candidates=inputs(value,snapshot,self.capital_limit(),now)
+        with self.session() as s:
+            prior=s.latest('profile')
+            if prior and p.get('loss_budget_scope')=='analysis_only':
+                for key in ('loss_reference_profile_id','context_update_event_id'):
+                    if key in prior['body']:p[key]=prior['body'][key]
         positions={x['symbol']:numeric(x['quantity'],'보유 수량') for x in snapshot['body']['included'] if float(x['quantity'])}
         with self.broker() as (b,config):
             if identity(config)!=snapshot['body']['identity']: raise InputError('계좌 설정이 바뀌었어요. 보유를 다시 불러와주세요.')
@@ -411,6 +434,9 @@ class PortfolioSetup:
                 self.research_factory(self.directory/'research',now=captured).enrich(
                     m,list(dict.fromkeys(list(positions)+candidates)),b,progress)
         d.market(m); nav=d.valuation(actual,m,allow_empty=True)['nav']
+        from .sector_lookthrough import apply as sector_lookthrough
+        sector_lookthrough(m,memberships,{'as_of':today,'expected_root_names':[x['name'] for x in sectors if x['depth']==0]})
+        d.market(m)
         p['proposal_capital']=proposal_amount(amount,nav,value['capital_mode'],p['funding_source'])
         p['funding_mode']=value['capital_mode']
         if not 0<p['proposal_capital']<=self.capital_limit(): raise InputError('기존 보유와 추가 자금을 합친 제안 총액이 운용 한도를 넘어요.')

@@ -70,6 +70,11 @@ def evaluate(w, p, m, capital, actual=None):
             classes['cash']=classes.get('cash',0)+weight; currencies[p['base_currency']]=currencies.get(p['base_currency'],0)+weight
             continue
         a=m['assets'].get(symbol,{})
+        if a.get('sector_estimate_only'):
+            reason=symbol+': 보고 포지션·명목금액과 NAV가 같은 평가기준이라는 가정의 노출 추정이에요. 실제 노출 상한을 입증한 값이 아니에요.'
+            (warnings if p.get('loss_budget_scope')=='analysis_only' else missing).append(reason)
+        if a.get('sector_exposure_unbounded'):
+            missing.append(symbol+': 파생상품 또는 결측 비중의 경제적 노출 상한을 확인하지 못했어요.')
         kind=a.get('asset_class','unknown')
         classes[kind]=classes.get(kind,0)+weight
         if kind=='unknown': unknown_class+=weight
@@ -86,7 +91,7 @@ def evaluate(w, p, m, capital, actual=None):
         else:
             for name,share in exposures.items(): sectors[name]=sectors.get(name,0)+weight*share
             # Provider tags may overlap. Never divide multi-sector membership equally.
-            if not a.get('sector_complete',False): unknown_sector+=weight
+            if not a.get('sector_complete',False): unknown_sector+=weight*a.get('sector_unknown_fraction',1.)
     equity=classes.get('equity',0)
     foreign=sum(v for k,v in currencies.items() if k not in (p['base_currency'],'unknown'))
     if c:

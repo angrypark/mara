@@ -89,7 +89,9 @@ def build(profile,actual,market,valuation,capital,selected=None):
         change=equity*equity_shock+foreign*fx_shock+foreign_equity*equity_shock*fx_shock
         scenarios.append({'equity_return_assumption':equity_shock,'foreign_currency_return_in_base_assumption':fx_shock,
             'portfolio_change_fraction':change,'loss_on_proposal_capital':-change*capital,
-            'breaches_reported_loss_tolerance':-change>profile['max_loss_fraction']})
+            'breaches_reported_loss_tolerance':None if profile.get('loss_budget_scope')=='analysis_only' else -change>profile['max_loss_fraction'],
+            'breaches_reference_loss_fraction':-change>profile['max_loss_fraction'],
+            'breaches_effective_loss_budget':-change>d.loss_budget(profile)['effective_fraction']})
     costs={'status':'account_specific_rates_unconfirmed','assumed_one_way_bps':[0,10,50,100],
         'monthly_non_cash_allocation':monthly*(1-selected.get('CASH',0)),
         'monthly_cost_sensitivity':[{'bps':b,'base_currency_amount':monthly*(1-selected.get('CASH',0))*b/10000} for b in (0,10,50,100)],
@@ -132,7 +134,7 @@ def build(profile,actual,market,valuation,capital,selected=None):
     from .monitoring_exercise import exercise
     h['monitoring_exercise']=exercise(profile,h,monthly)
     costs['krw_cash_hurdle']=cash_hurdle(profile,costs)
-    result={'macro_consistency':macro_consistency(market),'lookthrough':lookthrough,'schema_version':VERSION,'as_of':market['as_of'],'selected_weights':selected,
+    result={'risk_budget':d.loss_budget(profile),'macro_consistency':macro_consistency(market),'lookthrough':lookthrough,'schema_version':VERSION,'as_of':market['as_of'],'selected_weights':selected,
         'household':h,'comparison':comparison,'products':products,'costs':costs,
         'fx_stress':{'formula':'equity_weight*r + foreign_weight*f + foreign_equity_weight*r*f',
             'base_currency':profile['base_currency'],'capital':capital,'foreign_fraction':foreign,'equity_fraction':equity,

@@ -270,15 +270,21 @@ class Engine:
         checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
         proposal, proposal_id = call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation})
         from .report_references import errors as reference_errors
-        for reference_attempt in (1,2):
+        for reference_attempt in (1,2,3):
+            allocation_changed=common['analysis']['selected_weights']!=proposal['weights']
             common['analysis']=build_analysis(p,h,m,val,capital,proposal['weights'])
             errors=reference_errors(proposal,common['analysis'],funding,val)
             self.s.append('proposal_reference_validation',{'output_id':proposal_id,'attempt':reference_attempt,
-                'status':'failed' if errors else 'passed','errors':errors},as_of,run_id)
-            if not errors:break
-            if reference_attempt==2:raise AgentOutputError('leader','proposal_reference',proposal_id)
+                'status':'failed' if errors or allocation_changed else 'passed','errors':errors,
+                'reference_status':'failed' if errors else 'passed',
+                'allocation_reconciliation_required':allocation_changed,
+                'code':'allocation_reconciliation' if allocation_changed else 'proposal_reference' if errors else None},as_of,run_id)
+            if not errors and not allocation_changed:break
+            if reference_attempt==3:raise AgentOutputError('leader','allocation_reconciliation' if allocation_changed else 'proposal_reference',proposal_id,attempts=3)
             proposal,proposal_id=call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation,
                 'reference_feedback':{'errors':errors,'previous_output':proposal,
+                    'selected_weights_recomputed':common['analysis']['selected_weights'],
+                    'allocation_instruction':'선택한 비중의 계산을 새로 완료했어요. 같은 비중을 유지하고 보고서·주장·반대 근거의 모든 수치를 지금 analysis와 대조해 다시 작성해요. 잠정 비교안의 수치를 최종 제안의 성과로 서술하지 않아요. 수익률이 미확인인 선택 자산은 대체 지수 이력으로 채우지 않아요.',
                     'instruction':'계산 연결을 실제 report body 기준으로 교정해 전체 JSON을 다시 작성해요. evaluator가 평가 입력에서 쓰는 /report 접두사는 저자 calculation_paths에 붙이지 않아요. /input도 존재하지 않아요. 다른 값에 억지로 연결하거나 자료 공백을 숨기지 말고 주장의 범위와 반대 근거를 유지해요.'}})
         final_check = evaluate(proposal['weights'],p,m,capital,val)
         final_review, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks,
@@ -328,7 +334,7 @@ class Engine:
         # Original dissent is retained regardless of how the leader summarizes it.
         report = {'run_id':run_id,'mode':self.model.mode,'as_of':as_of,'profile_id':pe['id'],
             'actual_id':he['id'],'market_id':me['id'],'previous_id':previous['id'] if previous else None,
-            'valuation':val,'performance':outcome,'reflection':reflection,'funding':funding,
+            'valuation':val,'performance':outcome,'reflection':reflection,'funding':funding,'risk_budget':d.loss_budget(p),
             'revision_of':revision_of,'revision_reason':revision_reason,'amendment':amendment,
             'analysis':analysis,'evidence_delivery':delivery,'improvement':improvement,
             'perspectives':perspectives,'validation':{'numeric':checks,'critique':validation,

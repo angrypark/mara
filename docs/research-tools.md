@@ -1,6 +1,6 @@
 # 분석 자료 수집 도구
 
-조사·검증일: 2026-11-15. `PortfolioSetup.generate`가 기본 가격·환율·후보를 준비한 뒤, R2의 자료 수집 코드인 `Research.enrich`를 호출해요. 최초 생성과 주간 평가에 같은 경로를 사용해요. 기존 보고서를 다시 쓰지는 않아요.
+조사·검증일: 2026-11-16. `PortfolioSetup.generate`가 기본 가격·환율·후보를 준비한 뒤, R2의 자료 수집 코드인 `Research.enrich`를 호출해요. 최초 생성과 주간 평가에 같은 경로를 사용해요. 기존 보고서를 다시 쓰지는 않아요.
 
 ## 역할과 자료
 
@@ -11,8 +11,8 @@
 | `treasury` | US Treasury | 최근 6일 만기별 국채 par 금리, 장단기 차이 | R2, Marks, R4 |
 | `bls` | BLS | CPI·실업률, 최대 14개월 관측 | R2, Marks, R4 |
 | `fed` | Federal Reserve | 정책 발표 RSS의 날짜·제목·요약·링크 | R2, Marks, R4 |
-| `fund_profile` | iShares | ITOT·IVV 목적·추종지수·보수 | Bogle, R4 |
-| `fund_holdings` | iShares | 구성 CSV 원본, 상위 10개·섹터 합계·구성 수 | Bogle, R4 |
+| `fund_profile` | iShares·Invesco·State Street·J.P. Morgan | 지원 ETF 목적·추종방식·보수와 상품별 미확인 항목 | Bogle, R4 |
+| `fund_holdings` | iShares·Invesco·State Street | 전량 CSV/JSON/XLSX, 상위 구성·섹터·비주식·결측 구분 | Bogle, R4 |
 | `candles` | 토스증권 | 최대 80 수정 일봉, 5/20/60거래일 가격 변화·거래량 | R2, Marks, R4 |
 | `orderbook` | 토스증권 | 관측 시각의 양방향 최우선 호가·스프레드 | Marks, R4 |
 | `institutional_reports` | BlackRock·Charles Schwab | 주간 논평 HTML 원문 보존, 발표일·제목·도입부 일부 발췌 | R2, Marks, R4 |
@@ -53,3 +53,13 @@
 - [iShares ITOT](https://www.ishares.com/us/products/239724/ishares-core-s-p-total-u-s-stock-market-etf), [iShares IVV](https://www.ishares.com/us/products/239726/ishares-core-s-p-500-etf)
 - [토스증권 시장 자료](https://developers.tossinvest.com/docs/market-data), [공식 OpenAPI 계약](https://openapi.tossinvest.com/openapi-docs/latest/openapi.json)
 - [BlackRock 주간 논평](https://www.blackrock.com/corporate/insights/blackrock-investment-institute/global-weekly-commentary), [Schwab 주간 전망](https://www.schwab.com/learn/story/weekly-traders-outlook), [CNBC 공식 뉴스 피드](https://www.cnbc.com/id/100003114/device/rss/rss.html)
+
+## 성장 후보와 위험 예산 · 2026-11-16
+
+QQQ는 운용사 페이지의 공식 JSON API, XLV는 공식 상품 필드와 XLSX, ITA는 iShares adapter를 사용해요. IAU는 금 신탁의 sponsor fee를 읽고 주식으로 분류하지 않아요. JEPI 전략 설명은 현재 구성·ELN 검증을 대신하지 않아요. 지원 상품별 실패는 영수증에 남기며 다른 후보 분석은 계속해요.
+
+전량 구성 티커는 토스 원래 섹터 태그와 대조해요. 구성 날짜·분류 조회 날짜·전체 root 및 요청 섹터 조회를 구분하고 미분류 비중은 보수적으로 남겨요. 선물·옵션·결측 가중치의 경제적 노출 상한이 미확인이면 NAV 잔여분으로 축소하지 않고 제안 검증에 남겨요. 원문 바이너리도 SHA-256과 base64로 보존 조회할 수 있어요.
+
+초기 기업 자료는 최대 8개, 활성 원문 요약은 최대 160,000자로 제한해요. 재무는 140,000자에서 멈춰 다른 자료의 여유를 두고, 추가 기업 조사는 별도 역할 도구와 전달 예산을 따릅니다. 자료 확대가 사용자 제약이나 가치 판단 통과를 뜻하지 않아요.
+
+`loss_budget_scope=analysis_only`는 `analysis_loss_budget`을 연구용 충격 비교 예산으로 사용해요. `max_loss_fraction`은 기존 기준으로 보존하고 두 결과를 따로 표시해요. 새로운 실제 손실 수용이나 거래 권한이 아니며 해당 원본 보고서로 주문 계획을 만들 수 없어요.

@@ -36,3 +36,7 @@ html[data-theme=dark]{--proposal:#39b9aa;--buffett:#72a7e1;--marks:#dda24e;--bog
 @media(max-width:760px){.judgment-report{padding:14px;margin:16px 0}}
 @media print{@page{size:A4;margin:18mm}.judgment-report{max-width:none;border:0;padding:0;break-before:page;break-inside:auto}.judgment-report h3,.judgment-report h4{break-after:avoid}.judgment-report p{font-size:10.5pt;line-height:1.65;orphans:3;widows:3}.judgment-report section{break-inside:auto}}
 @media print{.source-card details{display:none!important}.judgment-report .source-chips{break-inside:avoid}}
+.wb-run-banner{flex-wrap:wrap}
+.wb-run-banner>span:nth-child(2){flex:1 1 240px;min-width:0}
+.wb-run-banner>.pill{flex-shrink:0}
+#wb-risk-scope{flex:1 0 100%;order:1;margin:0}

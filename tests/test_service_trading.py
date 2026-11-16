@@ -17,7 +17,7 @@ NOW=datetime(2026,11,14,0,0,tzinfo=timezone.utc)
 def fixture():
     policy={'market':'US','live_enabled':True,'account_seq':1,'max_order_krw':1000000,'max_daily_krw':3000000,
             'max_capital_krw':3000000,'allowed_symbols':['TEST'],'fee_buffer_fraction':'0.01'}
-    report={'event_id':'report-1','mode':'live','as_of':'2026-11-14','proposal':{'action':'adjust','eligibility':'review_now','weights':{'TEST':0.5,'CASH':0.5}}}
+    report={'risk_budget':{'scope':'confirmed','effective_fraction':.25,'reference_fraction':.25,'personal_tolerance_confirmed':None,'definition':'Synthetic stress test','notice':'Synthetic fixture, no consent claim'},'event_id':'report-1','mode':'live','as_of':'2026-11-14','proposal':{'action':'adjust','eligibility':'review_now','weights':{'TEST':0.5,'CASH':0.5}}}
     actual={'base_currency':'USD','cash':1000,'positions':{'TEST':2}}
     quote={'symbol':'TEST','timestamp':NOW.isoformat(),'lastPrice':'100','currency':'USD'}
     snapshot={'captured_at':NOW.isoformat(),'account_seq':1,'open_orders':{'orders':[],'hasNext':False},
