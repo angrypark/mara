@@ -195,6 +195,18 @@ class Agents:
             payload['decision_context']=semantics(payload['profile'],payload['market'])
             if payload.get('final_proposal'):
                 payload['final_numeric_check']=evaluate(payload['final_proposal']['weights'],payload['profile'],payload['market'],capital,payload['valuation'])
+            if payload.get('analysis') and payload.get('actual'):
+                # Research runs inside this call. Refresh every comparison row
+                # against those newly activated facts before R4 reads it. Only
+                # deterministic row fields are replaced; full historical/issuer
+                # exhibits remain from the immutable unprojected market.
+                from .analysis_pack import build
+                def comparison(weights):
+                    return build(payload['profile'],payload['actual'],payload['market'],payload['valuation'],capital,weights)['selected_comparison']
+                if 'perspective_comparisons' in payload['analysis']:
+                    payload['analysis']['perspective_comparisons']={r:comparison(v['weights']) for r,v in payload['perspectives'].items()}
+                if 'selected_comparison' in payload['analysis']:
+                    payload['analysis']['selected_comparison']=comparison(payload['analysis']['selected_weights'])
         original=copy.deepcopy(payload)
         current=copy.deepcopy(original)
         current['citation_scope']={'market_fact_ids':[f['id'] for f in original.get('market',{}).get('facts',[])],
@@ -210,7 +222,8 @@ class Agents:
         # Current and previous research summaries plus independent perspectives
         # remain bounded; raw provider responses never enter this budget.
         from .context_budget import LIMITS
-        context_limit=LIMITS.get(role,256000) if payload.get('market',{}).get('research') or payload.get('narrative_contract') else 100000
+        has_exhibits=bool(payload.get('analysis') or payload.get('report',{}).get('analysis'))
+        context_limit=LIMITS.get(role,256000) if payload.get('market',{}).get('research') or payload.get('narrative_contract') or has_exhibits else 100000
         current['input_budget']={'version':'role-envelope/1.0','max_characters':context_limit,
             'knowledge_characters':6000,'previous_completed_runs':1,
             'rule':'현재 근거와 현재 관점은 자르지 않아요. 이전 기록은 역할별 투영으로 전달하고 원본은 보존해요. 상한 초과는 명시적으로 실패하며 결론을 강제하지 않아요.'}

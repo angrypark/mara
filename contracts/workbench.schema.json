@@ -6980,6 +6980,555 @@
                       "type": "string"
                     }
                   }
+                },
+                "selected_comparison": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "weights",
+                    "capital",
+                    "base_currency",
+                    "numeric_checks",
+                    "numeric_scenario_assumptions",
+                    "fx_stress",
+                    "allocation_sleeves",
+                    "historical_performance",
+                    "scope"
+                  ],
+                  "properties": {
+                    "weights": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "additionalProperties": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "capital": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "base_currency": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 3
+                    },
+                    "numeric_checks": {
+                      "type": "object",
+                      "required": [
+                        "passed",
+                        "status",
+                        "errors",
+                        "missing",
+                        "warnings",
+                        "metrics"
+                      ],
+                      "properties": {
+                        "passed": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "missing": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "warnings": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "metrics": {
+                          "type": "object"
+                        }
+                      }
+                    },
+                    "numeric_scenario_assumptions": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "fx_stress": {
+                      "type": "object",
+                      "required": [
+                        "limitation",
+                        "scenarios",
+                        "base_currency"
+                      ],
+                      "properties": {
+                        "limitation": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1200
+                        },
+                        "base_currency": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 3
+                        },
+                        "scenarios": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "equity_return_assumption",
+                              "foreign_currency_return_in_base_assumption",
+                              "portfolio_change_fraction",
+                              "loss_on_proposal_capital"
+                            ],
+                            "properties": {
+                              "equity_return_assumption": {
+                                "type": "number"
+                              },
+                              "foreign_currency_return_in_base_assumption": {
+                                "type": "number"
+                              },
+                              "portfolio_change_fraction": {
+                                "type": "number"
+                              },
+                              "loss_on_proposal_capital": {
+                                "type": "number"
+                              }
+                            }
+                          },
+                          "maxItems": 20,
+                          "minItems": 0
+                        }
+                      }
+                    },
+                    "allocation_sleeves": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "version",
+                        "status",
+                        "scope",
+                        "capital",
+                        "monthly_contribution",
+                        "invested_fraction",
+                        "invested_weights",
+                        "rows",
+                        "usd_buffer_reference_fraction",
+                        "reference_authority",
+                        "unknown_asset_classes",
+                        "cash_warning"
+                      ],
+                      "properties": {
+                        "version": {
+                          "const": "allocation-sleeves/1"
+                        },
+                        "status": {
+                          "enum": [
+                            "decision_pending",
+                            "selected"
+                          ]
+                        },
+                        "scope": {
+                          "type": "string"
+                        },
+                        "capital": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "monthly_contribution": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "invested_fraction": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1.000001
+                        },
+                        "invested_weights": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1.000001
+                          }
+                        },
+                        "rows": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "symbol",
+                              "kind",
+                              "whole_fraction",
+                              "invested_fraction",
+                              "proposal_amount",
+                              "monthly_amount"
+                            ],
+                            "properties": {
+                              "symbol": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "enum": [
+                                  "cash",
+                                  "investment"
+                                ]
+                              },
+                              "whole_fraction": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1.000001
+                              },
+                              "invested_fraction": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 1.000001
+                              },
+                              "proposal_amount": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "monthly_amount": {
+                                "type": "number",
+                                "minimum": 0
+                              }
+                            }
+                          }
+                        },
+                        "usd_buffer_reference_fraction": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "reference_authority": {
+                          "type": "string"
+                        },
+                        "unknown_asset_classes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "cash_warning": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "historical_performance": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "available",
+                        "reason"
+                      ],
+                      "properties": {
+                        "available": {
+                          "const": false
+                        },
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    },
+                    "scope": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "perspective_comparisons": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "weights",
+                      "capital",
+                      "base_currency",
+                      "numeric_checks",
+                      "numeric_scenario_assumptions",
+                      "fx_stress",
+                      "allocation_sleeves",
+                      "historical_performance",
+                      "scope"
+                    ],
+                    "properties": {
+                      "weights": {
+                        "type": "object",
+                        "minProperties": 1,
+                        "additionalProperties": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        }
+                      },
+                      "capital": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "base_currency": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 3
+                      },
+                      "numeric_checks": {
+                        "type": "object",
+                        "required": [
+                          "passed",
+                          "status",
+                          "errors",
+                          "missing",
+                          "warnings",
+                          "metrics"
+                        ],
+                        "properties": {
+                          "passed": {
+                            "type": "boolean"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "errors": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "missing": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "warnings": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "metrics": {
+                            "type": "object"
+                          }
+                        }
+                      },
+                      "numeric_scenario_assumptions": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "fx_stress": {
+                        "type": "object",
+                        "required": [
+                          "limitation",
+                          "scenarios",
+                          "base_currency"
+                        ],
+                        "properties": {
+                          "limitation": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1200
+                          },
+                          "base_currency": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 3
+                          },
+                          "scenarios": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "equity_return_assumption",
+                                "foreign_currency_return_in_base_assumption",
+                                "portfolio_change_fraction",
+                                "loss_on_proposal_capital"
+                              ],
+                              "properties": {
+                                "equity_return_assumption": {
+                                  "type": "number"
+                                },
+                                "foreign_currency_return_in_base_assumption": {
+                                  "type": "number"
+                                },
+                                "portfolio_change_fraction": {
+                                  "type": "number"
+                                },
+                                "loss_on_proposal_capital": {
+                                  "type": "number"
+                                }
+                              }
+                            },
+                            "maxItems": 20,
+                            "minItems": 0
+                          }
+                        }
+                      },
+                      "allocation_sleeves": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "version",
+                          "status",
+                          "scope",
+                          "capital",
+                          "monthly_contribution",
+                          "invested_fraction",
+                          "invested_weights",
+                          "rows",
+                          "usd_buffer_reference_fraction",
+                          "reference_authority",
+                          "unknown_asset_classes",
+                          "cash_warning"
+                        ],
+                        "properties": {
+                          "version": {
+                            "const": "allocation-sleeves/1"
+                          },
+                          "status": {
+                            "enum": [
+                              "decision_pending",
+                              "selected"
+                            ]
+                          },
+                          "scope": {
+                            "type": "string"
+                          },
+                          "capital": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "monthly_contribution": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "invested_fraction": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1.000001
+                          },
+                          "invested_weights": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1.000001
+                            }
+                          },
+                          "rows": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "symbol",
+                                "kind",
+                                "whole_fraction",
+                                "invested_fraction",
+                                "proposal_amount",
+                                "monthly_amount"
+                              ],
+                              "properties": {
+                                "symbol": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "enum": [
+                                    "cash",
+                                    "investment"
+                                  ]
+                                },
+                                "whole_fraction": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1.000001
+                                },
+                                "invested_fraction": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ],
+                                  "minimum": 0,
+                                  "maximum": 1.000001
+                                },
+                                "proposal_amount": {
+                                  "type": "number",
+                                  "minimum": 0
+                                },
+                                "monthly_amount": {
+                                  "type": "number",
+                                  "minimum": 0
+                                }
+                              }
+                            }
+                          },
+                          "usd_buffer_reference_fraction": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "reference_authority": {
+                            "type": "string"
+                          },
+                          "unknown_asset_classes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "cash_warning": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "historical_performance": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "available",
+                          "reason"
+                        ],
+                        "properties": {
+                          "available": {
+                            "const": false
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "scope": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
                 }
               },
               "required": [

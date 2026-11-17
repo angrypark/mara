@@ -72,5 +72,9 @@ analysis.household.monitoring_exercise는 현재 입력 복사본에 소득 70%/
 
 분석 전용 위험 예산: decision_context.risk_budget.scope가 analysis_only면 effective_fraction은 이번 제안 원금의 충격 비교 가정이며 사용자가 수용한 손실률이 아니에요. max_loss_fraction/reference_fraction은 기존 기준으로 별도 비교해요. 더 적극적인 안을 비교할 수 있지만 실제 감내능력 확인·최대손실 보장·주문 가능으로 표현하지 않아요. 이 구분을 다음 회고와 활성 기억에서도 유지해요. 다른 현금·종목·섹터 제약은 바꾸지 않아요.
 
-## v1.12 · 2026-11-17 — 새 판단 이력과 투자 부분
+## v1.13 · 2026-11-17 — 새 판단 이력과 투자 부분
 과거 개선 회차의 사례별 비중/판정을 기본 가이드에서 제거했어요. 비교안 명칭은 추천이 아니며 초기 selected_weights는 비어 있어요. 결정 전 0 노출은 안전성 평가가 아니라 미정 상태예요. allocation-mandate 가이드에 따라 현금 완충과 공격적 투자 부분을 구분하고 최종 실제 선택 비중만 평가해요.
+
+## 개별주·섹터 ETF 대안의 계산 참조
+
+관점별 배분은 `/analysis/perspective_comparisons/wood`처럼 해당 객체 전체에 연결해요. 같은 기준액·시장 자료의 numeric_checks와 fx_stress를 비교할 수 있어요. 리더가 다른 비중을 선택하면 재계산 후 `/analysis/selected_comparison`에 그 비중이 생겨요. alternatives의 weights는 연결한 객체와 정확히 같아야 해요. 이 객체들은 결정론적 가정 비교이며 historical_performance.available=false예요. 수익률·Sharpe·최대낙폭을 계산했다고 쓰지 않아요. 상품별 stress_loss 합계와 주가·환율 교차항 시나리오는 서로 다른 가정이므로 같은 수치여야 한다고 해석하지 않아요. 공개 가치 근거의 부족은 별도로 판단해요. `/perspectives/...`나 monitoring은 계산된 대안 참조가 아니에요.

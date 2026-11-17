@@ -205,8 +205,12 @@ class Engine:
             from .evaluation import evaluator_fingerprint
             if stability['body'].get('evaluator_spec_hash')==evaluator_fingerprint(self.s,self.model,as_of):
                 stability_receipt=dict(stability['body'],source_event_id=stability['id'])
+        comparison_perspectives={}
         def build_analysis(*args):
             result=base_analysis(*args)
+            if comparison_perspectives:
+                result['perspective_comparisons']={role:base_analysis(p,h,m,val,capital,view['weights'])['selected_comparison']
+                    for role,view in comparison_perspectives.items()}
             if stability_receipt:result['comparison']['evaluator_stability']=copy.deepcopy(stability_receipt)
             return result
         analysis=build_analysis(p,h,m,val,capital)
@@ -284,9 +288,13 @@ class Engine:
         for role in personas():
             # No peer output enters any perspective call. Separate requests, no shared conversation state.
             perspectives[role], _ = call(role)
+        # Peer allocations are attached only AFTER every independent perspective.
+        comparison_perspectives.update(perspectives)
+        common['analysis']=build_analysis(p,h,m,val,capital)
         checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
         validation, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks})
         checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
+        common['analysis']=build_analysis(p,h,m,val,capital)
         proposal, proposal_id = call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation})
         from .report_references import errors as reference_errors
         for reference_attempt in (1,2,3):

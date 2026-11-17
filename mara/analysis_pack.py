@@ -155,6 +155,14 @@ def build(profile,actual,market,valuation,capital,selected=None):
         rates=conditions['published_rates'];fee=((1+rates['us_stock_standard_commission_fraction'])*(1+rates['fx_regular_effective_spread_fraction'])-1)*10000
         result['krw_comparison']=krw_compare(market,allocations,capital,monthly,max(1,round(profile['rebalance_every_days']/30.4375)),fee)
         result['krw_comparison']['cost_source_fact_id']=rates['fact_id']
+    if selected:
+        result['selected_comparison']={
+            'weights':dict(selected),'capital':capital,'base_currency':profile['base_currency'],
+            'numeric_checks':evaluate(selected,profile,market,capital,valuation),
+            'numeric_scenario_assumptions':{s:market['assets'].get(s,{}).get('stress_loss') for s,w in selected.items() if w>0 and s!='CASH'},
+            'fx_stress':result['fx_stress'],'allocation_sleeves':result['allocation_sleeves'],
+            'historical_performance':{'available':False,'reason':'이 객체는 동일 기준액의 결정론적 비중·위험 비교예요. 역사 수익률은 계산하지 않으며 별도 검증된 comparison/krw_comparison만 해당 범위에서 인용해요.'},
+            'scope':'수치 제약과 가정별 충격 비교. 기업 가격 타당성·기대수익·과거 성과·통계적 위험 또는 대안 우월성의 입증이 아니에요. numeric_checks는 상품별 stress_loss 합계이며 fx_stress는 별도 주가·환율·교차항 시나리오예요.'}
     return result
 
 
