@@ -4,8 +4,8 @@ import copy
 # Bounded delivery envelopes: 64k base + 368k supplemental facts, one preceding
 # week of maximum 38k narratives, and one rejected-output repair. Keep room for
 # schema/provenance metadata without silently dropping original counterarguments.
-LIMITS={'context':704000,'evidence':768000,'buffett':832000,'marks':832000,'bogle':832000,'wood':832000,
-        'reflection':832000,'memory':704000,'validation':1152000,'leader':1152000,'evaluator':1024000}
+LIMITS={'context':800000,'evidence':768000,'buffett':896000,'marks':896000,'bogle':896000,'wood':896000,
+        'reflection':896000,'memory':800000,'validation':1280000,'leader':1280000,'evaluator':1152000}
 PROPOSAL=('action','weights','rationale','dissent','risks','next_checks','premise_changes','validation_response','eligibility')
 
 

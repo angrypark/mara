@@ -49,7 +49,7 @@ window.MaraClarifications=(()=>{
     for(const n of history){const box=el('div','context-memory-item');box.append(el('small','hint',n.recorded_at.slice(0,10)+' 추가 설명'),el('p','',n.text));root.append(box)}
   }
   function update(nextJob,nextAnswers=[],notes=[]){
-    const merged=new Map(answers.map(a=>[a.question_id,a]));for(const a of nextAnswers){const old=merged.get(a.question_id);if(!old||a.recorded_at>=old.recorded_at)merged.set(a.question_id,a)}answers=[...merged.values()];history=notes;const sig=JSON.stringify([nextJob?.id,nextJob?.status,nextJob?.context_output_id,nextJob?.structured_questions]);
+    answers=[...nextAnswers];history=notes;const sig=JSON.stringify([nextJob?.id,nextJob?.status,nextJob?.context_output_id,nextJob?.structured_questions]);
     const changed=sig!==signature;if(changed){remember();signature=sig;job=nextJob;editing=null;index=0;
       if(job?.status==='needs_input'){const unanswered=qs().findIndex(q=>!answers.some(a=>a.question_id===q.id&&a.source_output_id===source()));index=Math.max(0,unanswered)}
       render(false)

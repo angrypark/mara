@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "mara.user-persona/1.0.0"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "as_of": {
+      "type": "string"
+    },
+    "profile_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "facts": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {},
+          "unit": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "unknown",
+              "recorded",
+              "user_stated",
+              "disputed"
+            ]
+          },
+          "source": {
+            "type": "object"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "value",
+          "unit",
+          "status",
+          "source",
+          "scope"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "preferences": {
+      "type": "object"
+    },
+    "risk": {
+      "type": "object",
+      "required": [
+        "investment_preference",
+        "reference_loss_fraction",
+        "confirmed_loss_capacity_fraction",
+        "budget_scope",
+        "rule"
+      ]
+    },
+    "current_context": {
+      "type": "string"
+    },
+    "unknowns": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "blocks_research"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "blocks_research": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "source_policy": {
+      "type": "string"
+    },
+    "handoff_policy": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "current",
+        "draft"
+      ]
+    },
+    "basis_id": {
+      "type": "string"
+    },
+    "answer_memory": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "answer_memory_scope": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "version",
+    "as_of",
+    "profile_id",
+    "title",
+    "summary",
+    "facts",
+    "preferences",
+    "risk",
+    "current_context",
+    "unknowns",
+    "source_policy",
+    "handoff_policy",
+    "status",
+    "answer_memory",
+    "answer_memory_scope"
+  ],
+  "additionalProperties": false
+}

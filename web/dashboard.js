@@ -9,6 +9,8 @@ let initialized=false, displayed=null, running=false, selectedHistory=false;
 let modelReady=null, lastJobSignature=null, expectedJobId=null, feedbackIssues=[];
 let modelSettingsInitialized=false, savedModelProvider='openai';
 let demoReport=null, viewChosen=false, showingDemo=false, generateLabel='초기 포트폴리오 제안 생성';
+let latestJobStatus=null,advancedDirty=false;
+form.addEventListener('input',e=>{if(e.target.closest('#advanced-settings'))advancedDirty=true});
 function selectView(name,chosen=true){
   if(chosen)viewChosen=true;const report=name==='report';
   form.hidden=report;$('report-panel').hidden=!report;$('setup-toc').hidden=report;$('report-toc').hidden=!report;
@@ -26,6 +28,7 @@ function restore(value){if(Object.keys(value).length&&!value.contribution_schedu
 function focusTarget(target){
   selectView(target==='proposal'?'report':'setup');
   const el=form.elements.namedItem(target)||$(target);if(!el)return;
+  if(el.closest('#advanced-settings'))$('advanced-settings').open=true;
   if(target==='model-settings')el.open=true;
   el.scrollIntoView({block:'center',behavior:'smooth'});
   const input=target==='model-settings'?$('model-id'):el;
@@ -94,16 +97,19 @@ async function load(){const sequence=++loadSequence;try{
   const s=await api('/api/state');if(sequence!==loadSequence)return;const o=s.onboarding;text('service','실행 중');text('broker-state',s.broker_connected?'조회 연결 확인':'연결 확인 필요');text('broker-time',s.broker_check?.checked_at?'최근 확인 '+new Date(s.broker_check.checked_at).toLocaleString('ko-KR'):'보유 불러오기로 확인해주세요.');
   if(!initialized){snapshot(o.snapshot,true);restore(o.draft);if(o.snapshot)form.elements.snapshot_id.value=o.snapshot.id;form.elements.confirmed.checked=false;initialized=true}
   modelStatus(o.model);text('capital-limit','기존 보유와 현금을 합친 운용 상한: '+money(o.capital_limit));generateLabel=o.latest?'포트폴리오 평가·제안 생성':'초기 포트폴리오 제안 생성';running=o.job?.status==='running';text('job',o.job?.message||'');for(const id of ['generate','refresh-holdings','save-model'])$(id).disabled=running||busy.has(id);
+  latestJobStatus=o.job?.status;window.MaraPersona?.refresh(o);
   window.MaraClarifications?.update(o.job,o.clarification_answers,o.context_note_history);
   $('generate').textContent=running?'포트폴리오 분석 중…':busy.has('generate')?'요청 확인 중…':generateLabel;updateJob(o.job);
-  if(o.latest&&o.latest.id!==displayed&&!selectedHistory){show(o.latest);if(!viewChosen||o.job?.id===expectedJobId)selectView('report',false)}
+  if(o.latest&&o.latest.id!==displayed&&!selectedHistory){show(o.latest);if(o.job?.id===expectedJobId)selectView('report',false)}
   $('historylist').replaceChildren(...o.history.map(r=>{const div=document.createElement('div'),b=document.createElement('button');b.type='button';b.className='rowbutton';b.textContent=r.as_of+' · '+({adjust:'조정 제안',hold:'유지',defer:'보류'}[r.action]||r.action)+(r.revision_of?' · 수정본':'');b.onclick=async()=>{try{show(await api('/api/portfolio/report/'+r.id));selectedHistory=true;selectView('report')}catch(e){text('message',e.message)}};div.append(b);return div}));
   demoReport=s.latest;$('demo-view').disabled=!demoReport;
   window.MaraWorkbench?.refresh();
   if(s.latest)text('demo-result',pretty({구분:'합성 데모',평가일:s.latest.effective,제안:s.latest.body.proposal,회고:s.latest.body.reflection}));
 }catch(e){text('service','연결 확인 필요');text('message','서비스 상태를 불러오지 못했어요. '+e.message)}}
 async function action(button,fn){if(busy.has(button.id))return;busy.add(button.id);button.disabled=true;try{await fn()}catch(e){text('message',e.message);if(button.id==='generate'||button.id==='save-draft')generationFeedback(e.message,[],'error',true);if(button.id==='save-model')text('model-message',e.message);if(button.id==='refresh-holdings')text('snapshot-time',e.message)}finally{busy.delete(button.id);button.disabled=running&&['generate','refresh-holdings','save-model'].includes(button.id);if(button.id==='generate')button.textContent=running?'포트폴리오 분석 중…':generateLabel}}
-window.MaraClarifications?.init({api,submit:()=>form.requestSubmit()});
+window.MaraPersona?.init({api,syncContext:async()=>{const s=await api('/api/state');latestJobStatus=s.onboarding.job?.status;window.MaraClarifications?.update(s.onboarding.job,s.onboarding.clarification_answers,s.onboarding.context_note_history)},needsInput:()=>latestJobStatus==='needs_input',analysisStarted:result=>{expectedJobId=result.job_id;lastJobSignature=null;selectedHistory=false;running=true;load()},
+  profileChanged:async persona=>{if(!persona?.body?.profile_id||advancedDirty)return;const s=await api('/api/state');if(s.onboarding.draft.profile_base_id===persona.body.profile_id)restore(s.onboarding.draft)}});
+window.MaraClarifications?.init({api,submit:()=>window.MaraPersona?.current()?window.MaraPersona.analyze():form.requestSubmit()});
 $('save-draft').onclick=()=>action($('save-draft'),async()=>{await api('/api/setup/draft',readForm());const message='입력을 이 Mac에 임시 저장했어요. 주문이나 분석은 실행하지 않았어요.';text('message',message);generationFeedback(message,[],'success')});
 $('refresh-holdings').onclick=()=>action($('refresh-holdings'),async()=>{text('message','토스 보유와 섹터 목록을 조회하고 있어요.');snapshot(await api('/api/setup/holdings',{}),true);text('message','보유를 불러왔어요. 실제 현금과 보유 확인란을 확인해주세요.')});
 $('clear-sectors').onclick=()=>{for(const key of ['preferred_sectors','excluded_sectors'])for(const o of form.elements[key].options)o.selected=false};

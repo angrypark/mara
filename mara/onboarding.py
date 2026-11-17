@@ -31,7 +31,7 @@ FIELDS={'goal','horizon_months','total_assets','monthly_income','monthly_expense
     'min_cash_fraction','max_foreign_fraction','snapshot_id','confirmed','revision_reason','context_notes',
     'contribution_schedule','funding_source','horizon_purpose','property_value','mortgage_balance',
     'monthly_debt_payment','mortgage_rate','outside_emergency_cash','debt_payment_in_expenses',
-    'investment_style','usd_buffer_reference_fraction','reported_liquid_cash','contribution_risk_preference','loss_budget_scope','analysis_loss_budget'}
+    'investment_style','usd_buffer_reference_fraction','reported_liquid_cash','contribution_risk_preference','loss_budget_scope','analysis_loss_budget','profile_base_id'}
 
 
 class InputError(ValueError): pass
@@ -203,6 +203,8 @@ class PortfolioSetup:
         value=clean_draft(value)
         with self.session() as s:
             prior=s.latest('profile')
+            if prior and s.events('persona_message') and value.get('profile_base_id')!=prior['id']:
+                raise InputError('개인 페르소나가 변경됐어요. 오래 열린 상세 입력 대신 최신 페르소나를 불러와주세요.')
             if prior and prior['body'].get('loss_budget_scope')=='analysis_only' and 'loss_budget_scope' not in value:
                 value.update(loss_budget_scope='analysis_only',analysis_loss_budget=prior['body']['analysis_loss_budget'])
         return value
@@ -211,8 +213,15 @@ class PortfolioSetup:
         value=self.scoped_input(value)
         # Confirmation is per generation, not a durable authorization.
         value['confirmed']=False
-        with self.session() as s: eid=s.append('onboarding_draft',value,date.today().isoformat())
+        with self.session() as s,s.store.transaction():
+            prior=s.latest('profile')
+            if prior and s.events('persona_message') and value.get('profile_base_id')!=prior['id']:raise InputError('개인 페르소나가 변경됐어요. 최신 내용을 불러와주세요.')
+            eid=s.append('onboarding_draft',value,date.today().isoformat())
         return {'saved':True,'id':eid}
+
+    def start_persona(self,value):
+        from .persona_analysis import start
+        return start(self,value)
 
     def refresh(self):
         with self.broker() as (b,c):
@@ -236,13 +245,22 @@ class PortfolioSetup:
     def state(self):
         with self.session() as s:
             reports=s.events('completed'); draft=s.latest('onboarding_draft'); job=s.latest('onboarding_job')
+            draft_value=copy.deepcopy(draft['body']) if draft else {}
+            current_profile=s.latest('profile')
+            if current_profile and draft_value.get('profile_base_id')!=current_profile['id']:
+                from .persona_chat import draft_projection
+                draft_value=draft_projection(current_profile['body'],draft_value,current_profile['id'])
             job_value=copy.deepcopy(job['body']) if job else None
             diagnostic=failed_job_diagnostic(s,job) if job else None
             if diagnostic:job_value.update(message=diagnostic.message,output_validation=diagnostic.details,
                 diagnostic_source='read_only_validation_of_original_output')
             if job_value and job_value.get('status')=='needs_input' and job_value.get('context_output_id'):
-                job_value['structured_questions']=questions(s.get(job_value['context_output_id'])['body']['output'])
-            return {'draft':draft['body'] if draft else {},'snapshot':self.public_snapshot(s.latest('onboarding_snapshot')),
+                source=s.get(job_value['context_output_id'])
+                job_value['structured_questions']=questions(source['body']['output'])
+                started=next((e for e in s.events('run_started') if e['run_id']==source['run_id']),None)
+                if current_profile and started and current_profile['body'].get('context_answer_cutoff_seq') and started['body']['profile_id']!=current_profile['id'] and current_profile['body'].get('clarification_source_run_id')!=source['run_id']:
+                    job_value.update(status='context_updated',structured_questions=[],questions=[],message='이전 확인 요청 이후 개인 페르소나가 갱신됐어요. 현재 페르소나로 다시 분석할 수 있어요.')
+            return {'draft':draft_value,'snapshot':self.public_snapshot(s.latest('onboarding_snapshot')),
                 'model':self.model_state(),'latest':present(s,reports[-1]) if reports else None,
                 'history':[{'id':r['id'],'as_of':r['effective'],'action':r['body']['proposal']['action'],
                             'revision_of':r['body'].get('revision_of'),'previous_id':r['body'].get('previous_id')} for r in reversed(reports[-40:])],
@@ -253,7 +271,17 @@ class PortfolioSetup:
     def answer_context(self,value):
         with self.guard:
             if self.thread and self.thread.is_alive():raise InputError('진행 중인 분석이 끝난 뒤 답변을 수정해주세요.')
-            with self.session() as s:return save_answers(s,value)
+            with self.session() as s,s.store.transaction():
+                result=save_answers(s,value);current=s.latest('profile')
+                if current and not result.get('duplicate'):
+                    from .history import profile_input,scope
+                    from .persona_chat import draft_projection
+                    p=profile_input(current['body'],scope(s));p['clarification_answers']=result['answers']
+                    p=profile_input(p,{'after_seq':1,'reset_id':scope(s)['reset_id']})
+                    p['clarification_source_run_id']=s.get(value['context_output_id'])['run_id']
+                    pid=Engine(s,None).set_profile(p,date.today().isoformat());old=s.latest('onboarding_draft')
+                    s.append('onboarding_draft',draft_projection(p,old['body'] if old else {},pid),date.today().isoformat())
+                return result
 
     def report(self,eid):
         with self.session() as s:
@@ -458,9 +486,19 @@ class PortfolioSetup:
             from .history import profile_input,scope
             previous_profile=s.latest('profile')
             if previous_profile:p['confirmed_answer_facts']=profile_input(previous_profile['body'],scope(s)).get('confirmed_answer_facts',[])
+            if previous_profile:
+                for key in ('persona_preferences','persona_fact_sources','persona_loss_capacity_confirmed','context_answer_cutoff_seq','financial_assets_basis','contested_fields'):
+                    if key in previous_profile['body']:p[key]=copy.deepcopy(previous_profile['body'][key])
+                from .persona import value_at
+                for field in list(p.get('persona_fact_sources',{})):
+                    if value_at(p,field)!=value_at(previous_profile['body'],field):
+                        p['persona_fact_sources'][field]={'kind':'form_input','draft_id':s.latest('onboarding_draft')['id']}
+                if p['max_loss_fraction']!=previous_profile['body']['max_loss_fraction']:p['persona_loss_capacity_confirmed']=False
             p['clarification_answers']=answers(s)
             p['context_note_history']=notes_history(s,p.get('context_notes',''))
             with s.store.transaction():
+                if s.events('persona_message') and value.get('profile_base_id')!=s.latest('profile')['id']:
+                    raise InputError('시장 자료를 준비하는 동안 페르소나가 바뀌었어요. 최신 맥락에서 다시 분석해주세요.')
                 source_id=s.append('onboarding_evidence',{'snapshot_id':snapshot['id'],'captured_at':captured.isoformat(),
                     'holdings':fresh,'stocks':stocks,'prices':prices,'fx':fx,'sectors':memberships},today)
                 actual['evidence_id']=source_id

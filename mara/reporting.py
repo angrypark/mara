@@ -5,6 +5,12 @@ import copy
 def present(session,row):
     if row is None:return None
     result=copy.deepcopy(session.get(row['id']));r=result['body']
+    comparison=r.get('analysis',{}).get('comparison',{})
+    if comparison.get('available') and 'sensitivity' not in comparison:
+        # Old all-cash results could finish the base comparison then fail the
+        # cash-only sensitivity calendar. Preserve originals; display the gap.
+        comparison['sensitivity']=[]
+        comparison['sensitivity_unavailable_reason']='이 원본 보고서의 추가 민감도 계산은 완료되지 않았어요. 화면에서는 빈 검증 목록으로 표시하며 원본과 점수는 변경하지 않아요.'
     if row['kind']!='completed':raise PermissionError('Completed report required')
     from .history import market_input,profile_input
     boundary=r.get('history_scope',{'after_seq':0,'reset_id':None})
@@ -48,7 +54,10 @@ def present(session,row):
             'source':quote['source'],'previous_price':before['price'] if before else None,
             'previous_observed_at':before['observed_at'] if before else None,
             'price_change':quote['price']/before['price']-1 if before and before['price'] else None})
-    result['view']={'version':1,'kind':'revision' if r.get('revision_of') else 'weekly' if previous else 'initial',
+    from .persona import snapshot
+    frozen_persona=snapshot(session.get(r['persona_id'])) if r.get('persona_id') else None
+    latest_profile=session.latest('profile')
+    result['view']={'user_persona':frozen_persona,'persona_is_current':bool(frozen_persona and latest_profile and latest_profile['id']==r['profile_id']), 'version':1,'kind':'revision' if r.get('revision_of') else 'weekly' if previous else 'initial',
         'base_currency':profile['base_currency'],'context':analyses.get('context'),
         'judgment_reports':list(role_reports.values()),
         'judgment_report_status':{'available':bool(role_reports),'final_action':r['proposal']['action'],

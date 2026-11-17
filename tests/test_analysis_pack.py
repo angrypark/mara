@@ -22,6 +22,11 @@ class AnalysisPackTests(unittest.TestCase):
         self.assertIn('proposal',receipt['verified_portfolios']);self.assertIn('Does not validate',receipt['scope'])
         self.assertNotIn('recomputed',receipt)
 
+    def test_all_cash_proposal_preserves_benchmark_only_sensitivity(self):
+        p,m,a,v=fixture();c=build(p,a,m,v,1000,{'CASH':1})['comparison']
+        self.assertTrue(c['available']);self.assertTrue(c['sensitivity'])
+        self.assertTrue(all(any(k!='CASH' for k in row['comparison_anchor_weights']) for row in c['sensitivity']))
+
     def test_zero_future_contributions_do_not_create_fake_sensitivity(self):
         from mara.quantitative_verifier import verify
         p,m,a,v=fixture();p['contribution_amount']=0

@@ -108,6 +108,9 @@ def evaluate_report(s,model,completed_id):
         'rubric':r,'rubric_hash':rhash,'reference_guide':resource('guides/portfolio-report-benchmarks.md').read_text() if r['version'].startswith('2.') else resource('guides/reference-reports.md').read_text(),
         'evaluation_scope':'frozen report quality; no hindsight returns or new market evidence'}
     payload['projection']={'version':'evaluation-input/1.1','deduplication':'perspective outputs, leader proposal, both R4 results and reflection are preserved once under report. R1/R2 under role_outputs. Original invocation events remain in the run.'}
+    if report.get('persona_id'):
+        from .persona import snapshot
+        payload['user_persona']=snapshot(s.get(report['persona_id']))
     s.append('evaluation_status',{'status':'running','completed_id':completed_id,'rubric_hash':rhash},date.today().isoformat(),run_id)
     try:
         output,oid=evaluator.call('evaluator',payload)

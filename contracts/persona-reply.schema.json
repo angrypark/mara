@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "reply": {
+      "type": "string",
+      "maxLength": 4000,
+      "minLength": 1
+    },
+    "updates": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "enum": [
+              "cash_need",
+              "cash_need_date",
+              "context_notes",
+              "contribution_amount",
+              "contribution_every_days",
+              "contribution_schedule",
+              "criteria.max_sector_fraction",
+              "funding_source",
+              "goal",
+              "horizon_months",
+              "horizon_purpose",
+              "household.debt_payment_in_expenses",
+              "household.monthly_debt_payment",
+              "household.mortgage_balance",
+              "household.mortgage_rate",
+              "household.property_value",
+              "household.reported_liquid_cash",
+              "investment_style",
+              "max_loss_fraction",
+              "max_position_fraction",
+              "monthly_expenses",
+              "monthly_income",
+              "persona_preferences.interests",
+              "persona_preferences.investment_preferences",
+              "persona_preferences.risk_preference",
+              "persona_preferences.sector_interests",
+              "rebalance_every_days",
+              "usd_buffer_reference_fraction"
+            ]
+          },
+          "value": {
+            "type": [
+              "string",
+              "number"
+            ]
+          },
+          "basis_quote": {
+            "type": "string",
+            "maxLength": 1200,
+            "minLength": 1
+          },
+          "certainty": {
+            "enum": [
+              "explicit",
+              "interpretation"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "field",
+          "value",
+          "basis_quote",
+          "certainty",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "question": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "topic": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "prompt": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "revisit_reason": {
+              "type": "string",
+              "maxLength": 600
+            },
+            "options": {
+              "type": "array",
+              "maxItems": 3,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "label",
+                  "message"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "topic",
+            "prompt",
+            "revisit_reason",
+            "options"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "required": [
+    "reply",
+    "updates",
+    "question"
+  ],
+  "additionalProperties": false
+}

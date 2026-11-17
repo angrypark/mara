@@ -45,3 +45,7 @@ v1.5 · 2026-11-16: funding.source=future_income이면 제안 기준액 전부�
 
 
 분석 전용 위험 예산: decision_context.risk_budget.scope가 analysis_only면 effective_fraction은 이번 제안 원금의 충격 비교 가정이며 사용자가 수용한 손실률이 아니에요. max_loss_fraction/reference_fraction은 기존 기준으로 별도 비교해요. 더 적극적인 안을 비교할 수 있지만 실제 감내능력 확인·최대손실 보장·주문 가능으로 표현하지 않아요. 이 구분을 다음 회고와 활성 기억에서도 유지해요. 다른 현금·종목·섹터 제약은 바꾸지 않아요.
+
+## 개인 페르소나 전달
+
+user_persona는 실행 시작 시 profile과 함께 고정한 개인 맥락 버전이에요. facts의 recorded/user_stated/unknown과 preferences의 explicit/interpretation을 구분해요. confirmed_answer_facts의 직접 답변과 최신 persona/profile을 함께 확인하고, 이미 아는 내용을 다시 질문할 때는 현재 사실과 충돌하거나 바뀐 구체적인 revisit_reason이 있어야 해요. 높은 투자 의지를 감내손실의 숫자로 바꾸지 않아요. unknowns.blocks_research=false는 조건부 연구를 막는 필수 질문이 아니에요. 실제 주문·보유 확인은 별도이며 이번 흐름은 개인 페르소나에 따른 연구 제안이에요.

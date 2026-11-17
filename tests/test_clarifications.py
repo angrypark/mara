@@ -106,14 +106,16 @@ class ClarificationFlowTests(unittest.TestCase):
     setUp=fixtures.SetupTests.setUp
     tearDown=fixtures.SetupTests.tearDown
 
-    def ask(self):
+    def ask(self, direct=False):
         class Asking(TestModel):
             def complete(model,role,guide,p,contract):
                 return output(question()) if role=='context' else super().complete(role,guide,p,contract)
         self.app.model_factory=Asking
         self.app.start(self.value);self.app.thread.join(10)
         job=self.app.state()['job'];self.assertEqual(job['status'],'needs_input')
-        self.app.answer_context(request(job['context_output_id']))
+        if direct:
+            with self.app.session() as s:save_answers(s,request(job['context_output_id']))
+        else:self.app.answer_context(request(job['context_output_id']))
         return job
 
     def test_saved_answers_reach_all_agents_and_notes_survive_shorter_input(self):
@@ -158,7 +160,7 @@ class ClarificationFlowTests(unittest.TestCase):
         self.assertTrue(self.app.state()['job']['structured_questions'][0]['revisit_reason'])
 
     def test_common_engine_freezes_updated_answers_even_without_onboarding(self):
-        self.ask()
+        self.ask(direct=True)
         with self.app.session() as s:
             # The prior failed run's profile precedes the answer event.
             before=s.latest('profile');self.assertFalse(before['body']['clarification_answers'])

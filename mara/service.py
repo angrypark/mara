@@ -23,6 +23,7 @@ from .clarifications import ClarificationError
 from .contracts import schema
 from .company_research import CompanyLibrary
 from .decision_actions import DecisionActions
+from .persona_chat import PersonaConversations,PersonaError
 
 
 def resource(relative):
@@ -44,7 +45,7 @@ class Application:
         self.mutex=threading.RLock()
         self.nonce=secrets.token_urlsafe(32)
         # Serve the UI from the same process version as its API, even while files are edited.
-        self.assets={name:resource('web/'+name).read_text() for name in ['dashboard.html','dashboard.js','report.js','workbench.js','clarifications.js','dashboard.css']}
+        self.assets={name:resource('web/'+name).read_text() for name in ['dashboard.html','dashboard.js','report.js','workbench.js','clarifications.js','persona.js','dashboard.css']}
         self.last_error=None
         config=self.directory/'demo-session.json'
         db=Store(self.path)
@@ -54,6 +55,7 @@ class Application:
         db.session(self.token)  # fail closed for mismatched database/config
         db.close()
         self.setup=PortfolioSetup(self.directory)
+        self.persona=PersonaConversations(self.setup)
         self.library=CompanyLibrary(self.directory/'company-research',quote_provider=self.setup.research_quote)
         self.dialogues={'portfolio':Dialogues(self.setup.session,self.setup.analysis_model,self.library),
                         'demo':Dialogues(self.demo_session,DemoModel)}
@@ -81,6 +83,7 @@ class Application:
         self.setup.recover()
         for manager in self.dialogues.values():manager.recover()
         for manager in self.actions.values():manager.recover()
+        self.persona.recover()
 
     def run_demo(self, next_week=False):
         with self.mutex:
@@ -167,9 +170,11 @@ def make_server(app,port):
                 if self.path=='/report.js': return self.send(200,app.assets['report.js'],'text/javascript; charset=utf-8')
                 if self.path=='/workbench.js': return self.send(200,app.assets['workbench.js'],'text/javascript; charset=utf-8')
                 if self.path=='/clarifications.js': return self.send(200,app.assets['clarifications.js'],'text/javascript; charset=utf-8')
+                if self.path=='/persona.js': return self.send(200,app.assets['persona.js'],'text/javascript; charset=utf-8')
                 if self.path=='/dashboard.css': return self.send(200,app.assets['dashboard.css'],'text/css; charset=utf-8')
                 if self.path=='/health': return self.send(200,{'status':'ok','mode':'portfolio','live_trading':False})
                 if self.path=='/api/state': return self.send(200,app.state())
+                if self.path=='/api/persona': return self.send(200,app.persona.read())
                 parts=self.path.strip('/').split('/')
                 if parts[:2]==['api','contracts'] and len(parts)==3:
                     try:return self.send(200,schema(parts[2]))
@@ -190,6 +195,7 @@ def make_server(app,port):
             if not self.host_ok() or self.headers.get('Origin')!=origin or self.headers.get('X-Mara-CSRF')!=app.nonce:
                 return self.send(403,{'error':'화면이 갱신되었거나 요청 출처를 확인할 수 없어요. 화면을 새로고침한 뒤 다시 시도해주세요.'})
             routes={'/api/setup/draft':app.setup.draft,'/api/setup/model':app.setup.save_model,
+                    '/api/persona/messages':app.persona.start,'/api/persona/analyze':app.setup.start_persona,
                     '/api/setup/generate':app.setup.start,'/api/setup/holdings':lambda body:app.setup.refresh(),
                     '/api/setup/answers':app.setup.answer_context}
             for scope,manager in app.dialogues.items():routes['/api/dialogue/'+scope]=manager.start
@@ -207,7 +213,7 @@ def make_server(app,port):
                 body=json.loads(self.rfile.read(length))
                 if not isinstance(body,dict): raise InputError('입력 형식을 확인해주세요.')
                 self.send(202 if self.path=='/api/setup/generate' or self.path.startswith('/api/dialogue/') else 200,routes[self.path](body))
-            except (InputError,DialogueError,ClarificationError) as exc: self.send(400,{'error':str(exc)})
+            except (InputError,DialogueError,ClarificationError,PersonaError) as exc: self.send(400,{'error':str(exc)})
             except PermissionError:self.send(404,{'error':'선택한 실행 또는 에이전트를 찾을 수 없어요.'})
             except (ValueError,UnicodeError): self.send(400,{'error':'입력 형식을 확인해주세요.'})
             except Exception: self.send(503,{'error':'처리하지 못했어요. 연결 설정을 확인하고 다시 시도해주세요.'})

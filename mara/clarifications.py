@@ -27,7 +27,10 @@ def answers(session,as_of=None):
     latest={}
     from .history import events,scope
     boundary=scope(session,as_of or '9999-12-31')
+    profile=session.latest('profile',as_of or '9999-12-31')
+    cutoff=profile['body'].get('context_answer_cutoff_seq',0) if profile else 0
     for event in events(session,'clarification_answer',as_of or '9999-12-31',boundary):
+        if event['seq']<=cutoff:continue
         latest[event['body']['question_id']]=dict(event['body'],answer_id=event['id'],recorded_at=event['recorded'],history_reset_id=boundary['reset_id'])
     return list(latest.values())
 
@@ -50,6 +53,7 @@ def notes_history(session,current):
 
 def save_answers(session,body):
     # Read the expected version and append atomically, including independent sessions.
+    if session.store.in_transaction:return _save_answers(session,body)
     with session.store.transaction():return _save_answers(session,body)
 
 
@@ -65,6 +69,11 @@ def _save_answers(session,body):
             return {'saved':True,'duplicate':True,'answers':answers(session)}
     source=session.get(source_id)
     if source['kind']!='agent_output' or source['body'].get('role')!='context':raise PermissionError('Context output required')
+    current=session.latest('profile')
+    if current and current['body'].get('context_answer_cutoff_seq'):
+        started=next((e for e in session.events('run_started') if e['run_id']==source['run_id']),None)
+        if started and started['body']['profile_id']!=current['id'] and current['body'].get('clarification_source_run_id')!=source['run_id']:
+            raise ClarificationError('개인 페르소나가 변경됐어요. 옛 질문 대신 현재 대화에서 바뀐 내용을 이어서 알려주세요.')
     known={q['id']:q for q in questions(source['body']['output'])}
     if not isinstance(submitted,list) or not 1<=len(submitted)<=3:raise ClarificationError('한 번에 1~3개 질문에 답해주세요.')
     latest={x['question_id']:x for x in answers(session)};pending=[];ids=set()
@@ -95,5 +104,5 @@ def repeated_questions(output,profile):
     # Semantic equivalence cannot be proven with a string ID. Once context exists,
     # every follow-up must compare known answers with the remaining gap, even if
     # the model renamed its fact ID/topic or rephrased a historical prose question.
-    prior=profile.get('clarification_answers') or profile.get('context_note_history')
+    prior=profile.get('clarification_answers') or profile.get('context_note_history') or profile.get('confirmed_answer_facts') or profile.get('persona_fact_sources') or profile.get('persona_preferences')
     return [q for q in questions(output) if prior and not q['revisit_reason'].strip()]

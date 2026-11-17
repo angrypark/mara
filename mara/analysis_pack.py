@@ -67,8 +67,10 @@ def build(profile,actual,market,valuation,capital,selected=None):
                 for r in [evaluate(w,profile,market,capital,valuation)]},
             'unavailable_selected_assets':[s for s,w in (selected or {}).items() if w>0 and s!='CASH' and s not in histories]}
         # Same assets, dates and flows; change exactly one declared assumption.
-        anchor={'comparison_anchor':allocations.get('proposal',allocations.get('ITOT_40',next(w for w in allocations.values() if w.get('CASH',0)<1)))}
+        proposed=allocations.get('proposal')
+        anchor={'comparison_anchor':proposed if proposed and any(s!='CASH' and w>0 for s,w in proposed.items()) else allocations.get('ITOT_40',next(w for w in allocations.values() if w.get('CASH',0)<1))}
         sensitivity=[]
+        comparison['sensitivity']=sensitivity
         base_rebalance=result['assumptions']['rebalance_months']
         for changed,cost,rebalance,flow,cash_yield in [('cost',0,base_rebalance,monthly/capital*100,0),('cost',50,base_rebalance,monthly/capital*100,0),('rebalance',10,1 if base_rebalance!=1 else 3,monthly/capital*100,0),('rebalance',10,12 if base_rebalance!=12 else 6,monthly/capital*100,0),('contribution',10,base_rebalance,0,0),('cash_yield',10,base_rebalance,monthly/capital*100,.02)]:
             if changed=='contribution' and monthly==0:continue
@@ -77,6 +79,7 @@ def build(profile,actual,market,valuation,capital,selected=None):
         comparison['sensitivity']=sensitivity
     except (ValueError,KeyError,TypeError,StopIteration) as exc:
         comparison['error_type']=type(exc).__name__
+        if comparison.get('available'):comparison['sensitivity_unavailable_reason']='추가 민감도 계산이 완료되지 않았어요. 기본 배분 비교와 별개이며 누락된 검증을 통과로 해석하지 않아요.'
     if selected is None:selected={}
     foreign_symbols={s for s in selected if s!='CASH' and market['assets'].get(s,{}).get('currency') not in (None,profile['base_currency'])}
     unknown_currency=[s for s,w in selected.items() if w>0 and s!='CASH' and market['assets'].get(s,{}).get('currency') is None]

@@ -50,7 +50,12 @@ class Engine:
 
     def set_profile(self, profile, as_of):
         d.profile(profile)
-        return self.s.append('profile',profile,as_of)
+        from .persona import ensure
+        from contextlib import nullcontext
+        with (nullcontext() if self.s.store.in_transaction else self.s.store.transaction()):
+            eid=self.s.append('profile',profile,as_of)
+            ensure(self.s,self.s.get(eid))
+        return eid
 
     def set_holdings(self, holdings):
         d.holdings(holdings)
@@ -72,13 +77,13 @@ class Engine:
         due = last is None or d.day(as_of) >= d.day(last['body']['next_evaluation'])
         return {'due':due,'next_evaluation':last['body']['next_evaluation'] if last else as_of}
 
-    def run(self, as_of, market_id=None, force=False, revision_reason=None, amendment=None, improvement=None, evaluate_after=True):
+    def run(self, as_of, market_id=None, force=False, revision_reason=None, amendment=None, improvement=None, evaluate_after=True, profile_id=None, actual_id=None):
         d.day(as_of)
         run_id = uuid.uuid4().hex
         self.s.append('execution_intent',{'campaign_id':(improvement or {}).get('campaign_id'),'run_id':run_id,'kind':'portfolio_decision'},as_of,run_id)
         self.s.lock(run_id)
         try:
-            result=self._run(as_of,market_id,force,run_id,revision_reason,amendment,improvement)
+            result=self._run(as_of,market_id,force,run_id,revision_reason,amendment,improvement,profile_id,actual_id)
             from .evaluation import evaluate_report
             try:
                 if evaluate_after:evaluate_report(self.s,self.model,result['event_id'])
@@ -93,7 +98,7 @@ class Engine:
         finally:
             self.s.unlock(run_id)
 
-    def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None, improvement=None):
+    def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None, improvement=None, profile_id=None, actual_id=None):
         boundary=history.scope(self.s)
         if boundary['reset_id'] and self.s.get(boundary['reset_id'])['effective']>as_of:raise ValueError('Cannot create a decision before the active history reset')
         previous = history.latest(self.s,'completed',boundary=boundary)
@@ -117,10 +122,14 @@ class Engine:
         elif previous and as_of <= previous['effective']: raise ValueError('Completed dates must advance; no duplicate weekly result')
         if not force and not revision_of and not self.due(as_of)['due']: raise ValueError('Weekly evaluation not due; use --force for an explicit early review')
         pe, he = self.s.latest('profile',as_of), self.s.latest('actual',as_of)
+        if profile_id:pe=self.s.get(profile_id)
+        if actual_id:he=self.s.get(actual_id)
         if frozen:
+            if profile_id or actual_id:raise ValueError('Frozen amendment already pins its original context')
             pe=self.s.get(frozen['body']['profile_id']);he=self.s.get(frozen['body']['actual_id'])
         me = self.s.get(market_id) if market_id else self.s.latest('market',as_of,shared=True)
         if pe is None or he is None or me is None: raise ValueError('Profile, actual holdings and market snapshot required')
+        if pe['kind']!='profile' or he['kind']!='actual' or pe['effective']>as_of or he['effective']>as_of:raise ValueError('Invalid pinned personal context')
         if me['kind'] != 'market' or me['effective'] != as_of: raise ValueError('Market snapshot must match evaluation date')
         p,h,m = pe['body'],he['body'],copy.deepcopy(me['body'])
         if boundary['after_seq']:
@@ -133,11 +142,12 @@ class Engine:
                     fact=event['body']['fact'];m['facts'].append(copy.deepcopy(fact));ids.add(fact['id'])
                     self.s.append('research_evidence',event['body'],as_of,run_id)
         saved_answers=answers(self.s,as_of)
-        if not frozen and saved_answers and p.get('clarification_answers')!=saved_answers:
+        if not frozen and not profile_id and saved_answers and p.get('clarification_answers')!=saved_answers:
             p=history.profile_input(p,boundary);p['clarification_answers']=saved_answers
             pe=self.s.get(self.set_profile(p,as_of))
         if previous and previous['body']['mode'] != self.model.mode: raise ValueError('Demo and live histories must use separate users')
         p=history.profile_input(p,boundary)
+        if p.get('contested_fields'):raise ValueError('Withdrawn or disputed personal facts require resolution before calculation: '+', '.join(p['contested_fields']))
         d.profile(p); d.holdings(h); d.market(m)
         if self.model.mode == 'live' and (m.get('synthetic') or not m['facts']):
             raise ValueError('Live analysis requires real, nonempty market evidence')
@@ -155,7 +165,10 @@ class Engine:
         m['facts'] = [f for f in m['facts'] if f['valid_until'] >= as_of]
         if self.model.mode=='live' and not m['facts']:
             raise ValueError('Live analysis requires currently valid evidence')
+        from .persona import ensure as ensure_persona,snapshot as persona_snapshot
+        user_persona=persona_snapshot(ensure_persona(self.s,pe))
         start_id = self.s.append('run_started',{'market_id':me['id'],'profile_id':pe['id'],
+             'persona_id':user_persona['id'],'persona_hash':user_persona['hash'],
              'actual_id':he['id'],'previous_id':previous['id'] if previous else None,
              'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason,
              'history_scope':boundary,'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement},as_of,run_id)
@@ -214,7 +227,7 @@ class Engine:
             if stability_receipt:result['comparison']['evaluator_stability']=copy.deepcopy(stability_receipt)
             return result
         analysis=build_analysis(p,h,m,val,capital)
-        common = {'history_scope':boundary,'analysis':analysis,'report_contract':'investment_case/1' if self.model.mode=='live' and m.get('return_histories') else None,
+        common = {'user_persona':user_persona,'history_scope':boundary,'analysis':analysis,'report_contract':'investment_case/1' if self.model.mode=='live' and m.get('return_histories') else None,
                   'improvement':improvement,'as_of':as_of,'profile':p,'actual':h,'valuation':val,'market':m,'previous':prior,
                   'decision_context':semantics(p,m),
                   'anchors':anchors,'rebalance_due':rebalance_due,'performance':outcome,'funding':funding,
@@ -360,6 +373,7 @@ class Engine:
         analysis['source_ids']={'profile_id':pe['id'],'actual_id':he['id'],'market_id':me['id']}
         # Original dissent is retained regardless of how the leader summarizes it.
         report = {'run_id':run_id,'mode':self.model.mode,'as_of':as_of,'profile_id':pe['id'],
+            'persona_id':user_persona['id'],'persona_hash':user_persona['hash'],
             'actual_id':he['id'],'market_id':me['id'],'previous_id':previous['id'] if previous else None,
             'valuation':val,'performance':outcome,'reflection':reflection,'funding':funding,'risk_budget':d.loss_budget(p),
             'revision_of':revision_of,'revision_reason':revision_reason,'amendment':amendment,

@@ -254,10 +254,13 @@ def project(s,run_id):
     from .quality_campaign import projection as quality_projection
     quality=quality_projection(s,completed['id'] if completed else None,run_id)
     stability=report['view'].get('evaluation_stability') if report else None
+    from .persona import snapshot as persona_snapshot
+    frozen_persona=persona_snapshot(s.get(basis['persona_id'])) if basis.get('persona_id') else None
+    latest_profile=s.latest('profile')
     return validate_workbench({'schema_version':'mara.workbench/1.2.0',
         'run':{'id':run_id,'as_of':as_of,'status':state,'mode':basis['mode'],'report_id':completed['id'] if completed else None,
             'previous_id':basis.get('previous_id'),'revision_of':basis.get('revision_of'),'message':message},
-        'components':components,'edges':edges,'sources':sources,'portfolio':portfolio,'extensions':{'history_scope':dict(boundary,is_active=boundary==history_scope(s)),'projection_corrections':corrections,
+        'components':components,'edges':edges,'sources':sources,'portfolio':portfolio,'extensions':{'user_persona':frozen_persona,'persona_is_current':bool(frozen_persona and latest_profile and latest_profile['id']==basis['profile_id']),'history_scope':dict(boundary,is_active=boundary==history_scope(s)),'projection_corrections':corrections,
             'quality_campaign':quality,'evaluation_stability':stability,'analysis':report['body'].get('analysis') if report else None,
             'coverage_ledger':report['body'].get('coverage_ledger',[]) if report else [],
             'flow':flow,'evaluation':evaluation,'decision_actions':actions,'lineage':lineage}})
