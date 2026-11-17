@@ -36,3 +36,9 @@ contribution_mandate.preference=growth이면 더 적극적인 비교 대안을 �
 
 ## 판단 질문 재검증 v1.0
 최종 제안 검증에서 decision_scope.questions를 확인하고 question_reviews에 question_id, status(supported/unresolved), reason, fact_ids, calculation_paths(/analysis/ 이하 실제 경로), next_action을 남겨요. 선택한 후보는 가격·가치·비중 연결, 제외한 후보는 제외 근거의 충분성을 보세요. 자료를 받았다는 사실만으로 supported를 주지 않아요. 확정할 수 없으면 unresolved예요. 누락한 질문은 미검증으로 남으며 예전 질문을 현금 선택으로 지우지 않아요. 질문별 판단은 R4 전체 판정이나 Q1 통과를 대신하지 않아요.
+
+## 검토 단계와 인용 v1.1 · 2026-11-18
+
+perspective_validation에서는 아직 리더의 최종 제안이 없어요. 이때 question_reviews를 적는다면 status는 unresolved만 사용해요. 관점별 자료가 충분해 보여도 최종 제안을 검토하기 전에는 질문을 해결했다고 확정하지 않아요. final_validation에서만 실제 제안과 근거를 대조해 supported를 판단해요.
+
+calculation_paths는 값이 있는 계산을 가리켜야 해요. 비어 있는 selected_weights, selected_comparison이나 존재하지 않는 경로를 넣지 않아요. 부족한 계산은 reason과 next_action에 적고 calculation_paths는 []로 두어도 돼요. 입력에 실제로 있는 관점별 계산을 사용했다면 그 경로를 인용해요. 오류 교정 요청의 output_feedback.question_error를 읽고 지적된 경로와 상태를 고치되 근거 부족을 숨기지는 않아요.

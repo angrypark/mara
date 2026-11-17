@@ -20,6 +20,60 @@ class RecoveryTests(unittest.TestCase):
     initial=system_fixture.Harness.initial
     week=system_fixture.Harness.week
 
+    def test_question_repair_receives_stage_contract_and_exact_local_diagnostic(self):
+        class Correct(DemoModel):
+            seen=[]
+            def complete(model,role,guide,p,contract):
+                value=super().complete(role,guide,p,contract)
+                if role=='validation' and not p.get('final_proposal'):
+                    Correct.seen.append((copy.deepcopy(p),copy.deepcopy(contract)))
+                    value['question_reviews']=[{'question_id':'portfolio-allocation','status':'unresolved',
+                        'reason':'No selected allocation yet','fact_ids':[],
+                        'calculation_paths':[] if p.get('output_feedback') else ['/analysis/selected_weights'],
+                        'next_action':'Review final proposal'}]
+                return value
+        self.e.model=Correct();self.initial()
+        self.assertEqual(len(Correct.seen),2)
+        first,repair=Correct.seen
+        self.assertEqual(first[1]['properties']['question_reviews']['items']['properties']['status']['enum'],['unresolved'])
+        self.assertEqual(repair[0]['output_feedback']['question_error']['path'],'/analysis/selected_weights')
+        self.assertNotIn('validation_error',repair[0]['output_feedback'])
+
+    def test_external_failure_review_is_bound_to_same_tenant_date_and_inputs(self):
+        class Fail(DemoModel):
+            def complete(model,*args):raise RuntimeError('private-provider-detail')
+        self.e.model=Fail()
+        with self.assertRaises(RuntimeError):self.initial()
+        failure=self.s.latest('failed');actual=self.s.latest('actual');profile=self.s.latest('profile')
+        body={'source_failed_id':failure['id'],'rubric_hash':'a'*64,'source_packet_sha256':'b'*64,
+              'feedback':{'instruction':'Review evidence gaps without changing constraints'}}
+        fid=self.s.append('external_improvement_feedback',body,'2026-11-14')
+        self.e.model=DemoModel()
+        other_review=self.other.append('external_improvement_feedback',body,'2026-11-14')
+        with self.assertRaises(PermissionError):self.e.run('2026-11-14',self.mid,external_review_id=other_review)
+        changed=self.e.set_profile(copy.deepcopy(self.p),'2026-11-14')
+        with self.assertRaisesRegex(ValueError,'original personal'):self.e.run('2026-11-14',self.mid,external_review_id=fid)
+        result=self.e.run('2026-11-14',self.mid,external_review_id=fid,profile_id=profile['id'],actual_id=actual['id'])
+        self.assertEqual(result['external_review']['source_failed_id'],failure['id'])
+        self.assertEqual(result['profile_id'],profile['id']);self.assertEqual(result['actual_id'],actual['id'])
+        self.assertEqual(self.s.get(actual['id'])['body'],self.h)
+        inputs=[e['body']['payload'] for e in self.s.events('agent_input') if e['run_id']==result['run_id']]
+        self.assertTrue(all(p.get('external_review',{}).get('source_event_id')==fid for p in inputs if 'external_review' in p))
+
+    def test_failure_review_does_not_promote_later_answers_into_original_profile(self):
+        class Fail(DemoModel):
+            def complete(model,*args):raise RuntimeError('provider failed')
+        self.e.model=Fail()
+        with self.assertRaises(RuntimeError):self.initial()
+        profile=self.s.latest('profile');count=len(self.s.events('profile'))
+        fid=self.s.append('external_improvement_feedback',{'source_failed_id':self.s.latest('failed')['id'],
+            'rubric_hash':'a'*64,'source_packet_sha256':'b'*64,'feedback':{}},'2026-11-14')
+        self.s.append('clarification_answer',{'question_id':'future','text':'Later answer'},'2026-11-14')
+        self.e.model=DemoModel()
+        result=self.e.run('2026-11-14',self.mid,external_review_id=fid)
+        self.assertEqual(result['profile_id'],profile['id']);self.assertEqual(len(self.s.events('profile')),count)
+        self.assertEqual(self.s.get(profile['id']),profile)
+
     def test_broker_record_id_is_repaired_once_with_originals_and_independence(self):
         class Correct(DemoModel):
             seen=[]

@@ -318,7 +318,7 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         s.append('research_stop',{'role':role,'stage':payload.get('analysis_stage'),'reason':reason,'detail':detail,
             'question_ids':sorted(question_ids),'calls':len(transcript),'sufficiency':'requires_independent_review'},as_of,run_id)
     for round_no in range(4):
-        prior_review=(payload.get('improvement') or {}).get('feedback',{})
+        prior_review=(payload.get('improvement') or payload.get('external_review') or {}).get('feedback',{})
         analysis=payload.get('analysis',{});comparison=analysis.get('comparison',{})
         request={'role':role,'as_of':as_of,'question':payload.get('question'),
             'research_capabilities':'mara.research-tools/1.1','decision_questions':questions,'objective':payload.get('profile',{}).get('goal'),'available_symbols':list(payload['market'].get('assets',{})),
@@ -329,9 +329,12 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
                 'products':list(analysis.get('products',{})),
                 'published_costs_available':analysis.get('costs',{}).get('published_conditions_and_examples',{}).get('available',False),
                 'rule':'이미 전달 가능한 계산과 부족한 자료를 구분. 원문을 읽어야 하는 주장은 적합한 기업/본문 도구로 확인.'},
+            'analysis_paths':['/analysis/'+k.replace('~','~0').replace('/','~1') for k in analysis],
+            'personal_context':{k:copy.deepcopy(payload[k]) for k in ('funding','decision_context') if k in payload},
             'market_prices':{'currency':payload['market'].get('base_currency'),'quotes':payload['market'].get('prices',{}),
                 'rule':'기준통화 환산 가격. USD 가치 계산에는 company 도구의 원래 USD quote를 사용.'},
-            'existing_evidence':[{'id':f['id'],'topic':f['topic']} for f in payload['market']['facts']],
+            'existing_evidence':[{'id':f['id'],'topic':f['topic'],'source':f['source'],
+                'characters':len(dumps(f)),'read_with':'evidence_read'} for f in payload['market']['facts']],
             'research_results':transcript,'round':round_no+1,'max_rounds':4,'collected_this_call':collected}
         s.append('research_plan_input',{'role':role,'guide':guide+'\n'+toolguide,'contract':contract,'payload':request,
             'provider':model.identity},as_of,run_id)
@@ -353,14 +356,19 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
                 if call['tool']=='collect':
                     collected+=len(call['arguments'].get('symbols',[]))
                     if collected>200:raise ValueError('200 company collection budget reached')
-                answer=runner.execute(role,call,payload['market'])
+                if call['tool'] in ('evidence_read','analysis_read'):
+                    from .research_read import read
+                    result=read(payload,call)
+                    answer={'result':result,'fact_id':None}
+                    s.append('research_tool_result',{'role':role,'call':call,'result':result,'fact_id':None},as_of,run_id)
+                else:answer=runner.execute(role,call,payload['market'])
             except (OSError,ValueError,KeyError,TypeError,IndexError) as exc:
                 answer={'status':'unavailable','reason':safe_code(exc),'action':'Reduce scope or use already frozen evidence; never invent data'}
                 s.append('research_tool_failure',{'role':role,'call':call,'result':answer},as_of,run_id)
             receipts=answer.get('result',{}).get('receipts',[])
             failures=[r for r in receipts if r.get('status')=='unavailable']
             s.append('research_activity',{'role':role,'question_ids':call.get('question_ids',[]),'discovery_reason':call.get('discovery_reason'),
-                'tool':call['tool'],'target':call['arguments'].get('symbol',call['arguments'].get('symbols')),
+                'tool':call['tool'],'target':call['arguments'].get('symbol',call['arguments'].get('symbols',call['arguments'].get('fact_id',call['arguments'].get('path')))),
                 'status':answer.get('status','returned'),'fact_id':answer.get('fact_id'),
                 'source_status':('collection_failed' if len(failures)==len(receipts) else 'collection_partial') if failures else answer.get('result',{}).get('status'),
                 'reason':answer.get('reason'),'collection_failures':failures,

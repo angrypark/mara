@@ -99,5 +99,14 @@
       "leader"
     ],
     "guide": "guides/skills/public-evidence.md"
+  },
+  {
+    "id": "korean-writing",
+    "version": "1.0",
+    "label": "읽기 쉬운 한국어 보고서",
+    "roles": [
+      "*"
+    ],
+    "guide": "guides/skills/korean-writing.md"
   }
 ]

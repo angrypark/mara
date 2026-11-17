@@ -5,6 +5,18 @@ from .contracts import ContractError
 VERSION='mara.research-questions/1.0.0'
 
 
+class QuestionReviewError(ContractError):
+    """Application-defined diagnostics, never provider exception text."""
+    def __init__(self,question,code,path=None):
+        self.diagnostic={'question_id':question,'reason_code':code,'path':path}
+        messages={
+            'before_final_proposal':'최종 제안 전에는 unresolved만 사용하고 남은 확인 사항을 설명하세요.',
+            'empty_calculation':'이 계산값이 비어 있어요. 인용 경로에서 빼고 부족한 계산을 reason에 설명하세요.',
+            'unknown_calculation':'현재 입력에 없는 계산 경로예요. 실제 경로만 인용하세요.'}
+        self.diagnostic['instruction']=messages[code]
+        super().__init__(f'Question {question}: {code}'+(' '+path if path else ''))
+
+
 def freeze(profile,market):
     candidates=sorted(s for s,a in market['assets'].items() if s!='CASH' and a.get('asset_class')!='cash')
     questions=[{'id':'portfolio-allocation','target':'portfolio','owner':'leader','depth':'decision',
@@ -28,14 +40,17 @@ def validate_reviews(output,payload):
     facts={f['id']:f for f in payload.get('market',{}).get('facts',[])}
     from .evaluation import pointer
     for row in rows:
+        question=row['question_id']
         if not set(row['fact_ids'])<=facts.keys():raise ContractError('Question cites evidence not delivered to reviewer')
+        if row['status']=='supported' and not payload.get('final_proposal'):
+            raise QuestionReviewError(question,'before_final_proposal')
         for path in row['calculation_paths']:
             if not path.startswith('/analysis/'):raise ContractError('Question calculation must reference analysis')
-            if pointer({'report':payload},'/report'+path) in (None,{},[]):raise ContractError('Empty question calculation')
+            try:value=pointer({'report':payload},'/report'+path)
+            except ContractError:raise QuestionReviewError(question,'unknown_calculation',path) from None
+            if value in (None,{},[]):raise QuestionReviewError(question,'empty_calculation',path)
         if row['status']=='supported' and not (row['fact_ids'] or row['calculation_paths']):
             raise ContractError('Supported question requires reviewable evidence')
-        if row['status']=='supported' and not payload.get('final_proposal'):
-            raise ContractError('Question resolution requires final proposal review')
     # Optional for old/custom providers. Omitted questions stay explicitly unreviewed.
 
 

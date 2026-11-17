@@ -219,6 +219,14 @@ class Agents:
             current['citation_scope']['raw_reference_paths']=raw_reference_paths(original)
             current['citation_scope']['raw_reference_rule']='원본 해시를 인용할 때는 위 실제 경로를 그대로 사용. 배열 위치를 추측하지 않아요. 해시는 수집 원본 식별자이며 내용의 진실성·분석 충분성 증명이 아니에요. 다른 주장은 해당 실제 입력 필드에 직접 연결하세요.'
         contract = output_schema(role)
+        if role=='validation':
+            contract=copy.deepcopy(contract)
+            if not original.get('final_proposal'):
+                contract['properties']['question_reviews']['items']['properties']['status']['enum']=['unresolved']
+            current['question_review_policy']={
+                'stage':original.get('analysis_stage'),
+                'allowed_statuses':['supported','unresolved'] if original.get('final_proposal') else ['unresolved'],
+                'rule':'최종 제안 전에는 질문을 해결했다고 확정하지 않아요. calculation_paths에는 현재 값이 있는 /analysis/ 계산만 적어요. 비어 있거나 없는 계산은 reason과 next_action에 설명하고 인용 경로에서는 빼세요. []도 허용해요.'}
         if payload.get('narrative_contract'):
             contract=copy.deepcopy(contract)
             contract['required']=list(dict.fromkeys(contract['required']+['judgment_report']))
@@ -252,9 +260,11 @@ class Agents:
                 current=copy.deepcopy(current)
                 current['output_feedback']={'code':code,'rejected_output_id':oid,'previous_output':result,
                     'instruction':'직전 자기 응답을 원본 입력과 계약에 대조하여 한 번 교정하세요. 전체 JSON을 다시 반환하세요. 무관한 인용으로 치환하거나 자료 공백·반론·위험을 숨기지 마세요. 정성 검증 통과나 매수를 강요하지 않으며 필요하면 보류하세요.'}
-                if role=='evaluator' or code=='judgment_report':
-                    # The evaluator already has this payload and its own rejected
-                    # paths. Keep precise repair diagnostics private to this call.
+                from .research_questions import QuestionReviewError
+                if isinstance(exc,QuestionReviewError):
+                    current['output_feedback']['question_error']=exc.diagnostic
+                elif role=='evaluator' or code=='judgment_report':
+                    # Existing local evaluator/narrative diagnostics stay private.
                     current['output_feedback']['validation_error']=str(exc)[:5000]
                 continue
             self.s.append('agent_validation',{'role':role,'input_id':iid,'output_id':oid,

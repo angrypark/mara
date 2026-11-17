@@ -77,13 +77,13 @@ class Engine:
         due = last is None or d.day(as_of) >= d.day(last['body']['next_evaluation'])
         return {'due':due,'next_evaluation':last['body']['next_evaluation'] if last else as_of}
 
-    def run(self, as_of, market_id=None, force=False, revision_reason=None, amendment=None, improvement=None, evaluate_after=True, profile_id=None, actual_id=None):
+    def run(self, as_of, market_id=None, force=False, revision_reason=None, amendment=None, improvement=None, evaluate_after=True, profile_id=None, actual_id=None, external_review_id=None):
         d.day(as_of)
         run_id = uuid.uuid4().hex
         self.s.append('execution_intent',{'campaign_id':(improvement or {}).get('campaign_id'),'run_id':run_id,'kind':'portfolio_decision'},as_of,run_id)
         self.s.lock(run_id)
         try:
-            result=self._run(as_of,market_id,force,run_id,revision_reason,amendment,improvement,profile_id,actual_id)
+            result=self._run(as_of,market_id,force,run_id,revision_reason,amendment,improvement,profile_id,actual_id,external_review_id)
             from .evaluation import evaluate_report
             try:
                 if evaluate_after:evaluate_report(self.s,self.model,result['event_id'])
@@ -100,7 +100,7 @@ class Engine:
         finally:
             self.s.unlock(run_id)
 
-    def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None, improvement=None, profile_id=None, actual_id=None):
+    def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None, improvement=None, profile_id=None, actual_id=None, external_review_id=None):
         boundary=history.scope(self.s)
         if boundary['reset_id'] and self.s.get(boundary['reset_id'])['effective']>as_of:raise ValueError('Cannot create a decision before the active history reset')
         previous = history.latest(self.s,'completed',boundary=boundary)
@@ -133,6 +133,27 @@ class Engine:
         if pe is None or he is None or me is None: raise ValueError('Profile, actual holdings and market snapshot required')
         if pe['kind']!='profile' or he['kind']!='actual' or pe['effective']>as_of or he['effective']>as_of:raise ValueError('Invalid pinned personal context')
         if me['kind'] != 'market' or me['effective'] != as_of: raise ValueError('Market snapshot must match evaluation date')
+        external_review=None
+        if external_review_id:
+            if amendment or improvement:raise ValueError('Failure review cannot be combined with a completed-report revision')
+            review=self.s.get(external_review_id)
+            if review['owner']!=self.s.owner or review['kind']!='external_improvement_feedback' or review['effective']!=as_of:
+                raise ValueError('Invalid external review')
+            body=review['body'];failure=self.s.get(body['source_failed_id'])
+            import re
+            if any(not isinstance(body.get(key),str) or not re.fullmatch('[a-f0-9]{64}',body[key])
+                for key in ('rubric_hash','source_packet_sha256')):raise ValueError('External review hashes required')
+            if failure['owner']!=self.s.owner or failure['kind']!='failed' or failure['effective']!=as_of:
+                raise ValueError('External review requires same-date failed execution')
+            starts=[e for e in self.s.events('run_started') if e['run_id']==failure['run_id'] and e['seq']<failure['seq']]
+            if len(starts)!=1 or any(starts[0]['body'][key]!=value for key,value in
+                (('profile_id',pe['id']),('actual_id',he['id']),('market_id',me['id']))):
+                raise ValueError('Failure review must retain its original personal and market inputs')
+            if not isinstance(body.get('feedback'),dict):raise ValueError('External feedback must be an object')
+            external_review={'source_event_id':review['id'],'source_failed_id':failure['id'],
+                'rubric_hash':body['rubric_hash'],'source_packet_sha256':body['source_packet_sha256'],
+                'feedback':copy.deepcopy(body['feedback']),
+                'scope':'Failed execution feedback, not an adopted portfolio or permission to change personal constraints.'}
         p,h,m = pe['body'],he['body'],copy.deepcopy(me['body'])
         if boundary['after_seq']:
             m=history.market_input(m,boundary)
@@ -144,7 +165,7 @@ class Engine:
                     fact=event['body']['fact'];m['facts'].append(copy.deepcopy(fact));ids.add(fact['id'])
                     self.s.append('research_evidence',event['body'],as_of,run_id)
         saved_answers=answers(self.s,as_of)
-        if not frozen and not profile_id and saved_answers and p.get('clarification_answers')!=saved_answers:
+        if not frozen and not external_review and not profile_id and saved_answers and p.get('clarification_answers')!=saved_answers:
             p=history.profile_input(p,boundary);p['clarification_answers']=saved_answers
             pe=self.s.get(self.set_profile(p,as_of))
         if previous and previous['body']['mode'] != self.model.mode: raise ValueError('Demo and live histories must use separate users')
@@ -173,7 +194,7 @@ class Engine:
              'persona_id':user_persona['id'],'persona_hash':user_persona['hash'],
              'actual_id':he['id'],'previous_id':previous['id'] if previous else None,
              'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason,
-             'history_scope':boundary,'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement},as_of,run_id)
+             'history_scope':boundary,'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement,'external_review':external_review},as_of,run_id)
         from .research_questions import freeze,ledger
         decision_scope=copy.deepcopy(frozen['body']['decision_scope']) if frozen and frozen['body'].get('decision_scope') else freeze(p,m)
         self.s.append('decision_scope',decision_scope,as_of,run_id)
@@ -234,7 +255,7 @@ class Engine:
             return result
         analysis=build_analysis(p,h,m,val,capital)
         common = {'decision_scope':decision_scope,'user_persona':user_persona,'history_scope':boundary,'analysis':analysis,'report_contract':'investment_case/1' if self.model.mode=='live' and m.get('return_histories') else None,
-                  'improvement':improvement,'as_of':as_of,'profile':p,'actual':h,'valuation':val,'market':m,'previous':prior,
+                  'improvement':improvement,'external_review':external_review,'as_of':as_of,'profile':p,'actual':h,'valuation':val,'market':m,'previous':prior,
                   'decision_context':semantics(p,m),
                   'anchors':anchors,'rebalance_due':rebalance_due,'performance':outcome,'funding':funding,
                   'frozen_revision':bool(frozen) and not (improvement or {}).get('allow_supplemental_research',False),
@@ -384,7 +405,7 @@ class Engine:
             'actual_id':he['id'],'market_id':me['id'],'previous_id':previous['id'] if previous else None,
             'valuation':val,'performance':outcome,'reflection':reflection,'funding':funding,'risk_budget':d.loss_budget(p),
             'revision_of':revision_of,'revision_reason':revision_reason,'amendment':amendment,
-            'history_scope':boundary,'analysis':analysis,'evidence_delivery':delivery,'improvement':improvement,
+            'history_scope':boundary,'analysis':analysis,'evidence_delivery':delivery,'improvement':improvement,'external_review':external_review,
             'perspectives':perspectives,'validation':{'numeric':checks,'critique':validation,
             'final_numeric':final_check,'final_critique':final_review}, 'proposal':proposal,
             'pruning_audit_id':audit,'anchors':anchors,'next_evaluation':(d.day(as_of)+timedelta(days=7)).isoformat(),
