@@ -154,14 +154,28 @@ class ResearchTools:
     def __init__(self,library,session,run_id,as_of):self.lib,self.s,self.run_id,self.as_of=library,session,run_id,as_of
 
     def activate(self,role,fact,market):
-        existing={e['body']['fact']['id']:e['body']['fact'] for e in self.s.events('research_evidence') if e['run_id']==self.run_id}
+        if self.s.store.in_transaction:return self._activate(role,fact,market)
+        with self.s.store.transaction():return self._activate(role,fact,market)
+
+    def _activate(self,role,fact,market):
+        rows=[e['body'] for e in self.s.events('research_evidence') if e['run_id']==self.run_id]
+        existing={r['fact']['id']:r['fact'] for r in rows}
+        if fact['id'] in {f['id'] for f in market['facts']}:return True
         if fact['id'] in existing:
-            if fact['id'] not in {f['id'] for f in market['facts']}:market['facts'].append(copy.deepcopy(existing[fact['id']]))
+            market['facts'].append(copy.deepcopy(existing[fact['id']]))
             return True
-        # Original dossiers/raw/tool receipts remain stored even when active context is full.
-        if sum(len(dumps(f)) for f in existing.values())+len(dumps(fact))>80000:return False
-        if fact['id'] not in {f['id'] for f in market['facts']}:
-            market['facts'].append(fact);self.s.append('research_evidence',{'role':role,'fact':fact},self.as_of,self.run_id)
+        general=sum(len(dumps(r['fact'])) for r in rows if r.get('budget_bucket','general')=='general')
+        reserved=sum(len(dumps(r['fact'])) for r in rows if r.get('budget_bucket')=='role_reserved' and r['role']==role)
+        total=sum(len(dumps(r['fact'])) for r in rows);size=len(dumps(fact))
+        self.activation_budget={'policy':'shared-general-and-role-reserve/1','general_used':general,'general_limit':80000,
+            'role':role,'role_reserved_used':reserved,'role_reserved_limit':48000,'run_used':total,'run_limit':368000,
+            'requested_characters':size,'rule':'동일 실행의 재시도·검증 단계는 같은 역할 예산을 공유. 중복 근거는 다시 차감하지 않음.'}
+        research_roles={'evidence','buffett','marks','bogle','wood','validation'}
+        prerequisites={'company_company','sec_financials','sec_filings','company_filing_search','company_valuation'}
+        bucket='general' if general+size<=80000 else 'role_reserved' if role in research_roles and fact.get('research_tool') in prerequisites and reserved+size<=48000 else None
+        if bucket is None or total+size>368000:return False
+        market['facts'].append(fact)
+        self.s.append('research_evidence',{'role':role,'fact':fact,'budget_bucket':bucket},self.as_of,self.run_id)
         return True
 
     def execute(self,role,call,market):
@@ -224,15 +238,15 @@ class ResearchTools:
             if tool=='company':fact['raw_refs']=[r for company in result['companies'] for r in company.get('raw_refs',[])]
             activated=self.activate(role,fact,market)
             if not activated:
-                self.s.append('research_tool_result',{'role':role,'call':call,'result':result,'fact_id':None,'status':'archived_context_budget'},self.as_of,self.run_id)
-                return {'status':'stored_not_activated','reason':'실행 전체 추가 근거 80,000자 한도. 원본 수집은 보존됐어요. 더 작은 compare 페이지/본문 검색을 요청하거나 다음 실행에서 우선 조회해요.','fact_id':None}
+                self.s.append('research_tool_result',{'role':role,'call':call,'result':result,'fact_id':None,'status':'archived_context_budget','budget':self.activation_budget},self.as_of,self.run_id)
+                return {'status':'stored_not_activated','reason':'활성 자료 예산 한도. 자료 부재가 아니며 원본은 보존됐어요. 더 좁은 기업/본문/가치평가 요청을 사용해요.','budget':self.activation_budget,'fact_id':None}
         self.s.append('research_tool_result',{'role':role,'call':call,'result':result,'fact_id':fact['id'] if fact else None},self.as_of,self.run_id)
         return {'result':result,'fact_id':fact['id'] if fact else None}
 
 
 def research_loop(s,model,role,guide,payload,run_id,as_of,library):
     """Model chooses typed tools. Its final analysis sees receipts and cited returned facts."""
-    if role not in ('evidence','buffett','marks','bogle','validation') or model.mode!='live':return payload
+    if role not in ('evidence','buffett','marks','bogle','wood','validation') or model.mode!='live':return payload
     if as_of!=library.today or payload.get('frozen_revision'):
         payload['research_access']={'status':'frozen_snapshot','rule':'당시 고정 근거만 사용. 최신 자료 소급 수집 불가.'};return payload
     contract=json.loads(resource('contracts/research-plan.schema.json').read_text());toolguide=resource('guides/roles/company-tools.md').read_text()
@@ -276,5 +290,5 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
             transcript.append({'call':call,'answer':answer})
         if len(dumps(transcript))>65000:break
     payload['research_access']={'status':'executed','rounds':round_no+1,'calls':len(transcript),
-            'limits':'최대 4라운드/200기업 수집, 페이지 20개. 실행 전체 추가 활성 근거 80,000자. 원본과 전문은 별도 보존하며 미수집·미독해·보관만 된 자료를 명시.'}
+            'limits':'최대 4라운드/200기업 수집, 페이지 20개. 일반 근거 80,000자 + 연구 역할별 회사·공시·가치평가 예약 48,000자(6역할), 실행 전체 최대 368,000자. 원본과 전문은 별도 보존하며 미수집·미독해·보관만 된 자료를 명시.'}
     return payload

@@ -23,6 +23,10 @@ class DocumentTextTests(unittest.TestCase):
         content=DecodedStreamObject();content.set_data(b'BT /F1 10 Tf 10 100 Td (Synthetic issuer filing competition capital allocation risk factors and cash flow disclosure. This fixture is not financial evidence.) Tj ET')
         page[NameObject('/Contents')]=writer._add_object(content);stream=io.BytesIO();writer.write(stream)
         text,meta=extract(stream.getvalue());self.assertEqual(meta['pages'],1);self.assertIn('[PDF page 1]',text);self.assertIn('Synthetic issuer',text)
+        writer.encrypt('',owner_password='synthetic-owner');public=io.BytesIO();writer.write(public)
+        public_text,_=extract(public.getvalue());self.assertIn('Synthetic issuer',public_text)
+        writer.encrypt('synthetic-required-password');protected=io.BytesIO();writer.write(protected)
+        with self.assertRaises(ValueError):extract(protected.getvalue())
         with self.assertRaises(ValueError):extract(b'%PDF-broken')
         with self.assertRaises(ValueError):extract(b'not HTML or PDF')
 

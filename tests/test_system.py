@@ -62,9 +62,9 @@ class Harness(unittest.TestCase):
 
     def test_independent_perspectives_and_guide_snapshots(self):
         self.initial()
-        calls=[e['body'] for e in self.s.events('agent_input') if e['body']['role'] in ('buffett','marks','bogle')]
-        self.assertEqual(len(calls),3)
-        self.assertEqual(len({x['guide_hash'] for x in calls}),3)
+        calls=[e['body'] for e in self.s.events('agent_input') if e['body']['role'] in ('buffett','marks','bogle','wood')]
+        self.assertEqual(len(calls),4)
+        self.assertEqual(len({x['guide_hash'] for x in calls}),4)
         for x in calls:
             self.assertNotIn('perspectives',x['payload'])
             self.assertTrue(x['guide']); self.assertEqual(x['provider']['mode'],'demo')

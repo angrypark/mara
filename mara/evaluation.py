@@ -4,6 +4,7 @@ import hashlib
 import json
 from datetime import date
 from .agents import Agents
+from .history import profile_input,market_input
 from .registry import resource
 from .domain import dumps
 from .contracts import ContractError
@@ -69,7 +70,7 @@ def evaluator_fingerprint(s,model,as_of,guide_text=None):
     specification={'rubric_hash':hashlib.sha256(dumps(r).encode()).hexdigest(),'guide':hashlib.sha256((guide_text if guide_text is not None else evaluator.guide('evaluator')).encode()).hexdigest(),
         'skills':for_role('evaluator'),'model':model.identity,
         'implementation':{p:hashlib.sha256(resource(p).read_bytes()).hexdigest() for p in ('mara/evaluation.py','mara/strict_evaluation.py','mara/quantitative_verifier.py','mara/coverage.py','mara/decision.py','mara/agents.py','mara/contracts.py','contracts/agent-evaluator.schema.json')},
-        'appended_guide_dependencies':{p:hashlib.sha256(resource(p).read_bytes()).hexdigest() for p in ('guides/roles/research-tools.md','guides/roles/analysis-exhibits.md','guides/roles/judgment-report.md','mara/judgment_reports.py','contracts/judgment-report.schema.json')},
+        'appended_guide_dependencies':{p:hashlib.sha256(resource(p).read_bytes()).hexdigest() for p in ('guides/roles/allocation-mandate.md','guides/roles/research-tools.md','guides/roles/analysis-exhibits.md','guides/roles/judgment-report.md','mara/judgment_reports.py','contracts/judgment-report.schema.json')},
         'reference_guide':hashlib.sha256(resource('guides/portfolio-report-benchmarks.md' if r['version'].startswith('2.') else 'guides/reference-reports.md').read_bytes()).hexdigest()}
     return hashlib.sha256(dumps(specification).encode()).hexdigest()
 
@@ -89,7 +90,7 @@ def evaluate_report(s,model,completed_id):
         if old['body']['completed_id']==completed_id and old['body']['rubric_hash']==rhash and old['body'].get('evaluator_spec_hash')==spec_hash:
             s.append('evaluation_status',{'status':'completed','completed_id':completed_id,'rubric_hash':rhash},date.today().isoformat(),run_id)
             return old['body']
-    market=copy.deepcopy(s.get(report['market_id'])['body'])
+    market=market_input(s.get(report['market_id'])['body'],report.get('history_scope',{}))
     market.pop('fund_constituents',None)
     # Q1 receives actual monthly inputs as well as an independent calculator receipt.
     # Hiding them made historical claims impossible to verify from the assessment packet.
@@ -103,7 +104,7 @@ def evaluate_report(s,model,completed_id):
     from .quantitative_verifier import verify
     outputs['quantitative_verifier']=verify(report,market)
     payload={'as_of':as_of,'evaluated_at':date.today().isoformat(),'report':report,
-        'profile':s.get(report['profile_id'])['body'],'market':market,'role_outputs':outputs,
+        'profile':profile_input(s.get(report['profile_id'])['body'],report.get('history_scope',{'after_seq':0,'reset_id':None})),'market':market,'role_outputs':outputs,
         'rubric':r,'rubric_hash':rhash,'reference_guide':resource('guides/portfolio-report-benchmarks.md').read_text() if r['version'].startswith('2.') else resource('guides/reference-reports.md').read_text(),
         'evaluation_scope':'frozen report quality; no hindsight returns or new market evidence'}
     payload['projection']={'version':'evaluation-input/1.1','deduplication':'perspective outputs, leader proposal, both R4 results and reflection are preserved once under report. R1/R2 under role_outputs. Original invocation events remain in the run.'}

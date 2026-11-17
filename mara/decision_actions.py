@@ -45,7 +45,9 @@ class DecisionActions:
             if self.thread and self.thread.is_alive() or s.store.db.execute('SELECT 1 FROM locks WHERE owner=?',(s.owner,)).fetchone():raise DialogueError('진행 중인 분석이 끝난 뒤 다시 시도해주세요.')
             amendment=None
             if body['action']=='revise':
-                if s.latest('completed')['id']!=completed['id']:raise DialogueError('더 새로운 제안이 있어요. 최신 제안에서 변경을 반영해주세요.')
+                from .history import latest
+                active=latest(s,'completed')
+                if not active or active['id']!=completed['id']:raise DialogueError('더 새로운 제안이 있어요. 최신 제안에서 변경을 반영해주세요.')
                 replies=[e for e in events if e['kind']=='dialogue_result' and e['body']['request_id']==body.get('dialogue_request_id') and e['body']['status']=='completed']
                 if not replies:raise DialogueError('완료된 대화 답변을 선택해주세요.')
                 reply=replies[-1];change=reply['body']['answer'].get('proposed_change')

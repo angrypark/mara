@@ -11,7 +11,7 @@
     },
     "selected_weights": {
       "type": "object",
-      "minProperties": 1,
+      "minProperties": 0,
       "additionalProperties": {
         "type": "number",
         "minimum": 0,
@@ -580,6 +580,126 @@
           "personal_tolerance_confirmed": {
             "const": false
           }
+        }
+      }
+    },
+    "allocation_sleeves": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "status",
+        "scope",
+        "capital",
+        "monthly_contribution",
+        "invested_fraction",
+        "invested_weights",
+        "rows",
+        "usd_buffer_reference_fraction",
+        "reference_authority",
+        "unknown_asset_classes",
+        "cash_warning"
+      ],
+      "properties": {
+        "version": {
+          "const": "allocation-sleeves/1"
+        },
+        "status": {
+          "enum": [
+            "decision_pending",
+            "selected"
+          ]
+        },
+        "scope": {
+          "type": "string"
+        },
+        "capital": {
+          "type": "number",
+          "minimum": 0
+        },
+        "monthly_contribution": {
+          "type": "number",
+          "minimum": 0
+        },
+        "invested_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1.000001
+        },
+        "invested_weights": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1.000001
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "symbol",
+              "kind",
+              "whole_fraction",
+              "invested_fraction",
+              "proposal_amount",
+              "monthly_amount"
+            ],
+            "properties": {
+              "symbol": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "cash",
+                  "investment"
+                ]
+              },
+              "whole_fraction": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1.000001
+              },
+              "invested_fraction": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 1.000001
+              },
+              "proposal_amount": {
+                "type": "number",
+                "minimum": 0
+              },
+              "monthly_amount": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "usd_buffer_reference_fraction": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reference_authority": {
+          "type": "string"
+        },
+        "unknown_asset_classes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cash_warning": {
+          "type": "string"
         }
       }
     }

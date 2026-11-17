@@ -25,8 +25,10 @@ def questions(output):
 
 def answers(session,as_of=None):
     latest={}
-    for event in session.events('clarification_answer',as_of or '9999-12-31'):
-        latest[event['body']['question_id']]=dict(event['body'],answer_id=event['id'],recorded_at=event['recorded'])
+    from .history import events,scope
+    boundary=scope(session,as_of or '9999-12-31')
+    for event in events(session,'clarification_answer',as_of or '9999-12-31',boundary):
+        latest[event['body']['question_id']]=dict(event['body'],answer_id=event['id'],recorded_at=event['recorded'],history_reset_id=boundary['reset_id'])
     return list(latest.values())
 
 

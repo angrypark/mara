@@ -31,7 +31,7 @@ FIELDS={'goal','horizon_months','total_assets','monthly_income','monthly_expense
     'min_cash_fraction','max_foreign_fraction','snapshot_id','confirmed','revision_reason','context_notes',
     'contribution_schedule','funding_source','horizon_purpose','property_value','mortgage_balance',
     'monthly_debt_payment','mortgage_rate','outside_emergency_cash','debt_payment_in_expenses',
-    'reported_liquid_cash','contribution_risk_preference','loss_budget_scope','analysis_loss_budget'}
+    'investment_style','usd_buffer_reference_fraction','reported_liquid_cash','contribution_risk_preference','loss_budget_scope','analysis_loss_budget'}
 
 
 class InputError(ValueError): pass
@@ -87,6 +87,8 @@ def inputs(value,snapshot,cap,now):
              funding_source=v.get('funding_source','undecided'),horizon_purpose=v.get('horizon_purpose','unknown'))
     p['household']={key:None if v.get(key) in (None,'') else numeric(v[key],key,1 if key=='mortgage_rate' else None)
         for key in ['property_value','mortgage_balance','monthly_debt_payment','mortgage_rate','outside_emergency_cash','reported_liquid_cash']}
+    p['investment_style']=v.get('investment_style','general')
+    p['usd_buffer_reference_fraction']=None if v.get('usd_buffer_reference_fraction') in (None,'') else numeric(v['usd_buffer_reference_fraction'],'달러 완충 비교 비중',1)
     p['contribution_risk_preference']=v.get('contribution_risk_preference','inherit')
     p['loss_budget_scope']=v.get('loss_budget_scope','confirmed')
     p['analysis_loss_budget']=None if v.get('analysis_loss_budget') in (None,'') else numeric(v['analysis_loss_budget'],'분석용 손실 예산',1)
@@ -317,7 +319,8 @@ class PortfolioSetup:
                 snapshot=s.latest('onboarding_snapshot')
                 if not snapshot: raise InputError('토스 보유를 먼저 불러와주세요.')
                 inputs(value,snapshot,self.capital_limit(),datetime.now(timezone.utc))
-                last=s.latest('completed')
+                from .history import latest
+                last=latest(s,'completed')
                 if last and last['effective']==date.today().isoformat() and not value.get('revision_reason','').strip():
                     raise InputError('같은 날 다시 생성할 때는 변경 이유를 입력해주세요.')
             if not self.model_state()['configured']: raise InputError('화면 아래 분석 모델 설정을 먼저 저장해주세요. 입력 임시 저장은 가능해요.')
@@ -452,6 +455,9 @@ class PortfolioSetup:
             return original_complete(role,*args)
         model.complete=complete
         with self.session() as s:
+            from .history import profile_input,scope
+            previous_profile=s.latest('profile')
+            if previous_profile:p['confirmed_answer_facts']=profile_input(previous_profile['body'],scope(s)).get('confirmed_answer_facts',[])
             p['clarification_answers']=answers(s)
             p['context_note_history']=notes_history(s,p.get('context_notes',''))
             with s.store.transaction():

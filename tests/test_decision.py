@@ -114,7 +114,7 @@ class DecisionTests(unittest.TestCase):
         class Model(DemoModel):
             def complete(self,role,guide,p,contract):
                 out=super().complete(role,guide,p,contract)
-                if role in ('buffett','marks','bogle','leader'):out['weights']={'FUND':.4,'CASH':.6}
+                if role in ('buffett','marks','bogle','wood','leader'):out['weights']={'FUND':.4,'CASH':.6}
                 if role=='leader':out['action']='adjust'
                 return out
         with tempfile.TemporaryDirectory() as tmp:
@@ -126,7 +126,7 @@ class DecisionTests(unittest.TestCase):
             self.assertEqual(r['funding']['availability'],'conditional_on_deposit');self.assertEqual(s.latest('actual'),original)
             doc=project(s,r['run_id']);self.assertEqual(doc['schema_version'],'mara.workbench/1.2.0')
             self.assertTrue(all(row['body']['skills'] for row in s.events('agent_input')))
-            self.assertFalse(any('perspectives' in row['body']['payload'] for row in s.events('agent_input') if row['body']['role'] in ('buffett','marks','bogle')))
+            self.assertFalse(any('perspectives' in row['body']['payload'] for row in s.events('agent_input') if row['body']['role'] in ('buffett','marks','bogle','wood')))
             e.set_holdings({'as_of':ASOF,'base_currency':'USD','cash':2000,'positions':{},'rationale':'Separate existing cash','last_rebalanced':ASOF})
             updated=e.run(ASOF,r['market_id'],force=True,revision_reason='Synthetic separate future funding')
             self.assertEqual(updated['funding']['proposal_capital'],1000)

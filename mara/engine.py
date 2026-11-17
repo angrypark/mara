@@ -13,6 +13,7 @@ from .research import compact_market
 from .decision import semantics,decision_findings
 from .contracts import validate,schema
 from .context_budget import previous_for_role, improvement_for_role
+from . import history
 
 
 class ContextNeedsInput(ValueError):
@@ -35,6 +36,18 @@ class Engine:
         self.s, self.model = session, model
         self.research_library=research_library
 
+    def reset_history(self, as_of, reason):
+        if not isinstance(reason,str) or not reason.strip():raise ValueError('Reset reason required')
+        lock='history-reset-'+uuid.uuid4().hex
+        self.s.lock(lock)
+        try:
+            current=self.s.latest('profile',as_of)
+            if current:
+                projected=history.profile_input(current['body'],{'after_seq':1,'reset_id':None})
+                self.set_profile(projected,as_of)
+            return self.s.append('history_reset',{'reason':reason,'policy':'Archive originals; exclude previous judgments, learned knowledge and guide overrides; retain current facts and public evidence'},as_of)
+        finally:self.s.unlock(lock)
+
     def set_profile(self, profile, as_of):
         d.profile(profile)
         return self.s.append('profile',profile,as_of)
@@ -50,12 +63,12 @@ class Engine:
         d.day(flow['date']); d.number(flow['amount'],float('-inf'))
         if not isinstance(flow['reference'],str) or not flow['reference'].strip(): raise ValueError('Unique flow reference required')
         if any(e['body']['reference']==flow['reference'] for e in self.s.events('cashflow')): raise ValueError('Duplicate cashflow')
-        last = self.s.latest('completed')
+        last = history.latest(self.s,'completed')
         if last and flow['date'] <= last['effective']: raise ValueError('Historical correction needs a separate reconciliation; completed returns are immutable')
         return self.s.append('cashflow',flow,flow['date'])
 
     def due(self, as_of):
-        last = self.s.latest('completed')
+        last = history.latest(self.s,'completed')
         due = last is None or d.day(as_of) >= d.day(last['body']['next_evaluation'])
         return {'due':due,'next_evaluation':last['body']['next_evaluation'] if last else as_of}
 
@@ -81,7 +94,9 @@ class Engine:
             self.s.unlock(run_id)
 
     def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None, improvement=None):
-        previous = self.s.latest('completed')
+        boundary=history.scope(self.s)
+        if boundary['reset_id'] and self.s.get(boundary['reset_id'])['effective']>as_of:raise ValueError('Cannot create a decision before the active history reset')
+        previous = history.latest(self.s,'completed',boundary=boundary)
         if previous and previous['body']['mode'] != self.model.mode: raise ValueError('Demo and live histories must use separate users')
         revision_of=None
         frozen=None
@@ -97,7 +112,7 @@ class Engine:
             market_id=frozen['body']['market_id']
         if previous and as_of == previous['effective'] and revision_reason and revision_reason.strip():
             revision_of=previous['id']
-            earlier=[e for e in self.s.events('completed') if e['effective']<as_of]
+            earlier=[e for e in history.events(self.s,'completed',boundary=boundary) if e['effective']<as_of]
             previous=earlier[-1] if earlier else None
         elif previous and as_of <= previous['effective']: raise ValueError('Completed dates must advance; no duplicate weekly result')
         if not force and not revision_of and not self.due(as_of)['due']: raise ValueError('Weekly evaluation not due; use --force for an explicit early review')
@@ -108,6 +123,8 @@ class Engine:
         if pe is None or he is None or me is None: raise ValueError('Profile, actual holdings and market snapshot required')
         if me['kind'] != 'market' or me['effective'] != as_of: raise ValueError('Market snapshot must match evaluation date')
         p,h,m = pe['body'],he['body'],copy.deepcopy(me['body'])
+        if boundary['after_seq']:
+            m=history.market_input(m,boundary)
         if frozen:
             # Carry only evidence actually read in that run, never today's library contents.
             ids={f['id'] for f in m['facts']}
@@ -117,9 +134,10 @@ class Engine:
                     self.s.append('research_evidence',event['body'],as_of,run_id)
         saved_answers=answers(self.s,as_of)
         if not frozen and saved_answers and p.get('clarification_answers')!=saved_answers:
-            p=copy.deepcopy(p);p['clarification_answers']=saved_answers
+            p=history.profile_input(p,boundary);p['clarification_answers']=saved_answers
             pe=self.s.get(self.set_profile(p,as_of))
         if previous and previous['body']['mode'] != self.model.mode: raise ValueError('Demo and live histories must use separate users')
+        p=history.profile_input(p,boundary)
         d.profile(p); d.holdings(h); d.market(m)
         if self.model.mode == 'live' and (m.get('synthetic') or not m['facts']):
             raise ValueError('Live analysis requires real, nonempty market evidence')
@@ -140,8 +158,8 @@ class Engine:
         start_id = self.s.append('run_started',{'market_id':me['id'],'profile_id':pe['id'],
              'actual_id':he['id'],'previous_id':previous['id'] if previous else None,
              'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason,
-             'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement},as_of,run_id)
-        k = Knowledge(self.s)
+             'history_scope':boundary,'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement},as_of,run_id)
+        k = Knowledge(self.s,after_seq=boundary['after_seq'])
         a = Agents(self.s,self.model,as_of,run_id,self.research_library)
         rebalance_due = d.day(as_of) >= d.day(h['last_rebalanced']) + timedelta(days=p['rebalance_every_days'])
         anchors = {'goal':p['goal'],'constraints':p['constraints'],'actual_rationale':h['rationale'],
@@ -157,7 +175,8 @@ class Engine:
         reflection_id = None
         if previous:
             pb = previous['body']
-            prior_market = self.s.get(pb['market_id'])['body']
+            prior_boundary=pb.get('history_scope',{'after_seq':0,'reset_id':None})
+            prior_market = history.market_input(self.s.get(pb['market_id'])['body'],prior_boundary)
             prior_market=copy.deepcopy(prior_market);known={f['id'] for f in prior_market['facts']}
             for e in self.s.events('research_evidence'):
                 if e['run_id']==previous['run_id'] and e['seq']<=previous['seq'] and e['body']['fact']['id'] not in known:
@@ -165,7 +184,7 @@ class Engine:
             prior = {'event_id':previous['id'],'as_of':previous['effective'],'proposal':pb['proposal'],
                      'perspectives':pb['perspectives'],'validation':pb['validation'],
                      'reflection':pb['reflection'],'market':prior_market,
-                     'profile':self.s.get(pb['profile_id'])['body']}
+                     'profile':history.profile_input(self.s.get(pb['profile_id'])['body'],prior_boundary)}
             flows = [e['body'] for e in self.s.events('cashflow',as_of) if e['effective'] > previous['effective']]
             outcome = d.performance(pb['valuation']['nav'],val['nav'],flows,previous['effective'],as_of)
             outcome['holdings_confirmed'] = (h['as_of'] == as_of and
@@ -180,7 +199,7 @@ class Engine:
                 outcome['cashflows_reconciled']=False
                 outcome['limitation']='외부 입출금 대조가 끝나지 않아 평가액만 표시해요. 자금 납입을 투자 수익으로 해석하지 않아요.'
         from .analysis_pack import build as base_analysis
-        stability=self.s.latest('quality_stability_result',as_of)
+        stability=history.latest(self.s,'quality_stability_result',as_of,boundary)
         stability_receipt=None
         if stability:
             from .evaluation import evaluator_fingerprint
@@ -191,7 +210,7 @@ class Engine:
             if stability_receipt:result['comparison']['evaluator_stability']=copy.deepcopy(stability_receipt)
             return result
         analysis=build_analysis(p,h,m,val,capital)
-        common = {'analysis':analysis,'report_contract':'investment_case/1' if self.model.mode=='live' and m.get('return_histories') else None,
+        common = {'history_scope':boundary,'analysis':analysis,'report_contract':'investment_case/1' if self.model.mode=='live' and m.get('return_histories') else None,
                   'improvement':improvement,'as_of':as_of,'profile':p,'actual':h,'valuation':val,'market':m,'previous':prior,
                   'decision_context':semantics(p,m),
                   'anchors':anchors,'rebalance_due':rebalance_due,'performance':outcome,'funding':funding,
@@ -336,7 +355,7 @@ class Engine:
             'actual_id':he['id'],'market_id':me['id'],'previous_id':previous['id'] if previous else None,
             'valuation':val,'performance':outcome,'reflection':reflection,'funding':funding,'risk_budget':d.loss_budget(p),
             'revision_of':revision_of,'revision_reason':revision_reason,'amendment':amendment,
-            'analysis':analysis,'evidence_delivery':delivery,'improvement':improvement,
+            'history_scope':boundary,'analysis':analysis,'evidence_delivery':delivery,'improvement':improvement,
             'perspectives':perspectives,'validation':{'numeric':checks,'critique':validation,
             'final_numeric':final_check,'final_critique':final_review}, 'proposal':proposal,
             'pruning_audit_id':audit,'anchors':anchors,'next_evaluation':(d.day(as_of)+timedelta(days=7)).isoformat(),

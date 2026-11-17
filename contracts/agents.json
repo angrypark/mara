@@ -40,6 +40,14 @@
     "guide": "guides/personas/bogle.md"
   },
   {
+    "id": "wood",
+    "kind": "perspective",
+    "role": "R3",
+    "label": "Cathie Wood",
+    "description": "혁신 채택 · 성장 가치 · 가정의 실패",
+    "guide": "guides/personas/wood.md"
+  },
+  {
     "id": "validation",
     "kind": "validation",
     "role": "R4",

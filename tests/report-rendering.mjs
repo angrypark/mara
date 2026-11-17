@@ -20,7 +20,7 @@ test('weekly report joins actual prior evidence and all persona rationale sectio
     assert.equal(h.$('report-content').hidden,false);assert.equal(h.$('report-demo').hidden,false);
     assert.match(h.$('report-title').textContent,/주간/);assert.match(h.$('report-period').textContent,/2026-11-14 → 2026-11-21/);
     assert.match(h.$('report-summary').textContent,/USD/);assert.match(h.$('market-summary').textContent,/실제 시황 분석이 아니/);
-    assert.equal(h.$('perspectives').querySelectorAll('article').length,3);
+    assert.equal(h.$('perspectives').querySelectorAll('article').length,4);
     for(const p of h.$('perspectives').children){assert.match(p.textContent,/이 판단을 한 근거/);assert.match(p.textContent,/핵심 가정/);assert.match(p.textContent,/판단을 바꿀 조건/);assert.match(p.textContent,/지난 판단/)}
     assert.equal(h.$('perspective-weights').querySelectorAll('tr').length,3);assert.match(h.$('market-prices').textContent,/1.0%/);
     assert.match(h.$('allocation-chart').textContent,/실제 보유.*이번 제안.*지난 제안/);
@@ -48,7 +48,7 @@ test('independent proposals, actual holdings, cap violations, zero balances and 
     b.valuation={nav:0,weights:{},values:{}};h.render(r);
     assert.equal(h.$('report-demo').hidden,true);assert.equal(h.$('report-kind').textContent,'같은 날 수정본');
     const row=Array.from(h.$('perspective-weights').querySelectorAll('tr')).find(x=>x.firstChild.textContent==='BROAD');
-    assert.equal(row.children[1].textContent,'70.0%');assert.equal(row.children[2].textContent,'10.0%');assert.equal(row.children[4].textContent,'20.0%');
+    assert.equal(row.children[1].textContent,'70.0%');assert.equal(row.children[2].textContent,'10.0%');assert.equal(row.children[5].textContent,'20.0%');
     assert.match(h.$('weights').textContent,/보유 없음/);assert.ok(h.$('sector-chart').querySelector('.bar.over'));
     assert.equal(h.$('sector-chart').querySelector('.limit-mark').style.left,'30%');
   }finally{await h.close()}
@@ -57,8 +57,8 @@ test('new perspectives extend printable cards and comparison columns',async()=>{
   const h=setup();try{
     const r=structuredClone(fixture.weekly);r.body.perspectives.additional=structuredClone(r.body.perspectives.bogle);
     r.view.agent_registry=[{id:'additional',label:'추가 관점',description:'확장 검증'}];h.render(r);
-    assert.equal(h.$('perspectives').children.length,4);assert.match(h.$('perspectives').querySelector('[data-persona="additional"]').textContent,/추가 관점/);
-    assert.equal(h.$('perspective-weights').querySelector('tr').children.length,6);
+    assert.equal(h.$('perspectives').children.length,5);assert.match(h.$('perspectives').querySelector('[data-persona="additional"]').textContent,/추가 관점/);
+    assert.equal(h.$('perspective-weights').querySelector('tr').children.length,7);
     assert.match(h.$('perspective-weights').closest('table').querySelector('thead').textContent,/추가 관점/);
   }finally{await h.close()}
 });

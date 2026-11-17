@@ -37,6 +37,7 @@ window.MaraWorkbench=(()=>{
     if(selected!=='overview'&&!current())selected='overview';
     $('wb-run-state').textContent=statuses[d.run.status];$('wb-run-state').dataset.status=d.run.status;
     $('wb-run-note').textContent=(d.run.mode==='demo'?'합성 데모 · 실제 분석 아님 · ':'')+d.run.as_of+' · '+d.run.message;
+    let historyBanner=$('wb-history-scope');if(!historyBanner){historyBanner=el('p','notice');historyBanner.id='wb-history-scope';$('wb-run-note').after(historyBanner)}const history=d.extensions?.history_scope;historyBanner.hidden=!history;historyBanner.textContent=history?.is_active===false?'보관된 이전 판단 이력 · 대화로 내용을 확인할 수 있지만 현재 판단에 변경을 반영할 수 없어요.':history?.reset_id?'새 판단 이력 · 초기화 이전 분석·회고·학습 기억은 제외했어요. 현재 사실은 유지하고 이후 새 판단을 이어가요.':'기존 판단 이력 · 이전 평가와 회고를 이어서 사용해요.';
     let riskBanner=$('wb-risk-scope');if(!riskBanner){riskBanner=el('p','notice');riskBanner.id='wb-risk-scope';$('wb-run-note').after(riskBanner)}const riskBudget=d.portfolio?.risk_budget||d.extensions?.analysis?.risk_budget;riskBanner.hidden=riskBudget?.scope!=='analysis_only';riskBanner.textContent=riskBudget?.scope==='analysis_only'?`분석 전용 · 이번 제안의 충격 비교 예산 ${pct(riskBudget.effective_fraction)} / 기존 기준 ${pct(riskBudget.reference_fraction)}. 실제 감내손실 확인이나 주문 가능한 제안이 아니에요.`:'';
     $('wb-contract-tag').textContent='v'+d.schema_version.split('/')[1]+' · '+d.components.length+'개 역할';
     nodes();pane();
@@ -102,8 +103,10 @@ window.MaraWorkbench=(()=>{
   function quantitativeView(root){
     const a=doc.extensions?.analysis;if(!a)return;
     krwComparisonView(root,a.krw_comparison);
+    const sleeve=a.allocation_sleeves;if(sleeve){const box=el('section','wb-block');box.append(el('h4','','투자 부분과 현금 완충'),el('p','hint',sleeve.scope));for(const x of sleeve.rows){box.append(el('p','',x.symbol+' · 전체 '+pct(x.whole_fraction)+' / 투자 내부 '+(x.invested_fraction==null?'현금 완충':pct(x.invested_fraction))+' · 월 계획 '+x.monthly_amount.toLocaleString('ko-KR')+' '+a.fx_stress.base_currency))}box.append(el('p','hint',sleeve.cash_warning));root.append(box)}
     const section=el('section','wb-block');section.append(el('h4','','같은 조건에서 배분 대안 비교'));
     const c=a.comparison;
+    if(c?.unavailable_selected_assets?.length)section.append(el('p','notice','이번 제안 자체의 백테스트는 미완료예요. 공통 수익률 자료가 없는 자산: '+c.unavailable_selected_assets.join(', ')+'. 아래는 확보된 지수 비교안의 결과이며 제안 수익률이 아니에요.'));
     if(!c?.available||!c.results||!Array.isArray(c.sensitivity)){section.append(el('p','notice',c?.reason||'검증된 공통 수익률 자료가 없어요.'));root.append(section)}else{
     section.append(el('p','hint',c.start+' ~ '+c.end+' · '+c.observations+'개월 · 월별 NAV 총수익률 · USD'),el('p','hint',c.amount_unit),el('p','notice',c.cash_proxy_warning));
     const choice=el('select');choice.setAttribute('aria-label','비교 지표');for(const [key,label] of [['annualized_return','시간가중 연환산 수익률'],['annualized_volatility','월별 수익률의 연환산 변동성'],['month_end_max_drawdown','월말 최대 낙폭'],['ending_wealth','납입 포함 평가액 · 정규화 USD'],['profit','납입을 뺀 손익 · 정규화 USD']]){const o=el('option','',label);o.value=key;choice.append(o)}
@@ -280,7 +283,7 @@ window.MaraWorkbench=(()=>{
       if(data.schema_version!=='mara.dialogue/1.0.0'||data.run_id!==runId||data.agent_id!==selected)throw Error('대화 범위 또는 계약이 일치하지 않아요.');
       const sig=JSON.stringify(data);if(sig!==chatSignature){chatSignature=sig;const root=$('wb-chat-messages');root.replaceChildren();
         for(const m of data.messages){const box=el('article','wb-chat-message '+m.role);box.append(el('p','eyebrow',m.role==='user'?'나':m.role==='status'?'실행 상태':current().label),el('p','wb-answer',m.text));if(m.evidence_ids.length)box.append(sourceButtons(m.evidence_ids));if(m.uncertainties.length){const details=el('details');details.append(el('summary','','불확실성과 한계'),list(m.uncertainties));box.append(details)}
-          if(m.proposed_change&&m.proposed_change.scope!=='none'){const change=el('div','wb-proposed-change');change.append(el('strong','','판단 변경 제안'),el('p','',m.proposed_change.summary),el('p','hint',m.proposed_change.reason));if(m.proposed_change.scope==='reasoning'){const apply=button('변경 반영 · 후속 재평가',()=>decisionAction('revise',m.request_id),'primary');apply.disabled=doc.run.status!=='completed'||doc.extensions?.decision_actions?.some(x=>x.result.status==='running');change.append(apply,el('p','hint','당시 자료로 새 실행을 만들고 검증·종합·품질 평가를 다시 해요.'))}else change.append(button('투자 설정에서 변경하기',()=>document.getElementById('tab-setup').click()));box.append(change)}root.append(box)}
+          if(m.proposed_change&&m.proposed_change.scope!=='none'){const change=el('div','wb-proposed-change');change.append(el('strong','','판단 변경 제안'),el('p','',m.proposed_change.summary),el('p','hint',m.proposed_change.reason));if(m.proposed_change.scope==='reasoning'){const apply=button('변경 반영 · 후속 재평가',()=>decisionAction('revise',m.request_id),'primary');apply.disabled=doc.extensions?.history_scope?.is_active===false||doc.run.status!=='completed'||doc.extensions?.decision_actions?.some(x=>x.result.status==='running');change.append(apply,el('p','hint','당시 자료로 새 실행을 만들고 검증·종합·품질 평가를 다시 해요.'))}else change.append(button('투자 설정에서 변경하기',()=>document.getElementById('tab-setup').click()));box.append(change)}root.append(box)}
         if(!data.messages.length)root.append(el('p','hint','이 실행과 에이전트에 대한 첫 질문을 남겨보세요.'));
         root.scrollTop=root.scrollHeight;
       }

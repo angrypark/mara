@@ -5,9 +5,9 @@ from datetime import datetime
 from xml.etree import ElementTree as ET
 from .research_sources import finite,dated
 
-NAMES={'ITOT':'iShares Core S&P Total U.S. Stock Market ETF',
+NAMES={'SOXX':'iShares Semiconductor ETF','ITOT':'iShares Core S&P Total U.S. Stock Market ETF',
        'IVV':'iShares Core S&P 500 ETF','ITA':'iShares U.S. Aerospace & Defense ETF'}
-PORTFOLIOS={'ITOT':'239724','IVV':'239726','ITA':'239502'}
+PORTFOLIOS={'SOXX':'239705','ITOT':'239724','IVV':'239726','ITA':'239502'}
 NS='urn:schemas-microsoft-com:office:spreadsheet'
 
 

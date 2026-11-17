@@ -26,3 +26,12 @@ class CostExhibitsTests(unittest.TestCase):
         self.assertFalse(build(p,m,{'ETF':.4,'CASH':.6},1000)['available'])
         p,m=self.fixture();r=build(p,m,{'CASH':1},1000)
         self.assertIsNone(r['deposit_vs_sale_example']['deposit_to_cash_needed_to_restore_target'])
+
+    def test_usd_buffer_only_pays_fx_and_stays_separate_from_stock_units(self):
+        p,m=self.fixture();m['assets']['USD_CASH']={'asset_class':'cash','currency':'USD'};m['prices']['USD_CASH']={'price':10}
+        result=build(p,m,{'ETF':.6,'USD_CASH':.4},1000);a=result['scenarios'][0]
+        self.assertTrue(result['available'])
+        self.assertAlmostEqual(a['monthly_cost_at_target_notional'],600*(1.001*1.0005-1)+400*.0005)
+        cash=a['first_contribution_integer_illustration'][1]
+        self.assertEqual(cash['asset_type'],'foreign_cash');self.assertAlmostEqual(cash['estimated_cash_needed'],400)
+        self.assertAlmostEqual(cash['estimated_fee_fx_cost'],400-400/1.0005)

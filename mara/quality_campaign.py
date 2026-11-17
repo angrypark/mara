@@ -1,4 +1,5 @@
 """Resumable baseline + five real generation/evaluation cycles. No order authority."""
+from .history import latest as active_latest
 import copy
 import fcntl
 import os
@@ -89,7 +90,7 @@ class Campaign:
             if previous[0]['body']['baseline_id']!=baseline_id:raise ValueError('Campaign request identity conflict')
             return previous[0]['body']
         event=self.s.get(baseline_id)
-        if event['kind']!='completed' or self.s.latest('completed')['id']!=baseline_id:raise ValueError('Start from the latest completed report')
+        if event['kind']!='completed' or (active_latest(self.s,'completed') or {}).get('id')!=baseline_id:raise ValueError('Start from the latest completed report')
         state={'campaign_id':campaign_id,'baseline_id':baseline_id,'as_of':event['effective'],'rounds_required':5,
             'rules':frozen_rules(),'rubric_hash':sha(rubric()),'provider':self.model.identity,
             'evaluator_spec_hash':evaluator_fingerprint(self.s,self.model,event['effective']),
@@ -162,7 +163,7 @@ class Campaign:
                         and e['body']['improvement']['round']==round_no]
                     if generated:event=generated[-1]
                     else:
-                        if self.s.latest('completed')['id']!=parent_id:raise ValueError('Newer user decision exists; preserve this campaign as a historical branch')
+                        if (active_latest(self.s,'completed') or {}).get('id')!=parent_id:raise ValueError('Newer user decision exists; preserve this campaign as a historical branch')
                         improvement={'campaign_id':campaign_id,'round':round_no,'parent_completed_id':parent_id,
                             'evaluation_event_id':prior['evaluation_event_id'],'feedback':feedback(evaluation),
                             'previous_proposal':copy.deepcopy(self.s.get(parent_id)['body']['proposal']),

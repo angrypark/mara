@@ -70,7 +70,9 @@ def project(s,run_id):
     start=next((e for e in ev if e['kind']=='run_started'),None)
     completed=next((e for e in reversed(ev) if e['kind']=='completed'),None)
     basis=(start or completed)['body'];as_of=basis['as_of'];state=run_state(ev,s)
-    market=s.get(basis['market_id'])['body'];profile=s.get(basis['profile_id'])['body']
+    from .history import market_input,profile_input,scope as history_scope
+    boundary=basis.get('history_scope',{'after_seq':0,'reset_id':None})
+    market=market_input(s.get(basis['market_id'])['body'],boundary);profile=profile_input(s.get(basis['profile_id'])['body'],boundary)
     registry=copy.deepcopy(basis.get('agent_registry') or catalogue())
     if 'evaluator' not in {a['id'] for a in registry}:registry.append(next(a for a in catalogue() if a['id']=='evaluator'))
     market=copy.deepcopy(market)
@@ -255,7 +257,7 @@ def project(s,run_id):
     return validate_workbench({'schema_version':'mara.workbench/1.2.0',
         'run':{'id':run_id,'as_of':as_of,'status':state,'mode':basis['mode'],'report_id':completed['id'] if completed else None,
             'previous_id':basis.get('previous_id'),'revision_of':basis.get('revision_of'),'message':message},
-        'components':components,'edges':edges,'sources':sources,'portfolio':portfolio,'extensions':{'projection_corrections':corrections,
+        'components':components,'edges':edges,'sources':sources,'portfolio':portfolio,'extensions':{'history_scope':dict(boundary,is_active=boundary==history_scope(s)),'projection_corrections':corrections,
             'quality_campaign':quality,'evaluation_stability':stability,'analysis':report['body'].get('analysis') if report else None,
             'coverage_ledger':report['body'].get('coverage_ledger',[]) if report else [],
             'flow':flow,'evaluation':evaluation,'decision_actions':actions,'lineage':lineage}})

@@ -6,7 +6,9 @@ def present(session,row):
     if row is None:return None
     result=copy.deepcopy(session.get(row['id']));r=result['body']
     if row['kind']!='completed':raise PermissionError('Completed report required')
-    market=session.get(r['market_id'])['body'];profile=session.get(r['profile_id'])['body']
+    from .history import market_input,profile_input
+    boundary=r.get('history_scope',{'after_seq':0,'reset_id':None})
+    market=market_input(session.get(r['market_id'])['body'],boundary);profile=profile_input(session.get(r['profile_id'])['body'],boundary)
     previous=session.get(r['previous_id']) if r.get('previous_id') else None
     prior_market=session.get(previous['body']['market_id'])['body'] if previous else None
     started=session.store.db.execute('SELECT * FROM events WHERE owner=? AND run_id=? AND kind=? ORDER BY seq LIMIT 1',

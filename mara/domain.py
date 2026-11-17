@@ -69,6 +69,8 @@ def profile(p):
         if h.get('mortgage_rate') is not None:number(h['mortgage_rate'],0,1)
         if h.get('debt_payment_in_expenses','unknown') not in {'yes','no','unknown'}:raise ValueError('Invalid debt payment scope')
     if p.get('contribution_risk_preference','inherit') not in {'inherit','growth'}:raise ValueError('Invalid contribution risk preference')
+    if p.get('investment_style','general') not in {'general','aggressive_innovation'}:raise ValueError('Invalid investment style')
+    if p.get('usd_buffer_reference_fraction') is not None:number(p['usd_buffer_reference_fraction'],0,1)
     if 'criteria' in p:
         c=p['criteria']
         required(c,['risk_level','preferred_sectors','excluded_sectors','max_sector_fraction',

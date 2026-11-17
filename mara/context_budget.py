@@ -1,9 +1,11 @@
 """Bounded role projections of one preceding run; immutable originals untouched."""
 import copy
 
-# Reserve space for the immediate campaign parent and one format-repair output.
-LIMITS={'context':512000,'evidence':512000,'buffett':640000,'marks':640000,'bogle':640000,
-        'reflection':768000,'memory':640000,'validation':1024000,'leader':1024000,'evaluator':1024000}
+# Bounded delivery envelopes: 64k base + 368k supplemental facts, one preceding
+# week of maximum 38k narratives, and one rejected-output repair. Keep room for
+# schema/provenance metadata without silently dropping original counterarguments.
+LIMITS={'context':704000,'evidence':768000,'buffett':832000,'marks':832000,'bogle':832000,'wood':832000,
+        'reflection':832000,'memory':704000,'validation':1152000,'leader':1152000,'evaluator':1024000}
 PROPOSAL=('action','weights','rationale','dissent','risks','next_checks','premise_changes','validation_response','eligibility')
 
 

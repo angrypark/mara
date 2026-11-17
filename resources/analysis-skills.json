@@ -1,10 +1,88 @@
 [
- {"id":"household","version":"1.0","label":"가계 재무와 유동성","roles":["context","marks","validation","leader"],"guide":"guides/skills/household.md"},
- {"id":"accumulation","version":"1.0","label":"신규 소득의 정기 적립","roles":["context","bogle","validation","leader"],"guide":"guides/skills/accumulation.md"},
- {"id":"equity-valuation","version":"1.0","label":"개별 기업과 가격 검토","roles":["buffett","marks","validation"],"guide":"guides/skills/equity-valuation.md"},
- {"id":"fund-analysis","version":"1.0","label":"분산 상품 검토","roles":["bogle","validation","leader"],"guide":"guides/skills/fund-analysis.md"},
- {"id":"reports","version":"1.0","label":"기관 리포트와 언론 자료","roles":["evidence","marks"],"guide":"guides/skills/reports.md"},
- {"id":"gap-resolution","version":"1.0","label":"자료 공백과 다음 행동","roles":["*"],"guide":"guides/skills/gap-resolution.md"},
- {"id":"proposal-validation","version":"1.0","label":"제안과 보류의 검증","roles":["validation","leader"],"guide":"guides/skills/proposal-validation.md"},
- {"id":"learning","version":"1.0","label":"자료와 판단 과정 회고","roles":["reflection","memory"],"guide":"guides/skills/learning.md"}
+  {
+    "id": "household",
+    "version": "1.0",
+    "label": "가계 재무와 유동성",
+    "roles": [
+      "context",
+      "marks",
+      "validation",
+      "leader"
+    ],
+    "guide": "guides/skills/household.md"
+  },
+  {
+    "id": "accumulation",
+    "version": "1.0",
+    "label": "신규 소득의 정기 적립",
+    "roles": [
+      "context",
+      "bogle",
+      "validation",
+      "leader"
+    ],
+    "guide": "guides/skills/accumulation.md"
+  },
+  {
+    "id": "equity-valuation",
+    "version": "1.0",
+    "label": "개별 기업과 가격 검토",
+    "roles": [
+      "buffett",
+      "marks",
+      "validation",
+      "wood"
+    ],
+    "guide": "guides/skills/equity-valuation.md"
+  },
+  {
+    "id": "fund-analysis",
+    "version": "1.0",
+    "label": "분산 상품 검토",
+    "roles": [
+      "bogle",
+      "validation",
+      "leader"
+    ],
+    "guide": "guides/skills/fund-analysis.md"
+  },
+  {
+    "id": "reports",
+    "version": "1.0",
+    "label": "기관 리포트와 언론 자료",
+    "roles": [
+      "evidence",
+      "marks"
+    ],
+    "guide": "guides/skills/reports.md"
+  },
+  {
+    "id": "gap-resolution",
+    "version": "1.0",
+    "label": "자료 공백과 다음 행동",
+    "roles": [
+      "*"
+    ],
+    "guide": "guides/skills/gap-resolution.md"
+  },
+  {
+    "id": "proposal-validation",
+    "version": "1.0",
+    "label": "제안과 보류의 검증",
+    "roles": [
+      "validation",
+      "leader"
+    ],
+    "guide": "guides/skills/proposal-validation.md"
+  },
+  {
+    "id": "learning",
+    "version": "1.0",
+    "label": "자료와 판단 과정 회고",
+    "roles": [
+      "reflection",
+      "memory"
+    ],
+    "guide": "guides/skills/learning.md"
+  }
 ]

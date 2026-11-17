@@ -13,11 +13,12 @@ from .domain import day
 SEC_TICKERS='https://www.sec.gov/files/company_tickers.json'
 FED='https://www.federalreserve.gov/feeds/press_monetary.xml'
 FUNDS={
+ 'SOXX':'https://www.ishares.com/us/products/239705/ishares-semiconductor-etf',
  'ITOT':'https://www.ishares.com/us/products/239724/ishares-core-s-p-total-u-s-stock-market-etf',
  'IVV':'https://www.ishares.com/us/products/239726/ishares-core-s-p-500-etf',
  'ITA':'https://www.ishares.com/us/products/239502/ishares-u-s-aerospace-defense-etf'}
 METRICS={
- 'revenue':('USD',['RevenueFromContractWithCustomerExcludingAssessedTax','Revenues','SalesRevenueNet']),
+ 'revenue':('USD',['RevenueFromContractWithCustomerExcludingAssessedTax','RevenueFromContractWithCustomerIncludingAssessedTax','Revenues','SalesRevenueNet']),
  'net_income':('USD',['NetIncomeLoss','ProfitLoss']),
  'operating_cashflow':('USD',['NetCashProvidedByUsedInOperatingActivities']),
  'capital_expenditure':('USD',['PaymentsToAcquirePropertyPlantAndEquipment']),

@@ -60,7 +60,8 @@ if __name__=='__main__':
     raw=sys.stdin.buffer.read(8_000_001)
     if len(raw)>8_000_000:raise ValueError('PDF byte limit')
     reader=PdfReader(io.BytesIO(raw))
-    if reader.is_encrypted or not 1<=len(reader.pages)<=350:raise ValueError('PDF page/encryption limit')
+    if reader.is_encrypted and not reader.decrypt(''):raise ValueError('PDF requires a nonempty password')
+    if not 1<=len(reader.pages)<=350:raise ValueError('PDF page limit')
     parts=[];size=0
     for n,page in enumerate(reader.pages,1):
         content=page.get_contents()

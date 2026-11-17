@@ -13,31 +13,43 @@ class ContextBudgetTests(unittest.TestCase):
     def test_three_weeks_with_full_supplemental_evidence_preserve_reasoning(self):
         sizes=[]
         class Model(DemoModel):
+            mode='live' # Exercise the actual narrative contract with a local callback.
+            def __init__(self):self.repaired=set()
             def complete(self,role,guide,p,contract):
                 sizes.append((role,len(d.dumps(p))))
                 if p.get('previous'):
                     self_check=p['previous']['projection']
                     assert self_check['source_event_id']
                     if role in ('validation','leader','reflection'):
-                        assert set(p['previous']['perspectives'])=={'buffett','marks','bogle'}
+                        assert set(p['previous']['perspectives'])=={'buffett','marks','bogle','wood'}
                         assert all('critical countercase' in x['falsifiers'] for x in p['previous']['perspectives'].values())
                 out=super().complete(role,guide,p,contract)
-                if role in ('buffett','marks','bogle','leader'):out['weights']={'FUND':.4,'CASH':.6}
-                if role in ('buffett','marks','bogle'):out['falsifiers']=['critical countercase']
+                if role=='evaluator':return out
+                key=(role,p['as_of'],p.get('analysis_stage'))
+                if key not in self.repaired:
+                    self.repaired.add(key)
+                    return {'synthetic_invalid_output':'r'*37000}
+                out['judgment_report']={'schema_version':'mara.judgment-report/1.0',
+                    'title':'Synthetic maximum narrative','as_of':p['as_of'],
+                    'evidence_ids':[p['market']['facts'][0]['id']],
+                    **{field:str(i)*3500 for i,field in enumerate(
+                        ('portfolio_context','market_context','decision_method','conclusion'))}}
+                if role in ('buffett','marks','bogle','wood','leader'):out['weights']={'FUND':.4,'CASH':.6}
+                if role in ('buffett','marks','bogle','wood'):out['falsifiers']=['critical countercase']
                 if role=='leader':out['action']='adjust'
                 fields={'context':('summary','constraints'),'evidence':('summary','drivers'),
-                    'buffett':('thesis','decision_basis'),'marks':('thesis','decision_basis'),'bogle':('thesis','decision_basis'),
+                    'buffett':('thesis','decision_basis'),'marks':('thesis','decision_basis'),'bogle':('thesis','decision_basis'),'wood':('thesis','decision_basis'),
                     'validation':('reason','issues'),'leader':('rationale','dissent'),
                     'reflection':('investment_outcome','lessons'),'memory':('summary','conflicts')}
-                first,second=fields[role];out[first]='SYNTHETIC '+('x'*14900)
-                out[second]=['Synthetic boundary '+('y'*max(0,23800-len(d.dumps(out))-100))]
-                assert 23000<len(d.dumps(out))<24000
+                first,second=fields[role];out[first]='SYNTHETIC '+('x'*14000)
+                out[second]=['Synthetic boundary '+('y'*max(0,37800-len(d.dumps(out))-100))]
+                assert 37000<len(d.dumps(out))<38000
                 return out
         with tempfile.TemporaryDirectory() as tmp:
             db=Store(Path(tmp)/'db');s=db.session(db.create_user('synthetic'));engine=Engine(s,Model())
-            # Initial 64k plus the full 80k supplemental tool allowance. This
+            # Initial 64k plus the full 368k shared and reserved tool allowance. This
             # tests delivery, not acquisition: every synthetic fact is retained.
-            p=profile();m=market();remaining=144000-sum(len(f['text']) for f in m['facts'])
+            p=profile();m=market();remaining=432000-sum(len(f['text']) for f in m['facts'])
             for i in range(10):
                 size=remaining//(10-i);remaining-=size
                 m['facts'].append(dict(m['facts'][0],id='research-fixture-'+str(i),text='x'*size,research_tool='candles'))

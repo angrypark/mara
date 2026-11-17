@@ -60,5 +60,5 @@ class AnalysisPackTests(unittest.TestCase):
     def test_equal_numeric_weights_do_not_split_integer_and_float_cash(self):
         p,m,a,v=fixture();v={'nav':1000,'values':{'CASH':1000},'weights':{'CASH':1.0}}
         r=build(p,a,m,v,1000)['comparison']['independent_replay']
-        self.assertEqual(r['verified_name_count'],6)
+        self.assertEqual(r['verified_name_count'],5)
         self.assertEqual(r['distinct_positive_weight_count'],4)

@@ -6,12 +6,16 @@ PROTECTED = {'principle', 'rare_risk'}
 
 
 class Knowledge:
-    def __init__(self, session):
+    def __init__(self, session, after_seq=None):
         self.s = session
+        from .history import scope
+        self.after_seq=scope(session)['after_seq'] if after_seq is None else after_seq
 
     def current(self, as_of):
         result = {}
         for e in self.s.events('knowledge', as_of):
+            from .history import belongs
+            if not belongs(self.s,e,{'after_seq':self.after_seq}):continue
             result[e['body']['key']] = dict(e['body'], event_id=e['id'])
         return result
 
@@ -24,7 +28,7 @@ class Knowledge:
         from .store import Session, SHARED
         available = self.active(as_of)
         if self.s.owner != SHARED:
-            available += Knowledge(Session(self.s.store, SHARED)).active(as_of)
+            available += Knowledge(Session(self.s.store, SHARED),self.after_seq).active(as_of)
         items = sorted(available, key=lambda k: (k['category'] in PROTECTED, k['priority']), reverse=True)
         selected, size = [], 0
         for k in items:

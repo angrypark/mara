@@ -43,7 +43,7 @@ def build(profile,actual,market,valuation,capital,selected=None):
         mortgage_rate_sensitivity={'annual_rate_increase_assumption':.02,'monthly_interest_only_increase':h['mortgage_balance']*.02/12,
             'scope':'원금 고정 단순 이자 민감도. 변동금리 여부·만기·상환방식 미확인으로 실제 상환액 예측 아님'} if h['mortgage_balance'] else None)
     histories=market.get('return_histories',{})
-    if selected is None:selected={'ITOT':.4,'CASH':.6} if 'ITOT' in histories and 'ITOT' in market['assets'] else {'CASH':1}
+    decision_pending=selected is None
     allocations={'cash_proxy':{'CASH':1}}
     for symbol in ('ITOT','IVV'):
         if symbol in histories and symbol in market['assets']:
@@ -77,14 +77,14 @@ def build(profile,actual,market,valuation,capital,selected=None):
         comparison['sensitivity']=sensitivity
     except (ValueError,KeyError,TypeError,StopIteration) as exc:
         comparison['error_type']=type(exc).__name__
-    if selected is None:selected=allocations.get('ITOT_40',{'CASH':1})
+    if selected is None:selected={}
     foreign_symbols={s for s in selected if s!='CASH' and market['assets'].get(s,{}).get('currency') not in (None,profile['base_currency'])}
     unknown_currency=[s for s,w in selected.items() if w>0 and s!='CASH' and market['assets'].get(s,{}).get('currency') is None]
     foreign=sum(selected[s] for s in foreign_symbols)
     foreign_equity=sum(selected[s] for s in foreign_symbols if market['assets'][s].get('asset_class')=='equity')
     equity=sum(w for s,w in selected.items() if s!='CASH' and market['assets'].get(s,{}).get('asset_class')=='equity')
     scenarios=[]
-    for equity_shock,fx_shock in [(-.2,0),(-.4,0),(-.4,-.15),(-.2,.15),(.1,-.1),(-.5,-.2)]:
+    for equity_shock,fx_shock in [(-.2,0),(-.4,0),(-.4,-.15),(-.2,.15),(.1,-.1),(-.5,-.2),(-.7,-.2)]:
         # Non-equity foreign cash has FX exposure only. Domestic cash is unchanged.
         change=equity*equity_shock+foreign*fx_shock+foreign_equity*equity_shock*fx_shock
         scenarios.append({'equity_return_assumption':equity_shock,'foreign_currency_return_in_base_assumption':fx_shock,
@@ -93,8 +93,8 @@ def build(profile,actual,market,valuation,capital,selected=None):
             'breaches_reference_loss_fraction':-change>profile['max_loss_fraction'],
             'breaches_effective_loss_budget':-change>d.loss_budget(profile)['effective_fraction']})
     costs={'status':'account_specific_rates_unconfirmed','assumed_one_way_bps':[0,10,50,100],
-        'monthly_non_cash_allocation':monthly*(1-selected.get('CASH',0)),
-        'monthly_cost_sensitivity':[{'bps':b,'base_currency_amount':monthly*(1-selected.get('CASH',0))*b/10000} for b in (0,10,50,100)],
+        'monthly_non_cash_allocation':monthly*sum(w for s,w in selected.items() if s!='CASH' and market['assets'].get(s,{}).get('asset_class')!='cash'),
+        'monthly_cost_sensitivity':[{'bps':b,'base_currency_amount':monthly*sum(w for s,w in selected.items() if s!='CASH' and market['assets'].get(s,{}).get('asset_class')!='cash')*b/10000} for b in (0,10,50,100)],
         'fund_fee':'운용사 NAV 총수익률에 포함. 역사 비교에서 TER 재차 차감하지 않음.',
         'excluded':'개인별 세금·실제 환전 스프레드·수량/소수점 가능 여부. 주문 전 별도 확인.',
         'authority':'연구용 조건부 계획. 주문·사용자 승인·실제 보유 변경 아님'}
@@ -134,7 +134,8 @@ def build(profile,actual,market,valuation,capital,selected=None):
     from .monitoring_exercise import exercise
     h['monitoring_exercise']=exercise(profile,h,monthly)
     costs['krw_cash_hurdle']=cash_hurdle(profile,costs)
-    result={'risk_budget':d.loss_budget(profile),'macro_consistency':macro_consistency(market),'lookthrough':lookthrough,'schema_version':VERSION,'as_of':market['as_of'],'selected_weights':selected,
+    from .sleeves import build as sleeve_analysis
+    result={'allocation_sleeves':sleeve_analysis(profile,market,selected,capital,monthly,decision_pending),'risk_budget':d.loss_budget(profile),'macro_consistency':macro_consistency(market),'lookthrough':lookthrough,'schema_version':VERSION,'as_of':market['as_of'],'selected_weights':selected,
         'household':h,'comparison':comparison,'products':products,'costs':costs,
         'fx_stress':{'formula':'equity_weight*r + foreign_weight*f + foreign_equity_weight*r*f',
             'base_currency':profile['base_currency'],'capital':capital,'foreign_fraction':foreign,'equity_fraction':equity,
@@ -146,7 +147,7 @@ def build(profile,actual,market,valuation,capital,selected=None):
     result['comparison']['independent_replay']['verified_portfolios']=list(receipt.get('recomputed',{})) if receipt['status']=='passed' else []
     result['comparison']['independent_replay']['verified_name_count']=len(result['comparison']['independent_replay']['verified_portfolios'])
     result['comparison']['independent_replay']['distinct_positive_weight_count']=len({tuple(sorted((s,float(w)) for s,w in allocations[name].items() if w>0)) for name in result['comparison']['independent_replay']['verified_portfolios']})
-    result['comparison']['independent_replay']['stage_scope']='현재 selected_weights의 비교. 최초 분석의 proposal은 잠정 비교안이고 리더가 정한 실제 제안 비중으로 최종 검증에서 다시 계산해요.'
+    result['comparison']['independent_replay']['stage_scope']='현재 selected_weights의 비교. 결정 전에는 proposal이 없고 지수 비중은 벤치마크일 뿐이에요. 리더의 실제 제안 비중으로 최종 검증에서 다시 계산해요.'
     from .krw_comparison import build as krw_compare
     conditions=costs['published_conditions_and_examples']
     result['krw_comparison']={'available':False,'reason':'KRW 기준 공개 비용과 환율 원문이 있어야 원화 비교를 완료할 수 있어요.'}

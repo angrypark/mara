@@ -75,6 +75,8 @@ def output_schema(role):return schema('agent-'+agent(role)['kind'])
 
 def validate_workbench(doc):
     validate(doc,schema('workbench'))
+    from .sleeves import validate as validate_sleeves
+    if doc.get('extensions',{}).get('analysis'):validate_sleeves(doc['extensions']['analysis'])
     ids=[c['id'] for c in doc['components']];sources=[s['id'] for s in doc['sources']]
     if len(set(ids))!=len(ids) or len(set(sources))!=len(sources):raise ContractError('Duplicate component/source')
     for c in doc['components']:

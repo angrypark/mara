@@ -43,7 +43,7 @@ class WorkbenchTests(unittest.TestCase):
         return body,result
     def test_projection_contract_lineage_and_historical_records_unchanged(self):
         original=self.s.export();doc=project(self.s,self.run_id);validate_workbench(doc)
-        self.assertEqual(doc['run']['status'],'completed');self.assertEqual(len(doc['components']),10)
+        self.assertEqual(doc['run']['status'],'completed');self.assertEqual(len(doc['components']),11)
         self.assertEqual(doc['portfolio']['actual']['nav'],self.r['valuation']['nav'])
         self.assertEqual(next(c for c in doc['components'] if c['id']=='reflection')['status'],'skipped')
         validation=next(c for c in doc['components'] if c['id']=='validation')
@@ -108,11 +108,11 @@ class WorkbenchTests(unittest.TestCase):
         with patch.object(registry,'REGISTRY',registry.REGISTRY+[extra]):
             result=self.e.run('2026-11-14',self.db.publish_market(self.m),revision_reason='extension')
             doc=project(self.s,result['run_id'])
-            self.assertIn('research_test',result['perspectives']);self.assertEqual(len(doc['components']),11)
+            self.assertIn('research_test',result['perspectives']);self.assertEqual(len(doc['components']),12)
             c=next(c for c in doc['components'] if c['id']=='research_test');self.assertEqual(c['kind'],'perspective')
             self.assertTrue(any(e['from']=='research_test' and e['to']=='validation' for e in doc['edges']))
         # Recorded catalogue remains visible after plugin removal.
-        self.assertEqual(len(project(self.s,result['run_id'])['components']),11)
+        self.assertEqual(len(project(self.s,result['run_id'])['components']),12)
     def test_all_roles_two_turns_persist_and_never_mutate_proposal(self):
         original_actual=self.s.latest('actual');original_completed=self.s.latest('completed')
         for role in [a['id'] for a in registry.catalogue()]:

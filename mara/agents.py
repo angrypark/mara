@@ -66,7 +66,7 @@ def validate_output(role, obj, payload):
         blocked=any(x['blocks_proposal'] for x in obj['findings'])
         if obj['findings'] and blocked==obj['qualitative_pass']:raise ValueError('Validation findings contradict qualitative_pass')
     if kind == 'reflection':
-        required(obj['perspective_review'],personas())
+        required(obj['perspective_review'],list((payload.get('previous') or {}).get('perspectives',{})) or personas())
         if any(not isinstance(v,str) or not v for v in obj['perspective_review'].values()): raise ValueError('Invalid perspective review')
     if kind == 'memory' and not isinstance(obj['operations'],list): raise ValueError('operations must be list')
     if kind == 'evaluator':
@@ -158,7 +158,9 @@ class Agents:
 
     def guide(self, role):
         if role in self.guide_cache:return self.guide_cache[role]
-        overrides = [e for e in self.s.events('guide',self.as_of) if e['body']['role'] == role]
+        from .history import scope,belongs
+        boundary=scope(self.s,self.as_of,self.run_id)
+        overrides = [e for e in self.s.events('guide',self.as_of) if e['body']['role'] == role and belongs(self.s,e,boundary)]
         value=overrides[-1]['body']['text'] if overrides else resource(agent(role)['guide']).read_text()
         self.guide_cache[role]=value
         return value
@@ -167,6 +169,7 @@ class Agents:
         guide = self.guide(role)
         skills,skill_guide=for_role(role)
         guide += '\n'+skill_guide
+        guide += '\n'+resource('guides/roles/allocation-mandate.md').read_text()
         if payload.get('market',{}).get('research'):
             guide += '\n'+resource('guides/roles/research-tools.md').read_text()
         if payload.get('analysis'):
