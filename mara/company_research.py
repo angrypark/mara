@@ -162,6 +162,9 @@ class CompanyLibrary:
             if not body.get('annual_filing'):raise src.EvidenceError('annual_filing_unavailable')
             filing=body['annual_filing'][0]
         fallback=None;attempts=[]
+        def unavailable(code):
+            error=src.EvidenceError(code);error.attempts=copy.deepcopy(attempts)
+            raise error from None
         def checked(raw,required=()):
             text,fmt=extract(raw);normalized=re.sub(r'\s+',' ',text).casefold()
             head=normalized[:2000]
@@ -179,13 +182,24 @@ class CompanyLibrary:
             text,format_info=checked(raw,required)
         except (OSError,ValueError) as exc:
             attempts.append({'source':filing['url'],'status':safe_code(exc)})
-            fallback=json.loads(resource('resources/issuer-documents.json').read_text())['documents'].get(symbol(ticker))
-            if not fallback or not 0<=(day(as_of)-day(fallback['verified_on'])).days<=180:raise src.EvidenceError('source_access_failed_no_verified_fallback') from None
-            # A quarterly request must never fall back to an annual or earnings document.
-            if fallback.get('filing_accession') and fallback['filing_accession']!=filing['accession']:raise ValueError('Issuer fallback is for a different annual filing')
-            if accession and fallback.get('filing_accession')!=accession:raise src.EvidenceError('fallback_filing_identity_unverified')
-            raw,meta=self.archive().get(fallback['url'])
-            text,format_info=checked(raw,fallback.get('required_text',[]))
+            registry=json.loads(resource('resources/issuer-documents.json').read_text())
+            candidates=[registry['documents'].get(symbol(ticker))]+registry.get('additional_documents',{}).get(symbol(ticker),[])
+            candidates=[f for f in candidates if f and f.get('filing_accession')==filing['accession']
+                and 0<=(day(as_of)-day(f['verified_on'])).days<=180
+                and all(key not in f or f[key]==expected for key,expected in
+                    (('cik',body.get('cik')),('form',filing.get('form')),('report_date',filing.get('report_date'))))]
+            if not candidates:
+                unavailable(attempts[-1]['status'] if attempts[-1]['status'].startswith('source_text_extraction') else 'no_verified_same_filing_source')
+            for candidate in candidates[:3]:
+                try:
+                    raw,meta=self.archive().get(candidate['url'])
+                    if candidate.get('observed_sha256') and meta['sha256']!=candidate['observed_sha256']:
+                        raise src.EvidenceError('registered_document_changed_requires_review')
+                    text,format_info=checked(raw,candidate.get('required_text',[]))
+                    fallback=candidate;break
+                except (OSError,ValueError) as error:
+                    attempts.append({'source':candidate['url'],'status':safe_code(error)})
+            if fallback is None:unavailable(attempts[-1]['status'])
         if expected_sha256 and meta['sha256']!=expected_sha256:raise src.EvidenceError('document_changed_restart_cursor')
         return text,{'symbol':symbol(ticker),'filing':filing,'issuer_fallback':fallback,'raw_ref':meta,
             'attempts':attempts,'text_length':len(text),'extraction_version':EXTRACTION_VERSION,'document_format':format_info,
@@ -258,6 +272,7 @@ class ResearchTools:
                     except Exception:company['quote_status']='unavailable; no assumed price'
                 # Make the full retrieved financial and filing evidence available to
                 # the deterministic selected-asset gate as well as downstream agents.
+                company['evidence_refs']={}
                 for kind,value in [('sec_financials',company['financials']),('sec_filings',company['filings'])]:
                     fid='company-'+kind+'-'+company['version'][:24]
                     fact={'id':fid,'topic':company['symbol']+' · '+kind,'text':dumps(value),
@@ -266,7 +281,13 @@ class ResearchTools:
                         'known_at':self.as_of,'valid_until':self.as_of,'uncertainty':value['limits'],'research_tool':kind,
                         'company_identity':{'symbol':company['symbol'],'cik':company['cik'],'version':company['version'],'verification':'SEC submissions ticker match'},
                         'raw_refs':company['raw_refs']}
-                    self.activate(role,fact,market)
+                    delivered=self.activate(role,fact,market)
+                    company['evidence_refs'][kind]={'fact_id':fid if delivered else None,
+                        'status':'delivered' if delivered else 'stored_not_activated',
+                        'source':fact['source'],'rule':'Read the actual delivered fact; this link is not financial evidence.'}
+                company.pop('financials');company.pop('filings')
+                company['document_catalog']={'count':len(company.pop('documents',[])),'read_with':'filing_list'}
+                company['scope']='Company identity, quote and summary. Financial tables/filings are separate cited facts; full original dossier is retained in the library.'
         elif tool=='filing_list':result=self.lib.filing_list(args['symbol'],self.as_of)
         elif tool=='filing_search':result=self.lib.filing_search(args['symbol'],args['query'],self.as_of,
             args.get('accession'),args.get('offset',0),args.get('expected_sha256'),args.get('expected_extraction_version'))
@@ -364,6 +385,7 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
                 else:answer=runner.execute(role,call,payload['market'])
             except (OSError,ValueError,KeyError,TypeError,IndexError) as exc:
                 answer={'status':'unavailable','reason':safe_code(exc),'action':'Reduce scope or use already frozen evidence; never invent data'}
+                if isinstance(exc,src.EvidenceError) and getattr(exc,'attempts',None):answer['source_attempts']=exc.attempts
                 s.append('research_tool_failure',{'role':role,'call':call,'result':answer},as_of,run_id)
             receipts=answer.get('result',{}).get('receipts',[])
             failures=[r for r in receipts if r.get('status')=='unavailable']

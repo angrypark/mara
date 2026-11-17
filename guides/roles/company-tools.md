@@ -13,7 +13,7 @@ v1.1 · 2026-11-16: prior_review에는 직전 독립 평가의 구체적인 자�
 - search: query(티커/회사명 일부), offset, limit≤20. SEC 전체 목록 불가시 부분 seed라고 표시해요.
 - collect: symbols 최대200. 공식 기업 재무·공시 목록을 공통 보관소에 저장하며 건별 실패·재시도 가능. 충분한 기존 근거는 재수집 불필요.
 - compare: symbols 최대200, offset, limit≤20. 연간 매출·현금/이익률·FCF proxy 및 알려진 시점. 선별 점수나 moat 판정 아님.
-- company: symbol. 사업 식별·공시·재무의 원래 기간/단위/출처. 현재 주가와 price evidence는 최종 payload.market에 있음.
+- company: symbol. 회사와 USD 가격 요약, 재무표·공시의 evidence_refs를 반환해요. delivered인 fact_id를 evidence_read로 읽으면 원래 기간·단위·출처를 볼 수 있어요. stored_not_activated는 입력 공간 때문에 전달되지 않았다는 뜻이며 근거로 인용하지 않아요. 전체 공시 목록은 filing_list로 읽어요.
 - filing_search: symbol, query. 최신 10-K/20-F에서 competition|capital allocation|risk factors 등 키워드 주변 발췌. 본문 확인으로 질적 논지를 검증해요.
 - valuation: symbol과 assumptions 객체. owner_earnings_per_share, currency=USD, earnings_period, share_basis(희석·분할 기준), normalization(원자료에서 정상화한 근거), price, price_as_of, source_ids, margin_of_safety, scenarios 3개(bear/base/bull 각각 growth,discount,terminal_growth,years,reason). 모두 직접 명시. company 도구가 반환한 USD quote의 가격·날짜와 해당 fact ID를 사용해요. CFO-capex를 owner earnings로 자동 대입 금지. 새로 제시한 가정이지 사실 아님. 단위/분할이 불명확하면 계산하지 않아요.
 

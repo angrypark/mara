@@ -7,19 +7,50 @@ import io
 import zipfile
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
+from pathlib import Path
 
 
-EXTRACTION_VERSION='mara.document-text/1.2'
+EXTRACTION_VERSION='mara.document-text/1.3'
+
+
+class ExtractionError(ValueError):
+    def __init__(self,code):super().__init__(code);self.code=code
 
 
 class FilingText(HTMLParser):
-    def __init__(self):super().__init__();self.hidden=0;self.parts=[]
+    VOID={'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'}
+    BLOCK={'p','div','tr','h1','h2','h3','br'}
+    def __init__(self):super().__init__();self.hidden=0;self.parts=[];self.stack=[];self.skipped=0
+    def close_optional(self,tags,boundaries):
+        # HTML permits omitted end tags. A hidden prior row/cell must not hide
+        # its visible sibling; stop at the containing table/list boundary.
+        for tag,_ in reversed(self.stack):
+            if tag in tags:self.handle_endtag(tag);return
+            if tag in boundaries:return
     def handle_starttag(self,t,a):
-        if t in ('script','style','ix:header'):self.hidden+=1
-        if t in ('p','div','tr','h1','h2','h3','br'):self.parts.append('\n')
-        if t in ('td','th'):self.parts.append(' | ')
+        if t=='tr':self.close_optional({'tr'},{'table'})
+        if t in {'td','th'}:self.close_optional({'td','th'},{'tr','table'})
+        if t in {'thead','tbody','tfoot'}:self.close_optional({'thead','tbody','tfoot'},{'table'})
+        if t=='li':self.close_optional({'li'},{'ul','ol'})
+        if t in {'dt','dd'}:self.close_optional({'dt','dd'},{'dl'})
+        if t=='option':self.close_optional({'option'},{'select','datalist','optgroup'})
+        if t in {'p','div','table','ul','ol','dl','section','article','aside','header','footer','h1','h2','h3','h4','h5','h6'}:
+            self.close_optional({'p'},{'table','td','th'})
+        attrs=dict(a);style=re.sub(r'\s+','',attrs.get('style','') or '').lower()
+        display=None;important=False
+        for declaration in style.split(';'):
+            name,_,value=declaration.partition(':');priority=value.endswith('!important')
+            if name=='display' and (priority or not important):display=value.removesuffix('!important');important=priority
+        hides=t in ('script','style','ix:header') or 'hidden' in attrs or display=='none'
+        if hides:self.skipped+=1
+        if t not in self.VOID:self.stack.append((t,hides));self.hidden+=int(hides)
+        if not self.hidden and not hides:
+            if t in self.BLOCK:self.parts.append('\n')
+            if t in ('td','th'):self.parts.append(' | ')
     def handle_endtag(self,t):
-        if t in ('script','style','ix:header'):self.hidden=max(0,self.hidden-1)
+        for i in range(len(self.stack)-1,-1,-1):
+            if self.stack[i][0]==t:
+                self.hidden-=sum(int(hides) for _,hides in self.stack[i:]);del self.stack[i:];break
     def handle_data(self,s):
         if not self.hidden:self.parts.append(s)
     def text(self):return re.sub(r'[ \t]+',' ',''.join(self.parts))
@@ -44,17 +75,18 @@ def extract(raw):
     if raw.startswith(b'%PDF-'):
         # The untrusted parser is bounded separately from the long-lived service.
         try:
-            result=subprocess.run([sys.executable,'-m','mara.document_text'],input=raw,capture_output=True,timeout=30)
-            if result.returncode:raise ValueError('PDF extraction unavailable or exceeded document limits')
+            result=subprocess.run([sys.executable,str(Path(__file__).resolve())],input=raw,capture_output=True,timeout=30)
+            if result.returncode:raise ExtractionError('source_text_extraction_failed')
             value=json.loads(result.stdout)
-        except (OSError,subprocess.TimeoutExpired,ValueError):
-            raise ValueError('PDF text extraction failed; no HTML fallback for binary PDF') from None
+        except subprocess.TimeoutExpired:raise ExtractionError('source_text_extraction_timeout') from None
+        except (OSError,ValueError):raise ExtractionError('source_text_extraction_failed') from None
         return value['text'],{'format':'pdf','pages':value['pages'],'scope':'Text layer with PDF page markers; no OCR or verified table-cell alignment'}
     if b'<html' not in raw[:10000].lower() and b'<!doctype' not in raw[:1000].lower():
         raise ValueError('Unsupported issuer document format')
     p=FilingText();p.feed(raw.decode('utf-8',errors='replace'));text=p.text()
     if len(text.strip())<100:raise ValueError('Issuer document text unavailable')
-    return text,{'format':'html','scope':'Visible HTML text; keyword excerpts are not whole-document review'}
+    return text,{'format':'html','explicit_hidden_elements_skipped':p.skipped,
+        'scope':'Static HTML text excluding explicit hidden attributes and inline display:none. External CSS, visibility overrides and JavaScript rendering are not evaluated; excerpts are not whole-document review.'}
 
 
 def excerpts(text,query):

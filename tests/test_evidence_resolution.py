@@ -32,6 +32,42 @@ class EvidenceResolutionTests(unittest.TestCase):
   return engine.run(DAY,self.db.publish_market(self.m))
  def dossier(self):
   return {'symbol':'FIX','entity':'Fixture Inc.','annual_filing':[{'form':'10-K','filed':DAY,'accession':ACC,'url':'https://www.sec.gov/Archives/edgar/data/1/000000000126000001/a.htm'}]}
+ def test_quarterly_fallback_requires_exact_identity_and_pinned_bytes(self):
+  raw=b'<html><body>Fixture Inc. Form 10-Q September 30, 2026. '+b'Quarterly disclosure and accounting notes. '*15+b'</body></html>'
+  sha=hashlib.sha256(raw).hexdigest();body=self.dossier();body['cik']=1
+  body['documents']=[dict(body['annual_filing'][0],form='10-Q',report_date='2026-09-30')]
+  alternate={'url':'https://issuer.example/quarter.html','filing_accession':ACC,'cik':1,'form':'10-Q',
+   'report_date':'2026-09-30','verified_on':DAY,'observed_sha256':sha,'required_text':['Fixture Inc.','10-Q','September 30, 2026']}
+  registry=Path(self.tmp.name)/'registry.json'
+  def transport(url):
+   if 'sec.gov' in url:raise OSError('SEC transport unavailable')
+   return raw,{'sha256':sha,'source':url}
+  def write(row):registry.write_text(json.dumps({'documents':{},'additional_documents':{'FIX':[row]}}))
+  with patch.object(self.lib,'latest',return_value=body),patch.object(self.lib,'archive') as ar,patch('mara.company_research.resource',return_value=registry):
+   ar.return_value.get.side_effect=transport;write(alternate)
+   result=self.lib.filing_read('FIX',DAY,ACC);self.assertEqual(result['filing']['form'],'10-Q');self.assertEqual(result['issuer_fallback']['filing_accession'],ACC)
+   for change in ({'filing_accession':'0000000001-26-000002'},{'cik':2},{'form':'10-Q/A'},{'report_date':'2025-09-30'}):
+    write(dict(alternate,**change))
+    with self.assertRaisesRegex(ValueError,'no_verified_same_filing_source'):self.lib.filing_read('FIX',DAY,ACC)
+   write(dict(alternate,observed_sha256=HASH))
+   with self.assertRaisesRegex(ValueError,'registered_document_changed'):self.lib.filing_read('FIX',DAY,ACC)
+
+ def test_company_refs_preserve_financial_values_and_report_budget_failure(self):
+  fin=sec_financials(financial(),DAY);body=self.dossier()
+  body.update(cik=1,version='stable-fixture-version',known_at=DAY,financials=fin,
+   filings={'filings':body['annual_filing'],'limits':'Fixture filing metadata'},raw_refs=[{'source':'https://data.sec.gov/submissions/CIK0000000001.json'},{'source':'https://data.sec.gov/api/xbrl/companyfacts/CIK0000000001.json'}])
+  runner=ResearchTools(self.lib,self.s,'compact-company',DAY)
+  with patch.object(self.lib,'latest',return_value=body):
+   result=runner.execute('buffett',{'tool':'company','arguments':{'symbol':'FIX'}},self.m)
+  company=result['result']['companies'][0];self.assertNotIn('financials',company);self.assertNotIn('filings',company)
+  fid=company['evidence_refs']['sec_financials']['fact_id'];fact=next(f for f in self.m['facts'] if f['id']==fid)
+  self.assertEqual(json.loads(fact['text']),fin);self.assertEqual(company['evidence_refs']['sec_financials']['status'],'delivered')
+  huge=copy.deepcopy(body);huge['version']='large-fixture-version';huge['financials']['limits']='x'*150000
+  with patch.object(self.lib,'latest',return_value=huge):
+   result=runner.execute('buffett',{'tool':'company','arguments':{'symbol':'FIX'}},self.m)
+  link=result['result']['companies'][0]['evidence_refs']['sec_financials']
+  self.assertEqual(link['status'],'stored_not_activated');self.assertIsNone(link['fact_id'])
+  self.assertFalse(any(f['id']=='company-sec_financials-large-fixture-version' for f in self.m['facts']))
  def test_later_matches_and_hash_pinned_read(self):
   text='<html><body>Fixture Inc. Form 10-K '+('diluted table of contents. '+'x'*1800)*8+'ACTUAL NOTE diluted shares and stock compensation.'+'</body></html>'
   raw=text.encode();sha=hashlib.sha256(raw).hexdigest()
@@ -125,7 +161,8 @@ class EvidenceResolutionTests(unittest.TestCase):
   for text in ('Access Denied '+('unavailable '*20),'Other Corporation Form 10-K '+('disclosure '*20)):
    with patch.object(self.lib,'latest',return_value=self.dossier()),patch.object(self.lib,'archive') as ar:
     ar.return_value.get.return_value=(('<html>'+text+'</html>').encode(),{'sha256':HASH})
-    with self.assertRaisesRegex(ValueError,'source_access_failed'):self.lib.filing_read('FIX',DAY,ACC)
+    with self.assertRaisesRegex(ValueError,'no_verified_same_filing_source') as error:self.lib.filing_read('FIX',DAY,ACC)
+    self.assertIn(error.exception.attempts[0]['status'],('source_error_page','document_identity_mismatch'))
   def docx(xml):
    b=io.BytesIO()
    with zipfile.ZipFile(b,'w',zipfile.ZIP_DEFLATED) as z:z.writestr('word/document.xml',xml)
