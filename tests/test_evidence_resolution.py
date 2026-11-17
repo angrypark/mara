@@ -32,6 +32,43 @@ class EvidenceResolutionTests(unittest.TestCase):
   return engine.run(DAY,self.db.publish_market(self.m))
  def dossier(self):
   return {'symbol':'FIX','entity':'Fixture Inc.','annual_filing':[{'form':'10-K','filed':DAY,'accession':ACC,'url':'https://www.sec.gov/Archives/edgar/data/1/000000000126000001/a.htm'}]}
+ def test_fourth_round_discovery_can_be_read_in_fifth_without_claiming_resolution(self):
+  qid=self.scope['questions'][0]['id'];seen=[]
+  class Plan:
+   mode='live';identity={'provider':'fixture'}
+   def complete(self,role,guide,payload,contract):
+    n=payload['round'];seen.append(n)
+    if n<=3:call={'tool':'analysis_read','arguments':{'path':'/analysis/fixture'}}
+    elif n==4:call={'tool':'filing_list','arguments':{'symbol':'FIX'}}
+    elif n==5:call={'tool':'filing_read','arguments':{'symbol':'FIX','accession':ACC}}
+    else:return {'reason':'Fixture source read, analysis still required','calls':[],'stop_reason':'evidence_sufficient'}
+    call['question_ids']=[qid];return {'reason':'Read a source needed by the fixed question','calls':[call]}
+  source={'raw_ref':{'sha256':HASH,'source':'https://www.sec.gov/fixture'},'extraction_version':EXTRACTION_VERSION,
+      'start':0,'end':500,'text':'Synthetic source text. '*25}
+  payload={'profile':self.p,'market':copy.deepcopy(self.m),'decision_scope':self.scope,'analysis':{'fixture':{'value':1}}}
+  with patch.object(self.lib,'filing_list',return_value={'filings':[{'accession':ACC}]}),patch.object(self.lib,'filing_read',return_value=source):
+   result=research_loop(self.s,Plan(),'buffett','guide',payload,'bridge',DAY,self.lib)
+  self.assertEqual(seen,[1,2,3,4,5,6]);access=result['research_access']
+  self.assertEqual(access['extensions'][0]['reason'],'one_discovery_to_read_bridge')
+  self.assertEqual(access['extensions'][1]['reason'],'recent_delivered_source_content')
+  self.assertFalse(access['reading_progress'][3]['source_progress']);self.assertTrue(access['reading_progress'][4]['source_progress'])
+  self.assertTrue(all(q['state']=='awaiting_analysis_review' for q in ledger(self.s,'bridge',self.scope)['questions']))
+ def test_real_research_loop_keeps_eight_round_hard_limit_with_fresh_ranges(self):
+  qid=self.scope['questions'][0]['id'];seen=[]
+  class Plan:
+   mode='live';identity={'provider':'fixture'}
+   def complete(self,role,guide,payload,contract):
+    n=payload['round'];seen.append(n)
+    return {'reason':'Next original text range','calls':[{'tool':'filing_read','arguments':{'symbol':'FIX','accession':ACC,
+      'offset':(n-1)*500,'limit':500,'expected_sha256':HASH,'expected_extraction_version':EXTRACTION_VERSION},'question_ids':[qid]}]}
+  def read(*args,**kwargs):
+   offset=args[3]
+   return {'raw_ref':{'sha256':HASH,'source':'https://www.sec.gov/fixture'},'extraction_version':EXTRACTION_VERSION,
+      'start':offset,'end':offset+500,'text':'Synthetic bounded disclosure. '*20}
+  payload={'profile':self.p,'market':copy.deepcopy(self.m),'decision_scope':self.scope}
+  with patch.object(self.lib,'filing_read',side_effect=read):result=research_loop(self.s,Plan(),'buffett','guide',payload,'eight',DAY,self.lib)
+  self.assertEqual(seen,list(range(1,9)));self.assertEqual(result['research_access']['rounds'],8)
+  self.assertEqual(result['research_access']['stop_reason'],'round_budget')
  def test_quarterly_fallback_requires_exact_identity_and_pinned_bytes(self):
   raw=b'<html><body>Fixture Inc. Form 10-Q September 30, 2026. '+b'Quarterly disclosure and accounting notes. '*15+b'</body></html>'
   sha=hashlib.sha256(raw).hexdigest();body=self.dossier();body['cik']=1
@@ -111,7 +148,7 @@ class EvidenceResolutionTests(unittest.TestCase):
    mode='live'
    def complete(inner,role,g,p,c):return {'reason':'Keep looking','calls':[{'tool':'filing_list','arguments':{'symbol':'FIX'},'question_ids':['portfolio-allocation']}]}
   result=research_loop(self.s,Repeat(),'buffett','guide',copy.deepcopy(payload),'budget',DAY,self.lib)
-  self.assertEqual(result['research_access']['stop_reason'],'round_budget')
+  self.assertEqual(result['research_access']['stop_reason'],'no_recent_source_progress')
   self.assertEqual(len([e for e in self.s.events('research_activity') if e['run_id']=='budget']),4)
  def test_foreign_question_rejected_before_tool(self):
   class Bad(DemoModel):

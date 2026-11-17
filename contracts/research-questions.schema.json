@@ -220,6 +220,52 @@
                 },
                 "sufficiency": {
                   "const": "not_reviewed"
+                },
+                "reading_progress": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "no_new_source_content",
+                        "unavailable",
+                        "stored_not_activated",
+                        "unlinked_discovery",
+                        "delivered_evidence_range",
+                        "delivered_document_range",
+                        "delivered_xbrl_observations",
+                        "delivered_financial_observations",
+                        "new_discovery",
+                        "repeated_discovery",
+                        "calculation_read_or_assumption_model",
+                        "unclassified_or_summary_read",
+                        "partial_source_wrapper_read"
+                      ]
+                    },
+                    "new_units": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "eligible_for_extension": {
+                      "type": "boolean"
+                    },
+                    "discovery_bridge": {
+                      "type": "boolean"
+                    },
+                    "acquired": {
+                      "type": "boolean"
+                    },
+                    "delivered": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "new_units",
+                    "eligible_for_extension",
+                    "discovery_bridge"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -359,6 +405,102 @@
           },
           "sufficiency": {
             "const": "requires_independent_review"
+          },
+          "extensions": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "properties": {
+                "round": {
+                  "type": "integer",
+                  "minimum": 5,
+                  "maximum": 8
+                },
+                "reason": {
+                  "enum": [
+                    "recent_delivered_source_content",
+                    "one_discovery_to_read_bridge"
+                  ]
+                }
+              },
+              "required": [
+                "round",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "reading_progress": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "properties": {
+                "source_progress": {
+                  "type": "boolean"
+                },
+                "new_discovery": {
+                  "type": "boolean"
+                },
+                "records": {
+                  "type": "array",
+                  "maxItems": 2,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "no_new_source_content",
+                          "unavailable",
+                          "stored_not_activated",
+                          "unlinked_discovery",
+                          "delivered_evidence_range",
+                          "delivered_document_range",
+                          "delivered_xbrl_observations",
+                          "delivered_financial_observations",
+                          "new_discovery",
+                          "repeated_discovery",
+                          "calculation_read_or_assumption_model",
+                          "unclassified_or_summary_read",
+                          "partial_source_wrapper_read"
+                        ]
+                      },
+                      "new_units": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "eligible_for_extension": {
+                        "type": "boolean"
+                      },
+                      "discovery_bridge": {
+                        "type": "boolean"
+                      },
+                      "acquired": {
+                        "type": "boolean"
+                      },
+                      "delivered": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "new_units",
+                      "eligible_for_extension",
+                      "discovery_bridge"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "source_progress",
+                "new_discovery",
+                "records"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [

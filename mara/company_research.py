@@ -240,7 +240,7 @@ class ResearchTools:
             'role':role,'role_reserved_used':reserved,'role_reserved_limit':48000,'run_used':total,'run_limit':368000,
             'requested_characters':size,'rule':'동일 실행의 재시도·검증 단계는 같은 역할 예산을 공유. 중복 근거는 다시 차감하지 않음.'}
         research_roles={'evidence','buffett','marks','bogle','wood','validation'}
-        prerequisites={'company_company','sec_financials','sec_filings','company_filing_search','company_filing_read','company_valuation'}
+        prerequisites={'company_company','sec_financials','sec_filings','company_filing_search','company_filing_read','company_valuation','company_xbrl_read'}
         bucket='general' if general+size<=80000 else 'role_reserved' if role in research_roles and fact.get('research_tool') in prerequisites and reserved+size<=48000 else None
         if bucket is None or total+size>368000:return False
         market['facts'].append(fact)
@@ -293,6 +293,9 @@ class ResearchTools:
             args.get('accession'),args.get('offset',0),args.get('expected_sha256'),args.get('expected_extraction_version'))
         elif tool=='filing_read':result=self.lib.filing_read(args['symbol'],self.as_of,args['accession'],
             args.get('offset',0),args.get('limit',10000),args.get('expected_sha256'),args.get('expected_extraction_version'))
+        elif tool in ('xbrl_search','xbrl_read'):
+            from .xbrl_read import run
+            result=run(self.lib,tool,args,self.as_of)
         elif tool=='valuation':
             a=args['assumptions'];quotes=[]
             for fact in market['facts']:
@@ -306,7 +309,7 @@ class ResearchTools:
         else:raise ValueError('Unknown research tool')
         # Receipts and discovery results are not financial evidence.
         fact=None
-        if tool in ('compare','company','filing_search','filing_read','valuation'):
+        if tool in ('compare','company','filing_search','filing_read','valuation','xbrl_read') and result.get('status')!='no_observations':
             ident='company-'+hashlib.sha256(dumps(result).encode()).hexdigest()[:24]
             fact={'id':ident,'topic':tool+' · '+args.get('symbol',','.join(args.get('symbols',[])[:5])),
                 'text':dumps(result),'source':'https://www.sec.gov/search-filings/edgar-application-programming-interfaces',
@@ -314,6 +317,11 @@ class ResearchTools:
                 'uncertainty':'분석자 가정 계산' if tool=='valuation' else 'SEC 표준 재무/발행사 진술. 상세 기간·공시일은 본문에 포함.',
                 'research_tool':'company_'+tool}
             if tool in ('filing_search','filing_read'):fact['raw_refs']=[result['raw_ref']]
+            if tool=='xbrl_read':
+                fact.update(source=result['raw_ref']['source'],raw_refs=[result['raw_ref']],
+                    published_at=max(r['filed'] for r in result['observations']),
+                    company_identity={k:result[k] for k in ('symbol','cik','dossier_version')},
+                    uncertainty='선택한 SEC 항목의 원래 관측치예요. 기간·단위·수정치를 합치지 않았고 정상화 이익이나 내재가치를 검증한 결과가 아니에요.')
             if tool in ('filing_search','filing_read'):fact['source']=result['raw_ref']['source']
             if tool=='company':fact['raw_refs']=[r for company in result['companies'] for r in company.get('raw_refs',[])]
             activated=self.activate(role,fact,market)
@@ -332,17 +340,26 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
     contract=json.loads(resource('contracts/research-plan.schema.json').read_text());toolguide=resource('guides/roles/company-tools.md').read_text()
     from .contracts import validate
     runner=ResearchTools(library,s,run_id,as_of);transcript=[];collected=0
+    from .research_progress import Progress
+    progress=Progress();extensions=[];completed_rounds=0
     questions=(payload.get('decision_scope') or {}).get('questions',[])
     question_ids={q['id'] for q in questions}
-    stop_reason='round_budget';stop_detail='4 research rounds reached'
+    stop_reason='round_budget';stop_detail='8 research rounds reached'
     def record_stop(reason,detail):
         s.append('research_stop',{'role':role,'stage':payload.get('analysis_stage'),'reason':reason,'detail':detail,
-            'question_ids':sorted(question_ids),'calls':len(transcript),'sufficiency':'requires_independent_review'},as_of,run_id)
-    for round_no in range(4):
+            'question_ids':sorted(question_ids),'calls':len(transcript),'sufficiency':'requires_independent_review',
+            'extensions':extensions,'reading_progress':progress.history},as_of,run_id)
+    for round_no in range(8):
+        if round_no>=4:
+            extension=progress.extend()
+            if not extension:
+                stop_reason='no_recent_source_progress';stop_detail='No new delivered source range/observation or unused discovery-to-read bridge';break
+            extensions.append({'round':round_no+1,'reason':extension})
+        completed_rounds=round_no+1;round_progress=[]
         prior_review=(payload.get('improvement') or payload.get('external_review') or {}).get('feedback',{})
         analysis=payload.get('analysis',{});comparison=analysis.get('comparison',{})
         request={'role':role,'as_of':as_of,'question':payload.get('question'),
-            'research_capabilities':'mara.research-tools/1.1','decision_questions':questions,'objective':payload.get('profile',{}).get('goal'),'available_symbols':list(payload['market'].get('assets',{})),
+            'research_capabilities':'mara.research-tools/1.2','decision_questions':questions,'objective':payload.get('profile',{}).get('goal'),'available_symbols':list(payload['market'].get('assets',{})),
             'prior_review':{k:copy.deepcopy(prior_review[k]) for k in ('criteria','gates','coverage','deterministic_findings','instruction') if k in prior_review},
             'available_analysis':{'comparison_available':comparison.get('available',False),
                 'independent_replay':copy.deepcopy(comparison.get('independent_replay',{})),
@@ -356,7 +373,9 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
                 'rule':'기준통화 환산 가격. USD 가치 계산에는 company 도구의 원래 USD quote를 사용.'},
             'existing_evidence':[{'id':f['id'],'topic':f['topic'],'source':f['source'],
                 'characters':len(dumps(f)),'read_with':'evidence_read'} for f in payload['market']['facts']],
-            'research_results':transcript,'round':round_no+1,'max_rounds':4,'collected_this_call':collected}
+            'research_results':transcript,'round':round_no+1,'max_rounds':8,'collected_this_call':collected,
+            'research_budget':{'base_rounds':4,'hard_max_rounds':8,'extensions':extensions,
+                'recent_progress':progress.history[-2:],'rule':'After four rounds, continue only with new delivered source ranges/observations tied to the original questions. One discovery-to-read bridge is allowed. Repeated failures, pages, mere fact IDs and unactivated results do not establish progress or analytical sufficiency.'}}
         s.append('research_plan_input',{'role':role,'guide':guide+'\n'+toolguide,'contract':contract,'payload':request,
             'provider':model.identity},as_of,run_id)
         plan=model.complete(role,guide+'\n'+toolguide,request,contract)
@@ -373,6 +392,7 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         if not plan['calls']:
             stop_reason=plan.get('stop_reason','planner_stopped_unspecified');stop_detail=plan['reason'];break
         for call in plan['calls']:
+            before_ids={f['id'] for f in payload['market']['facts']}
             try:
                 if call['tool']=='collect':
                     collected+=len(call['arguments'].get('symbols',[]))
@@ -387,6 +407,9 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
                 answer={'status':'unavailable','reason':safe_code(exc),'action':'Reduce scope or use already frozen evidence; never invent data'}
                 if isinstance(exc,src.EvidenceError) and getattr(exc,'attempts',None):answer['source_attempts']=exc.attempts
                 s.append('research_tool_failure',{'role':role,'call':call,'result':answer},as_of,run_id)
+            source_fact=next((f for f in payload['market']['facts'] if f['id']==call['arguments'].get('fact_id')),None) if call['tool']=='evidence_read' else None
+            observed_progress=progress.observe(call,answer,[f for f in payload['market']['facts'] if f['id'] not in before_ids],source_fact)
+            round_progress.append(observed_progress)
             receipts=answer.get('result',{}).get('receipts',[])
             failures=[r for r in receipts if r.get('status')=='unavailable']
             s.append('research_activity',{'role':role,'question_ids':call.get('question_ids',[]),'discovery_reason':call.get('discovery_reason'),
@@ -394,11 +417,13 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
                 'status':answer.get('status','returned'),'fact_id':answer.get('fact_id'),
                 'source_status':('collection_failed' if len(failures)==len(receipts) else 'collection_partial') if failures else answer.get('result',{}).get('status'),
                 'reason':answer.get('reason'),'collection_failures':failures,
-                'sufficiency':'not_reviewed'},as_of,run_id)
+                'sufficiency':'not_reviewed','reading_progress':observed_progress},as_of,run_id)
             transcript.append({'call':call,'answer':answer})
+        progress.finish_round(round_progress)
         if len(dumps(transcript))>65000:
             stop_reason='transcript_budget';stop_detail='Research transcript reached bounded input limit';break
     record_stop(stop_reason,stop_detail)
-    payload['research_access']={'status':'executed','stop_reason':stop_reason,'sufficiency':'requires_independent_review','rounds':round_no+1,'calls':len(transcript),
-            'limits':'최대 4라운드/200기업 수집, 페이지 20개. 일반 근거 80,000자 + 연구 역할별 회사·공시·가치평가 예약 48,000자(6역할), 실행 전체 최대 368,000자. 원본과 전문은 별도 보존하며 미수집·미독해·보관만 된 자료를 명시.'}
+    payload['research_access']={'status':'executed','stop_reason':stop_reason,'sufficiency':'requires_independent_review','rounds':completed_rounds,'calls':len(transcript),
+            'extensions':extensions,'reading_progress':progress.history,
+            'limits':'기본 4회, 자료를 새로 읽으면 최대 8회 조사. 새 목록에서 읽기로 넘어갈 기회는 한 번 허용. 최대 200기업 수집, 페이지 20개. 일반 근거 80,000자 + 연구 역할별 회사·공시·가치평가 예약 48,000자(6역할), 실행 전체 최대 368,000자. 원본과 전문은 별도 보존하며 미수집·미독해·보관만 된 자료를 명시.'}
     return payload
