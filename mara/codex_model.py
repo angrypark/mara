@@ -93,7 +93,7 @@ class CodexModel:
         if not info['authenticated']:raise CodexError('Codex 로그인이 필요해요. 터미널에서 codex login을 실행해주세요.')
         self.binary=executable();self.model=model;self.runner=runner
         self.identity={'provider':'codex-cli','model':model or 'CLI default','cli_version':info['version'],
-            'mode':self.mode,'ephemeral':True,'sandbox':'read-only','adapter':'1.0'}
+            'mode':self.mode,'ephemeral':True,'sandbox':'read-only','adapter':'1.1'}
 
     def complete(self,role,guide,payload,contract):
         prompt=('You are the '+role+' analyst in Mara. Analyze only the supplied data. Explain in Korean. '
@@ -114,7 +114,7 @@ class CodexModel:
             command.extend(['--enable','skip_host_skill_discovery'])
             if self.model:command.extend(['--model',self.model])
             command.append('-')  # stdin keeps personal context out of process argument listings
-            trace=self.runner(command,prompt,tmp,300)
+            trace=self.runner(command,prompt,tmp,900 if payload.get('narrative_contract') else 300)
             completed=False
             try:
                 for line in trace.splitlines():

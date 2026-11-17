@@ -249,5 +249,6 @@ class PersonaConversations:
                 return
             except Exception as exc:
                 reply.update(error_type=type(exc).__name__)
-                if isinstance(exc,PersonaError):reply['reply']=str(exc)
+                from .codex_model import CodexError
+                if isinstance(exc,(PersonaError,CodexError)):reply['reply']=str(exc)
             s.append('persona_reply',reply,event['effective'])

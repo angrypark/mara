@@ -6,6 +6,7 @@ from .persona import ensure,snapshot
 from .engine import Engine,ContextNeedsInput
 from .output_validation import AgentOutputError
 from .company_research import CompanyLibrary
+from .codex_model import CodexError
 from .onboarding import InputError,KST,SOURCE
 
 
@@ -93,4 +94,4 @@ def work(setup,request):
         setup.job(jid,'completed','개인 페르소나를 반영한 분석과 제안을 저장했어요. 실제 보유·주문은 바꾸지 않았어요.',persona_id=request['persona_id'])
     except ContextNeedsInput as exc:setup.job(jid,'needs_input',exc.message,questions=exc.questions,context_output_id=exc.output_id,structured_questions=exc.structured_questions,persona_id=request['persona_id'])
     except AgentOutputError as exc:setup.job(jid,'failed',exc.message,error_type='AgentOutputError',output_validation=exc.details,persona_id=request['persona_id'])
-    except Exception as exc:setup.job(jid,'failed',str(exc) if isinstance(exc,InputError) else '페르소나는 보존됐어요. 시장 자료 또는 분석 실행을 완료하지 못했어요.',error_type=type(exc).__name__,persona_id=request['persona_id'])
+    except Exception as exc:setup.job(jid,'failed',str(exc) if isinstance(exc,(InputError,CodexError)) else '페르소나는 보존됐어요. 시장 자료 또는 분석 실행을 완료하지 못했어요.',error_type=type(exc).__name__,persona_id=request['persona_id'])

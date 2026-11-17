@@ -92,6 +92,8 @@ class Engine:
         except Exception as exc:
             # Do not log provider exceptions, whose URLs/bodies can contain secrets.
             failure={'error_type':type(exc).__name__,'retry':'Correct inputs/provider and rerun; completed state unchanged'}
+            from .codex_model import CodexError
+            if isinstance(exc,CodexError):failure['message']=str(exc)
             if isinstance(exc,AgentOutputError):failure.update(output_validation=exc.details,message=exc.message)
             self.s.append('failed',failure,as_of,run_id)
             raise

@@ -15,11 +15,24 @@ from mara.domain import valuation
 from mara.engine import Engine,ContextNeedsInput
 from mara.knowledge import Knowledge
 from mara.store import Store
-from mara.workbench import runs,project
+from mara.workbench import runs,project,run_state
 
 ROOT=Path(__file__).resolve().parent.parent
 
 class WorkbenchTests(unittest.TestCase):
+    def test_recovery_status_follows_latest_transition(self):
+        events=[{'seq':1,'kind':'failed','body':{'error_type':'CodexError'}}]
+        self.assertEqual(run_state(events),'failed')
+        events.append({'seq':2,'kind':'recovery','body':{'status':'resuming'}})
+        self.assertEqual(run_state(events),'running')
+        events.append({'seq':3,'kind':'recovery','body':{'reason':'service restart'}})
+        self.assertEqual(run_state(events),'interrupted')
+        events.append({'seq':4,'kind':'failed','body':{'error_type':'ValueError'}})
+        self.assertEqual(run_state(events),'failed')
+        events.append({'seq':5,'kind':'recovery','body':{'status':'resuming'}})
+        events.append({'seq':6,'kind':'completed','body':{}})
+        self.assertEqual(run_state(events),'completed')
+
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.path=Path(self.tmp.name)/'test.sqlite3'
         self.db=Store(self.path);self.token=self.db.create_user('alice');self.s=self.db.session(self.token)

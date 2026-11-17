@@ -43,6 +43,9 @@ def runs(s):
 def run_state(events,session=None):
     if any(e['kind']=='completed' for e in events):return 'completed'
     failures=[e for e in events if e['kind']=='failed']
+    recoveries=[e for e in events if e['kind']=='recovery']
+    if recoveries and (not failures or recoveries[-1]['seq']>failures[-1]['seq']):
+        return 'running' if recoveries[-1]['body'].get('status')=='resuming' else 'interrupted'
     if failures:
         if failures[-1]['body'].get('error_type')=='ContextNeedsInput':return 'needs_input'
         # Onboarding already validated and classified this legacy R1 failure.

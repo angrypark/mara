@@ -70,6 +70,15 @@ class CodexTests(unittest.TestCase):
         result['text']='가'*39000
         with self.assertRaises(CodexError):model.complete('leader','',{'narrative_contract':'mara.judgment-report/1.0'}, {})
 
+    def test_detailed_reports_have_a_bounded_longer_deadline(self):
+        deadlines=[]
+        def runner(command,prompt,directory,timeout):
+            deadlines.append(timeout);self.reply(command);return json.dumps({'type':'turn.completed'})
+        model=self.model(runner)
+        model.complete('context','',{}, {})
+        model.complete('leader','',{'narrative_contract':'mara.judgment-report/1.0'}, {})
+        self.assertEqual(deadlines,[300,900])
+
     def test_logged_out_and_unsupported_cli_fail_before_analysis(self):
         for update in [{'installed':False},{'compatible':False},{'authenticated':False}]:
             with patch('mara.codex_model.status',return_value=dict(READY,**update)):
