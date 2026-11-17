@@ -174,6 +174,9 @@ class Engine:
              'actual_id':he['id'],'previous_id':previous['id'] if previous else None,
              'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason,
              'history_scope':boundary,'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement},as_of,run_id)
+        from .research_questions import freeze,ledger
+        decision_scope=copy.deepcopy(frozen['body']['decision_scope']) if frozen and frozen['body'].get('decision_scope') else freeze(p,m)
+        self.s.append('decision_scope',decision_scope,as_of,run_id)
         k = Knowledge(self.s,after_seq=boundary['after_seq'])
         a = Agents(self.s,self.model,as_of,run_id,self.research_library)
         rebalance_due = d.day(as_of) >= d.day(h['last_rebalanced']) + timedelta(days=p['rebalance_every_days'])
@@ -199,6 +202,7 @@ class Engine:
             prior = {'event_id':previous['id'],'as_of':previous['effective'],'proposal':pb['proposal'],
                      'perspectives':pb['perspectives'],'validation':pb['validation'],
                      'reflection':pb['reflection'],'market':prior_market,
+                     'question_followups':[{'id':q['id'],'state':q['state'],'review':q['review']} for q in pb.get('research_questions',{}).get('questions',[])],
                      'profile':history.profile_input(self.s.get(pb['profile_id'])['body'],prior_boundary)}
             flows = [e['body'] for e in self.s.events('cashflow',as_of) if e['effective'] > previous['effective']]
             outcome = d.performance(pb['valuation']['nav'],val['nav'],flows,previous['effective'],as_of)
@@ -229,7 +233,7 @@ class Engine:
             if stability_receipt:result['comparison']['evaluator_stability']=copy.deepcopy(stability_receipt)
             return result
         analysis=build_analysis(p,h,m,val,capital)
-        common = {'user_persona':user_persona,'history_scope':boundary,'analysis':analysis,'report_contract':'investment_case/1' if self.model.mode=='live' and m.get('return_histories') else None,
+        common = {'decision_scope':decision_scope,'user_persona':user_persona,'history_scope':boundary,'analysis':analysis,'report_contract':'investment_case/1' if self.model.mode=='live' and m.get('return_histories') else None,
                   'improvement':improvement,'as_of':as_of,'profile':p,'actual':h,'valuation':val,'market':m,'previous':prior,
                   'decision_context':semantics(p,m),
                   'anchors':anchors,'rebalance_due':rebalance_due,'performance':outcome,'funding':funding,
@@ -250,6 +254,7 @@ class Engine:
                 payload['previous']=previous_for_role(prior,role,compact_market(prior['market'],role,historical=True))
                 # These exact fields are already present under previous.proposal.
                 payload['anchors']={k:v for k,v in anchors.items() if k not in ('previous_rationale','unresolved_risks','next_checks')}
+            if role in ('validation','leader'):payload['research_question_progress']=ledger(self.s,run_id,decision_scope)
             payload.update(extra or {})
             payload['analysis_stage']='final_validation' if role=='validation' and 'final_proposal' in payload else 'perspective_validation' if role=='validation' else 'proposal_synthesis' if role=='leader' else role
             if amendment and role==amendment.get('target_role',amendment['agent_id']) and (not amendment.get('target_stage') or amendment['target_stage']==payload['analysis_stage']):
@@ -386,6 +391,8 @@ class Engine:
             'rebalance_due':rebalance_due,'next_rebalance':(d.day(h['last_rebalanced'])+timedelta(days=p['rebalance_every_days'])).isoformat()}
         from .analysis_pack import coverage_ledger
         report['coverage_ledger']=coverage_ledger(report,m)
+        report['decision_scope']=decision_scope
+        report['research_questions']=ledger(self.s,run_id,decision_scope,delivery,final_review)
         with self.s.store.transaction():
             proposal_id = self.s.append('proposal',proposal,as_of,run_id)
             report['proposal_id'] = proposal_id

@@ -30,6 +30,7 @@ window.MaraWorkbench=(()=>{
     if(!d.run||!Array.isArray(d.components)||!d.components.length||!Array.isArray(d.sources)||!Array.isArray(d.edges))throw Error('결과 구조가 올바르지 않아요.');
     const ids=new Set(d.components.map(c=>c.id)),sources=new Set(d.sources.map(s=>s.id));
     if(ids.size!==d.components.length||sources.size!==d.sources.length||d.edges.some(e=>!ids.has(e.from)||!ids.has(e.to)))throw Error('중복되거나 알 수 없는 컴포넌트 참조예요.');
+    const ledger=d.extensions?.research_questions;if(ledger){if(ledger.schema_version!=='mara.research-questions/1.0.0'||!Array.isArray(ledger.questions)||!Array.isArray(ledger.scope?.questions)||ledger.questions.length!==ledger.scope.questions.length)throw Error('판단 질문 계약 오류');for(const [i,q] of ledger.questions.entries()){if(q.id!==ledger.scope.questions[i].id||!Array.isArray(q.activities)||!['activity_ids','fact_ids','delivered_fact_ids','review_fact_ids','activated_fact_ids'].every(k=>Array.isArray(q[k]))||q.fact_ids.some(id=>!sources.has(id))||q.state!==(q.review?'reviewed_'+q.review.status:'awaiting_analysis_review'))throw Error('판단 질문 근거 오류')}}
     for(const c of d.components){if(!Array.isArray(c.blocks)||!Array.isArray(c.source_ids)||c.source_ids.some(id=>!sources.has(id)))throw Error('컴포넌트 근거 참조를 확인할 수 없어요.');if(c.output?.weights){const w=Object.values(c.output.weights);if(w.some(n=>typeof n!=='number'||!Number.isFinite(n)||n<0||n>1)||Math.abs(w.reduce((a,b)=>a+b,0)-1)>1e-6)throw Error('제안 비중 계약에 맞지 않아요.')}}
   }
   function render(d){
@@ -127,6 +128,13 @@ window.MaraWorkbench=(()=>{
     if(c.checkpoint?.status==='running')box.append(el('p','notice',(c.checkpoint.round?'개선 '+c.checkpoint.round+'회':'기준 보고서')+' · '+(c.checkpoint.stage==='generation'?'판단 생성':'독립 평가')+' 진행 중이에요. 완료한 기록부터 표시해요.'));
     if(c.checkpoint?.status==='failed')box.append(el('p','notice','현재 단계가 중단됐어요. 원본과 완료한 회차를 보존했으며 재개 시 여기서 이어가요.'));
     for(const r of c.rounds){const row=el('details');row.append(el('summary','',(r.round?'개선 '+r.round+'회':'기준 보고서')+' · '+r.score.total+'점 · '+(r.score.strict_pass?'엄격 기준 충족':'미충족')),list(r.changes),el('p','hint','독립 응답 '+r.evaluator_output_id+' · '+r.recorded_at),button('이 회차 판단 열기',async()=>{runId=r.run_id;signature='';await refresh()}));box.append(row)}box.append(el('p','',c.G6==='pass'?'G6 · 서로 다른 평가 호출로 5회 개선 완료':'G6 · 5회 평가 이력을 확인하는 중이에요.'));root.append(box);
+  }
+  function questionView(root){
+    const ledger=doc.extensions?.research_questions;if(!ledger?.questions?.length)return;
+    const box=el('details','wb-block');box.open=true;box.append(el('summary','','해결할 판단 질문 · '+ledger.questions.length+'개'),el('p','hint','수집·전달과 분석적 해결을 구분해요. 검증자의 질문 판정도 Q1 통과나 주문 권한을 뜻하지 않아요.'));
+    const labels={awaiting_analysis_review:'분석 검토 대기',reviewed_supported:'검증자 근거 확인',reviewed_unresolved:'미해결'};
+    for(const q of ledger.questions){const row=el('details');row.append(el('summary','',q.target+' · '+(labels[q.state]||q.state)),el('p','',q.question),el('p','hint',q.id+' · 담당 '+q.owner),el('p','',q.review?.reason||q.acceptance),el('p','','다음 행동: '+(q.review?.next_action||'근거와 계산을 확보하고 최종 검증에서 이 질문을 확인해요.')),el('p','hint','연결 조사 '+q.activity_ids.length+'건 · 활성 근거 '+q.fact_ids.length+'개 · 역할 전달 '+q.delivered_fact_ids.length+'개'),sourceButtons(q.fact_ids));for(const path of q.review?.calculation_paths||[])row.append(calculationView(path));const activity=el('details');activity.append(el('summary','','조사 상태와 실패 원인'),objectView(q.activities));row.append(activity);box.append(row)}
+    const stops=el('details');stops.append(el('summary','','조사 종료와 남은 기록'),objectView(ledger.research_stops));box.append(stops);root.append(box);
   }
   function qualityView(root){
     campaignView(root);
@@ -252,7 +260,7 @@ window.MaraWorkbench=(()=>{
     const finished=doc.components.filter(c=>['completed','blocked','needs_input'].includes(c.status)).length;
     const strip=el('div','wb-progress');strip.append(el('span','',finished+' / '+doc.components.length+' 역할 기록'),bar(finished/doc.components.length));root.append(strip);
     if(!p){qualityView(root);root.append(el('p','wb-summary',doc.run.message),el('p','hint','아직 종합된 제안이 없어요. 왼쪽 역할을 선택하면 완료한 분석과 추가 확인을 볼 수 있어요.'));return}
-    quantitativeView(root);qualityView(root);
+    questionView(root);quantitativeView(root);qualityView(root);
     if(p.risk_budget?.scope==='analysis_only'){const b=p.risk_budget;root.append(el('p','notice',`분석 전용 · 이번 제안의 충격 비교 예산 ${pct(b.effective_fraction)} / 기존 기준 ${pct(b.reference_fraction)}. 실제 감내손실 확인이나 주문 가능한 제안이 아니에요.`))}
     const pr=p.proposal,capital=p.funding?.proposal_capital??p.actual.nav;
     const decision=el('div','wb-summary');decision.append(chip(actions[pr.action]||pr.action,pr.action),el('p','',pr.rationale));root.append(decision);

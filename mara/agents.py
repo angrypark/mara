@@ -62,6 +62,9 @@ def validate_output(role, obj, payload):
         allowed={f['id'] for f in payload['market']['facts']}
         if any(not set(c['fact_ids'])<=allowed for c in case['claims']):raise ValueError('Invented evidence ID')
     if kind == 'leader' and obj['action'] not in {'hold','adjust','defer'}: raise ValueError('Invalid action')
+    if kind=='validation':
+        from .research_questions import validate_reviews
+        validate_reviews(obj,payload)
     if kind=='validation' and 'findings' in obj:
         blocked=any(x['blocks_proposal'] for x in obj['findings'])
         if obj['findings'] and blocked==obj['qualitative_pass']:raise ValueError('Validation findings contradict qualitative_pass')

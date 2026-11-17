@@ -84,5 +84,20 @@
       "memory"
     ],
     "guide": "guides/skills/learning.md"
+  },
+  {
+    "id": "public-evidence",
+    "version": "1.0",
+    "label": "공개 원문 확보와 깊이 읽기",
+    "roles": [
+      "evidence",
+      "buffett",
+      "marks",
+      "bogle",
+      "wood",
+      "validation",
+      "leader"
+    ],
+    "guide": "guides/skills/public-evidence.md"
   }
 ]

@@ -79,6 +79,9 @@ def validate_workbench(doc):
     if doc.get('extensions',{}).get('analysis'):validate_sleeves(doc['extensions']['analysis'])
     ids=[c['id'] for c in doc['components']];sources=[s['id'] for s in doc['sources']]
     if len(set(ids))!=len(ids) or len(set(sources))!=len(sources):raise ContractError('Duplicate component/source')
+    if doc.get('extensions',{}).get('research_questions'):
+        from .research_questions import validate_ledger
+        validate_ledger(doc['extensions']['research_questions'],sources)
     for c in doc['components']:
         if not set(c['source_ids'])<=set(sources):raise ContractError('Unknown source reference')
         if c['output'] and 'weights' in c['output']:

@@ -42,10 +42,11 @@ def coverage_ledger(report,market):
                     if tool.startswith('company_'):
                         ids=[]
                         for f in facts:
-                            if f.get('research_tool')!=tool:continue
+                            if f.get('research_tool')!=tool and not (tool=='company_filing_search' and f.get('research_tool')=='company_filing_read'):continue
                             try:value=json.loads(f['text'])
                             except (ValueError,TypeError):continue
-                            if value.get('symbol')==symbol and (tool!='company_filing_search' or value.get('hits')):ids.append(f['id'])
+                            if value.get('symbol')==symbol and (tool!='company_filing_search' or value.get('hits') or
+                                f.get('research_tool')=='company_filing_read' and value.get('text') and value.get('raw_ref',{}).get('sha256') and value.get('extraction_version')):ids.append(f['id'])
                     else:ids=[x[0] for x in source_values(market,tool,symbol)]
                     requirements.append({'target':symbol,'evidence_type':tool,'fact_ids':ids,'retrieved':bool(ids)})
         else:

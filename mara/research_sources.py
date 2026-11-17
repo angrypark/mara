@@ -28,8 +28,13 @@ METRICS={
  'long_term_debt':('USD',['LongTermDebtCurrent','LongTermDebtNoncurrent','LongTermDebt']),
  'equity':('USD',['StockholdersEquity']),
  'diluted_eps':('USD/shares',['EarningsPerShareDiluted']),
+ 'diluted_shares':('shares',['WeightedAverageNumberOfDilutedSharesOutstanding']),
+ 'stock_compensation':('USD',['ShareBasedCompensation']),
+ 'depreciation_amortization':('USD',['DepreciationDepletionAndAmortization','DepreciationDepletionAndAmortizationPropertyPlantAndEquipment']),
+ 'operating_income':('USD',['OperatingIncomeLoss']),
+ 'research_development':('USD',['ResearchAndDevelopmentExpense']),
 }
-DURATIONS={'revenue','net_income','operating_cashflow','capital_expenditure','diluted_eps'}
+DURATIONS={'revenue','net_income','operating_cashflow','capital_expenditure','diluted_eps','diluted_shares','stock_compensation','depreciation_amortization','operating_income','research_development'}
 
 
 class EvidenceError(ValueError):

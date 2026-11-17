@@ -1,19 +1,33 @@
 {
-  "version": "1.2.0",
+  "version": "1.3.0",
   "reviewed_on": "2026-11-17",
   "policy": "공식 IR에서 확인한 보조 원문. 등록되지 않은 발행사는 SEC 본문 실패 시 명시적으로 공백을 반환해요. 후속 검토에서 URL·문서 시점·발행사 관계를 재확인해요.",
   "documents": {
     "MSFT": {
-      "url": "https://www.microsoft.com/investor/reports/ar26/index.html",
-      "title": "Microsoft 2026 Annual Report",
-      "kind": "issuer_annual_report",
-      "verified_on": "2026-11-16"
+      "url": "https://cdn-dynmedia-1.microsoft.com/is/content/microsoftcorp/MSFT_FY26Q4_10K.docx",
+      "title": "Microsoft fiscal 2026 Form 10-K",
+      "kind": "issuer_linked_10K_docx",
+      "verified_on": "2026-11-17",
+      "filing_accession": "0001193125-26-323660",
+      "required_text": [
+        "MICROSOFT CORPORATION",
+        "June 30, 2026"
+      ],
+      "verification_source": "https://www.microsoft.com/investor/reports/ar26/download-center/",
+      "verification_scope": "Official Microsoft download-center 2026 10-K DOCX, SEC submissions accession and cover period matched. gcs-web PDF returned HTTP 403. Same filing, not independent evidence."
     },
     "AAPL": {
-      "url": "https://www.apple.com/newsroom/2026/11/apple-reports-fourth-quarter-results/",
-      "title": "Apple fiscal 2026 fourth quarter results",
-      "kind": "issuer_earnings_release_not_full_10K",
-      "verified_on": "2026-11-16"
+      "url": "https://d18rn0p25nwr6d.cloudfront.net/CIK-0000320193/02604af3-8474-4e86-a4e3-ee40435b42e7.html",
+      "title": "Apple fiscal 2026 Form 10-K",
+      "kind": "issuer_linked_10K_html_mirror",
+      "verified_on": "2026-11-17",
+      "filing_accession": "0000320193-26-000026",
+      "required_text": [
+        "Apple Inc.",
+        "September 26, 2026"
+      ],
+      "verification_source": "https://investor.apple.com/sec-filings/sec-filings-details/default.aspx?FilingId=19895604",
+      "verification_scope": "Official Apple filing-detail HTML link, SEC submissions accession and cover reporting period matched. Replaces earnings release supplement; same filing, not independent evidence."
     },
     "BKNG": {
       "url": "https://d18rn0p25nwr6d.cloudfront.net/CIK-0001075531/031e5c54-ace2-4378-9b7e-3a126c47ad9b.html",

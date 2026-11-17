@@ -42,7 +42,7 @@ TOOLS=[
  {'id':'institutional_reports','label':'금융기관 주간 논평','roles':['evidence','marks','validation'],'provides':'BlackRock·Schwab 원문 HTML과 날짜·제목·도입부 발췌; 기관 전망'},
  {'id':'financial_news','label':'금융 언론 뉴스 탐색','roles':['evidence','marks','validation'],'provides':'CNBC 공식 RSS 최근 제목·발표시각·기사 링크; 본문 미검토'},
 ]
-ALLOWED={'www.invesco.com','dng-api.invesco.com','www.ssga.com','am.jpmorgan.com','fred.stlouisfed.org','d18rn0p25nwr6d.cloudfront.net','materials.proxyvote.com','www.bls.gov','www.sec.gov','data.sec.gov','www.ishares.com','www.federalreserve.gov','api.bls.gov','home.treasury.gov','www.blackrock.com','www.schwab.com','www.cnbc.com','www.microsoft.com','www.apple.com'}
+ALLOWED={'cdn-dynmedia-1.microsoft.com','microsoft.gcs-web.com','www.invesco.com','dng-api.invesco.com','www.ssga.com','am.jpmorgan.com','fred.stlouisfed.org','d18rn0p25nwr6d.cloudfront.net','materials.proxyvote.com','www.bls.gov','www.sec.gov','data.sec.gov','www.ishares.com','www.federalreserve.gov','api.bls.gov','home.treasury.gov','www.blackrock.com','www.schwab.com','www.cnbc.com','www.microsoft.com','www.apple.com'}
 
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()

@@ -13,7 +13,7 @@ from .research import PublicArchive,safe_code
 from . import research_sources as src
 from .registry import resource
 from .domain import dumps,day
-from .document_text import FilingText,extract,excerpts
+from .document_text import FilingText,extract,excerpts,excerpt_page,read_chunk,EXTRACTION_VERSION
 
 
 def symbol(value):
@@ -58,6 +58,20 @@ def owner_value(a,known_ids,as_of):
         'limits':'정상화와 주당/분할 기준은 분석자의 명시 가정. 자동 검증된 가치 아님. 부채를 다시 차감하지 않는 equity per-share 모델. 기업가치 FCFF/WACC와 혼용 금지. 음수 이익·은행/보험 등에는 적합한 별도 방법 필요.'}
 
 
+
+def document_catalog(sub,cik,as_of):
+    """Keep each useful form even when many 8-Ks crowd out quarterly/annual filings."""
+    recent=sub['filings']['recent'];rows=[];counts={}
+    for i,form in enumerate(recent.get('form',[])):
+        if form not in {'10-K','10-Q','20-F','6-K','8-K','10-K/A','10-Q/A'} or counts.get(form,0)>=3:continue
+        filed=recent['filingDate'][i];acc=recent['accessionNumber'][i];doc=recent['primaryDocument'][i]
+        if not 0<=(day(as_of)-day(filed)).days<=1850:continue
+        if not re.fullmatch(r'\d{10}-\d{2}-\d{6}',acc) or not re.fullmatch(r'[A-Za-z0-9_.-]+',doc):continue
+        rows.append({'form':form,'filed':filed,'report_date':recent['reportDate'][i],
+            'accession':acc,'url':f'https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc.replace("-","")}/{doc}'})
+        counts[form]=counts.get(form,0)+1
+    return rows
+
 class CompanyLibrary:
     def __init__(self,root,transport=None,today=None,quote_provider=None):
         self.root=Path(root);self.root.mkdir(parents=True,exist_ok=True,mode=0o700)
@@ -98,7 +112,7 @@ class CompanyLibrary:
             for i,ticker in enumerate(tickers):
                 try:
                     old=self.latest(ticker,as_of)
-                    if old and old['known_at']==as_of:receipts.append({'symbol':ticker,'status':'cached','version':old['version']});continue
+                    if old and old['known_at']==as_of and old.get('schema_version')=='company-dossier/1.1':receipts.append({'symbol':ticker,'status':'cached','version':old['version']});continue
                     identity=mapping[ticker];cik=identity['cik'];archive=self.archive()
                     # Reset per-company size/time budgets, never the per-request SEC spacing.
                     url=f'https://data.sec.gov/submissions/CIK{cik:010d}.json'
@@ -116,8 +130,9 @@ class CompanyLibrary:
                         acc=recent['accessionNumber'][j];doc=recent['primaryDocument'][j]
                         if re.fullmatch(r'\d{10}-\d{2}-\d{6}',acc) and re.fullmatch(r'[A-Za-z0-9_.-]+',doc):
                             annual=[{'form':form,'filed':recent['filingDate'][j],'accession':acc,'url':f'https://www.sec.gov/Archives/edgar/data/{cik}/{acc.replace("-","")}/{doc}'}];break
-                    body={'symbol':ticker,'cik':cik,'entity':sub['name'],'known_at':as_of,'retrieved_at':fmeta['retrieved_at'],
+                    body={'schema_version':'company-dossier/1.1','symbol':ticker,'cik':cik,'entity':sub['name'],'known_at':as_of,'retrieved_at':fmeta['retrieved_at'],
                         'financials':fin,'quality':quality(fin),'filings':filings,'annual_filing':annual,'raw_refs':[submeta,fmeta],
+                        'documents':document_catalog(sub,cik,as_of),
                         'coverage':'annual standard US GAAP; no independent moat or intrinsic value assertion'}
                     body['version']=hashlib.sha256(dumps(body).encode()).hexdigest()
                     folder=self.root/'companies'/ticker;folder.mkdir(parents=True,exist_ok=True)
@@ -128,26 +143,66 @@ class CompanyLibrary:
         return {'receipts':receipts,'identity_coverage':coverage,'requested':len(tickers),'completed':sum(r['status']!='unavailable' for r in receipts),
             'read_policy':'Collected does not mean read. compare returns pages; company returns selected dossiers.'}
 
-    def filing_search(self,ticker,query,as_of):
+    def filing_list(self,ticker,as_of):
         body=self.latest(ticker,as_of)
-        if not body or not body['annual_filing']:raise ValueError('Annual filing unavailable')
-        filing=body['annual_filing'][0]
+        if not body:raise src.EvidenceError('company_not_collected')
+        rows=body.get('documents',body.get('annual_filing',[])+body.get('filings',{}).get('filings',[]))
+        seen=set();rows=[r for r in rows if r['filed']<=as_of and not (r['accession'] in seen or seen.add(r['accession']))]
+        return {'symbol':symbol(ticker),'filings':rows,'scope':'Bounded recent submissions, not all historical filings; choose an accession before reading'}
+
+    def document(self,ticker,as_of,accession=None,expected_sha256=None):
+        body=self.latest(ticker,as_of)
+        if not body:raise src.EvidenceError('company_not_collected')
         if as_of!=self.today:raise ValueError('Historical filing text must already be in original run evidence')
-        fallback=None
-        try:raw,meta=self.archive().get(filing['url'])
-        except (OSError,ValueError):
+        if accession:
+            rows=self.filing_list(ticker,as_of)['filings']
+            filing=next((x for x in rows if x['accession']==accession),None)
+            if not filing:raise src.EvidenceError('unknown_filing_accession')
+        else:
+            if not body.get('annual_filing'):raise src.EvidenceError('annual_filing_unavailable')
+            filing=body['annual_filing'][0]
+        fallback=None;attempts=[]
+        def checked(raw,required=()):
+            text,fmt=extract(raw);normalized=re.sub(r'\s+',' ',text).casefold()
+            head=normalized[:2000]
+            if any(x in head for x in ('access denied','request rate threshold exceeded','undeclared automated tool','captcha','request blocked')):
+                raise src.EvidenceError('source_error_page')
+            if any(re.sub(r'\s+',' ',term).casefold() not in normalized for term in required):
+                raise src.EvidenceError('document_identity_mismatch')
+            return text,fmt
+        try:
+            raw,meta=self.archive().get(filing['url'])
+            required=[body['entity']] if body.get('entity') else []
+            required.append(filing['form'].removesuffix('/A'))
+            if filing.get('report_date'):
+                dt=day(filing['report_date']);required.append(dt.strftime('%B')+' '+str(dt.day)+', '+str(dt.year))
+            text,format_info=checked(raw,required)
+        except (OSError,ValueError) as exc:
+            attempts.append({'source':filing['url'],'status':safe_code(exc)})
             fallback=json.loads(resource('resources/issuer-documents.json').read_text())['documents'].get(symbol(ticker))
-            if not fallback or not 0<=(day(as_of)-day(fallback['verified_on'])).days<=180:raise ValueError('SEC document unavailable; no current verified issuer fallback') from None
+            if not fallback or not 0<=(day(as_of)-day(fallback['verified_on'])).days<=180:raise src.EvidenceError('source_access_failed_no_verified_fallback') from None
+            # A quarterly request must never fall back to an annual or earnings document.
             if fallback.get('filing_accession') and fallback['filing_accession']!=filing['accession']:raise ValueError('Issuer fallback is for a different annual filing')
+            if accession and fallback.get('filing_accession')!=accession:raise src.EvidenceError('fallback_filing_identity_unverified')
             raw,meta=self.archive().get(fallback['url'])
-        text,format_info=extract(raw)
-        normalized=re.sub(r'\s+',' ',text).casefold()
-        if fallback and any(term.casefold() not in normalized for term in fallback.get('required_text',[])):
-            raise ValueError('Issuer fallback identity or reporting period mismatch')
-        hits,terms,mode=excerpts(text,query)
-        return {'symbol':ticker,'filing':filing,'issuer_fallback':fallback,'raw_ref':meta,'hits':hits,'text_length':len(text),
-            'document_format':format_info,'query_terms':terms,'query_mode':mode,
-            'limits':'키워드 주변 발췌이며 문서 전체 독해 아님. SEC 발행사 진술을 독립 검증 사실과 구분. 위치는 추출된 텍스트 문자 기준.'}
+            text,format_info=checked(raw,fallback.get('required_text',[]))
+        if expected_sha256 and meta['sha256']!=expected_sha256:raise src.EvidenceError('document_changed_restart_cursor')
+        return text,{'symbol':symbol(ticker),'filing':filing,'issuer_fallback':fallback,'raw_ref':meta,
+            'attempts':attempts,'text_length':len(text),'extraction_version':EXTRACTION_VERSION,'document_format':format_info,
+            'source_scope':'same_filing' if not fallback or fallback.get('filing_accession') else 'supplement_not_verified_same_filing',
+            'limits':'Read ranges only, not full-document review. Issuer statement, not independently verified financial truth.'}
+
+    def filing_search(self,ticker,query,as_of,accession=None,offset=0,expected_sha256=None,expected_extraction_version=None):
+        if offset and not expected_sha256:raise ValueError('Continuation requires original document hash')
+        if offset and expected_extraction_version!=EXTRACTION_VERSION:raise src.EvidenceError('extraction_changed_restart_cursor')
+        text,receipt=self.document(ticker,as_of,accession,expected_sha256)
+        return dict(receipt,**excerpt_page(text,query,offset))
+
+    def filing_read(self,ticker,as_of,accession,offset=0,limit=10000,expected_sha256=None,expected_extraction_version=None):
+        if offset and not expected_sha256:raise ValueError('Continuation requires original document hash')
+        if offset and expected_extraction_version!=EXTRACTION_VERSION:raise src.EvidenceError('extraction_changed_restart_cursor')
+        text,receipt=self.document(ticker,as_of,accession,expected_sha256)
+        return dict(receipt,**read_chunk(text,offset,limit))
 
 
 class ResearchTools:
@@ -171,7 +226,7 @@ class ResearchTools:
             'role':role,'role_reserved_used':reserved,'role_reserved_limit':48000,'run_used':total,'run_limit':368000,
             'requested_characters':size,'rule':'동일 실행의 재시도·검증 단계는 같은 역할 예산을 공유. 중복 근거는 다시 차감하지 않음.'}
         research_roles={'evidence','buffett','marks','bogle','wood','validation'}
-        prerequisites={'company_company','sec_financials','sec_filings','company_filing_search','company_valuation'}
+        prerequisites={'company_company','sec_financials','sec_filings','company_filing_search','company_filing_read','company_valuation'}
         bucket='general' if general+size<=80000 else 'role_reserved' if role in research_roles and fact.get('research_tool') in prerequisites and reserved+size<=48000 else None
         if bucket is None or total+size>368000:return False
         market['facts'].append(fact)
@@ -212,7 +267,11 @@ class ResearchTools:
                         'company_identity':{'symbol':company['symbol'],'cik':company['cik'],'version':company['version'],'verification':'SEC submissions ticker match'},
                         'raw_refs':company['raw_refs']}
                     self.activate(role,fact,market)
-        elif tool=='filing_search':result=self.lib.filing_search(args['symbol'],args['query'],self.as_of)
+        elif tool=='filing_list':result=self.lib.filing_list(args['symbol'],self.as_of)
+        elif tool=='filing_search':result=self.lib.filing_search(args['symbol'],args['query'],self.as_of,
+            args.get('accession'),args.get('offset',0),args.get('expected_sha256'),args.get('expected_extraction_version'))
+        elif tool=='filing_read':result=self.lib.filing_read(args['symbol'],self.as_of,args['accession'],
+            args.get('offset',0),args.get('limit',10000),args.get('expected_sha256'),args.get('expected_extraction_version'))
         elif tool=='valuation':
             a=args['assumptions'];quotes=[]
             for fact in market['facts']:
@@ -226,15 +285,15 @@ class ResearchTools:
         else:raise ValueError('Unknown research tool')
         # Receipts and discovery results are not financial evidence.
         fact=None
-        if tool in ('compare','company','filing_search','valuation'):
+        if tool in ('compare','company','filing_search','filing_read','valuation'):
             ident='company-'+hashlib.sha256(dumps(result).encode()).hexdigest()[:24]
             fact={'id':ident,'topic':tool+' · '+args.get('symbol',','.join(args.get('symbols',[])[:5])),
                 'text':dumps(result),'source':'https://www.sec.gov/search-filings/edgar-application-programming-interfaces',
                 'published_at':self.as_of,'known_at':self.as_of,'valid_until':self.as_of,
                 'uncertainty':'분석자 가정 계산' if tool=='valuation' else 'SEC 표준 재무/발행사 진술. 상세 기간·공시일은 본문에 포함.',
                 'research_tool':'company_'+tool}
-            if tool=='filing_search':fact['raw_refs']=[result['raw_ref']]
-            if tool=='filing_search':fact['source']=result['raw_ref']['source']
+            if tool in ('filing_search','filing_read'):fact['raw_refs']=[result['raw_ref']]
+            if tool in ('filing_search','filing_read'):fact['source']=result['raw_ref']['source']
             if tool=='company':fact['raw_refs']=[r for company in result['companies'] for r in company.get('raw_refs',[])]
             activated=self.activate(role,fact,market)
             if not activated:
@@ -252,11 +311,17 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
     contract=json.loads(resource('contracts/research-plan.schema.json').read_text());toolguide=resource('guides/roles/company-tools.md').read_text()
     from .contracts import validate
     runner=ResearchTools(library,s,run_id,as_of);transcript=[];collected=0
+    questions=(payload.get('decision_scope') or {}).get('questions',[])
+    question_ids={q['id'] for q in questions}
+    stop_reason='round_budget';stop_detail='4 research rounds reached'
+    def record_stop(reason,detail):
+        s.append('research_stop',{'role':role,'stage':payload.get('analysis_stage'),'reason':reason,'detail':detail,
+            'question_ids':sorted(question_ids),'calls':len(transcript),'sufficiency':'requires_independent_review'},as_of,run_id)
     for round_no in range(4):
         prior_review=(payload.get('improvement') or {}).get('feedback',{})
         analysis=payload.get('analysis',{});comparison=analysis.get('comparison',{})
         request={'role':role,'as_of':as_of,'question':payload.get('question'),
-            'objective':payload.get('profile',{}).get('goal'),'available_symbols':list(payload['market'].get('assets',{})),
+            'research_capabilities':'mara.research-tools/1.1','decision_questions':questions,'objective':payload.get('profile',{}).get('goal'),'available_symbols':list(payload['market'].get('assets',{})),
             'prior_review':{k:copy.deepcopy(prior_review[k]) for k in ('criteria','gates','coverage','deterministic_findings','instruction') if k in prior_review},
             'available_analysis':{'comparison_available':comparison.get('available',False),
                 'independent_replay':copy.deepcopy(comparison.get('independent_replay',{})),
@@ -271,13 +336,18 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         s.append('research_plan_input',{'role':role,'guide':guide+'\n'+toolguide,'contract':contract,'payload':request,
             'provider':model.identity},as_of,run_id)
         plan=model.complete(role,guide+'\n'+toolguide,request,contract)
-        try:validate(plan,contract)
+        try:
+            validate(plan,contract)
+            if any(not set(c.get('question_ids',[]))<=question_ids for c in plan['calls']):raise ValueError('Unknown decision question')
+            if questions and any(not c.get('question_ids') and not c.get('discovery_reason','').strip() for c in plan['calls']):raise ValueError('Question or explicit discovery reason required')
         except ValueError:
             s.append('research_tool_failure',{'role':role,'call':{'tool':'plan'},'result':{'status':'invalid_plan','output':plan}},as_of,run_id)
+            record_stop('invalid_plan','Plan or question reference rejected')
             payload['research_access']={'status':'invalid_plan','limits':'추가 조사 계획이 계약 검증에 실패했어요. 기존 근거만으로 판단하고 공백을 명시해요.'}
             return payload
         s.append('research_plan',{'role':role,'plan':plan,'provider':model.identity,'round':round_no+1},as_of,run_id)
-        if not plan['calls']:break
+        if not plan['calls']:
+            stop_reason=plan.get('stop_reason','planner_stopped_unspecified');stop_detail=plan['reason'];break
         for call in plan['calls']:
             try:
                 if call['tool']=='collect':
@@ -287,8 +357,18 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
             except (OSError,ValueError,KeyError,TypeError,IndexError) as exc:
                 answer={'status':'unavailable','reason':safe_code(exc),'action':'Reduce scope or use already frozen evidence; never invent data'}
                 s.append('research_tool_failure',{'role':role,'call':call,'result':answer},as_of,run_id)
+            receipts=answer.get('result',{}).get('receipts',[])
+            failures=[r for r in receipts if r.get('status')=='unavailable']
+            s.append('research_activity',{'role':role,'question_ids':call.get('question_ids',[]),'discovery_reason':call.get('discovery_reason'),
+                'tool':call['tool'],'target':call['arguments'].get('symbol',call['arguments'].get('symbols')),
+                'status':answer.get('status','returned'),'fact_id':answer.get('fact_id'),
+                'source_status':('collection_failed' if len(failures)==len(receipts) else 'collection_partial') if failures else answer.get('result',{}).get('status'),
+                'reason':answer.get('reason'),'collection_failures':failures,
+                'sufficiency':'not_reviewed'},as_of,run_id)
             transcript.append({'call':call,'answer':answer})
-        if len(dumps(transcript))>65000:break
-    payload['research_access']={'status':'executed','rounds':round_no+1,'calls':len(transcript),
+        if len(dumps(transcript))>65000:
+            stop_reason='transcript_budget';stop_detail='Research transcript reached bounded input limit';break
+    record_stop(stop_reason,stop_detail)
+    payload['research_access']={'status':'executed','stop_reason':stop_reason,'sufficiency':'requires_independent_review','rounds':round_no+1,'calls':len(transcript),
             'limits':'최대 4라운드/200기업 수집, 페이지 20개. 일반 근거 80,000자 + 연구 역할별 회사·공시·가치평가 예약 48,000자(6역할), 실행 전체 최대 368,000자. 원본과 전문은 별도 보존하며 미수집·미독해·보관만 된 자료를 명시.'}
     return payload

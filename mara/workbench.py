@@ -266,4 +266,5 @@ def project(s,run_id):
         'components':components,'edges':edges,'sources':sources,'portfolio':portfolio,'extensions':{'user_persona':frozen_persona,'persona_is_current':bool(frozen_persona and latest_profile and latest_profile['id']==basis['profile_id']),'history_scope':dict(boundary,is_active=boundary==history_scope(s)),'projection_corrections':corrections,
             'quality_campaign':quality,'evaluation_stability':stability,'analysis':report['body'].get('analysis') if report else None,
             'coverage_ledger':report['body'].get('coverage_ledger',[]) if report else [],
+            'research_questions':report['body'].get('research_questions') if report else None,
             'flow':flow,'evaluation':evaluation,'decision_actions':actions,'lineage':lineage}})

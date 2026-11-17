@@ -1,0 +1,399 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "mara.research-questions/1.0.0"
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "mara.research-questions/1.0.0"
+        },
+        "as_of": {
+          "type": "string"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "depth": {
+                "type": "string"
+              },
+              "question": {
+                "type": "string"
+              },
+              "acceptance": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "target",
+              "owner",
+              "depth",
+              "question",
+              "acceptance"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "as_of",
+        "goal",
+        "candidates",
+        "questions",
+        "scope"
+      ],
+      "additionalProperties": false
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "depth": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "acceptance": {
+            "type": "string"
+          },
+          "activity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "activated_fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "review_fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "delivered_fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "reviewer_delivered_fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "activities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "event_id": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                },
+                "question_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                "discovery_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "tool": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": [
+                    "string",
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "status": {
+                  "type": "string"
+                },
+                "fact_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source_status": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "collection_failures": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "symbol": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "const": "unavailable"
+                      },
+                      "reason": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "symbol",
+                      "status",
+                      "reason"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "sufficiency": {
+                  "const": "not_reviewed"
+                }
+              },
+              "required": [
+                "event_id",
+                "role",
+                "question_ids",
+                "discovery_reason",
+                "tool",
+                "target",
+                "status",
+                "fact_id",
+                "source_status",
+                "reason",
+                "collection_failures",
+                "sufficiency"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "state": {
+            "enum": [
+              "awaiting_analysis_review",
+              "reviewed_supported",
+              "reviewed_unresolved"
+            ]
+          },
+          "review": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "question_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "status": {
+                    "enum": [
+                      "supported",
+                      "unresolved"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
+                  },
+                  "fact_ids": {
+                    "type": "array",
+                    "maxItems": 30,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "calculation_paths": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "next_action": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "question_id",
+                  "status",
+                  "reason",
+                  "fact_ids",
+                  "calculation_paths",
+                  "next_action"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "target",
+          "owner",
+          "depth",
+          "question",
+          "acceptance",
+          "activity_ids",
+          "activated_fact_ids",
+          "review_fact_ids",
+          "fact_ids",
+          "delivered_fact_ids",
+          "reviewer_delivered_fact_ids",
+          "activities",
+          "state",
+          "review"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "research_stops": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "stage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "question_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "calls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sufficiency": {
+            "const": "requires_independent_review"
+          }
+        },
+        "required": [
+          "event_id",
+          "role",
+          "stage",
+          "reason",
+          "detail",
+          "question_ids",
+          "calls",
+          "sufficiency"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "unattributed_activity_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "limits": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "scope",
+    "questions",
+    "research_stops",
+    "unattributed_activity_ids",
+    "limits"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:research-questions:1.0.0"
+}

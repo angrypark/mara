@@ -33,3 +33,6 @@ contribution_mandate.preference=growth이면 더 적극적인 비교 대안을 �
 
 
 분석 전용 위험 예산: decision_context.risk_budget.scope가 analysis_only면 effective_fraction은 이번 제안 원금의 충격 비교 가정이며 사용자가 수용한 손실률이 아니에요. max_loss_fraction/reference_fraction은 기존 기준으로 별도 비교해요. 더 적극적인 안을 비교할 수 있지만 실제 감내능력 확인·최대손실 보장·주문 가능으로 표현하지 않아요. 이 구분을 다음 회고와 활성 기억에서도 유지해요. 다른 현금·종목·섹터 제약은 바꾸지 않아요.
+
+## 판단 질문 재검증 v1.0
+최종 제안 검증에서 decision_scope.questions를 확인하고 question_reviews에 question_id, status(supported/unresolved), reason, fact_ids, calculation_paths(/analysis/ 이하 실제 경로), next_action을 남겨요. 선택한 후보는 가격·가치·비중 연결, 제외한 후보는 제외 근거의 충분성을 보세요. 자료를 받았다는 사실만으로 supported를 주지 않아요. 확정할 수 없으면 unresolved예요. 누락한 질문은 미검증으로 남으며 예전 질문을 현금 선택으로 지우지 않아요. 질문별 판단은 R4 전체 판정이나 Q1 통과를 대신하지 않아요.
