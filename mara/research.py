@@ -325,6 +325,19 @@ class Research:
         return market
 
 
+def project_fact(fact,role):
+    """The only permitted current-role projection of an immutable fact."""
+    f=copy.deepcopy(fact);f.pop('raw_refs',None)
+    if f.get('research_tool')=='sec_financials':
+        value=json.loads(f['text'])
+        if role in ('context','bogle','reflection','memory'):
+            value={k:v for k,v in value.items() if k!='metrics'}
+            value['scope']='상세 재무는 시장 근거·기업 관점·검증에 전달. 원본 시장 fact에서 확인.'
+        else:value['provenance']='수치 검증이 같은 근거를 사용할 수 있도록 접수번호·공시일·기간·단위를 보존해요.'
+        f['text']=d.dumps(value)
+    return f
+
+
 def compact_market(market,role,historical=False):
     """Model-only projection; full facts, manifest and raw responses stay frozen."""
     m=copy.deepcopy(market)
@@ -336,16 +349,7 @@ def compact_market(market,role,historical=False):
     # Complete per-call provenance stays in the stored market/workbench.
     m['research']={k:r[k] for k in ('schema_version','selection','budget','collected_at')}
     m['research']['tool_results']=[{k:c[k] for k in ('tool','target','status','reason')} for c in r['calls']]
-    for f in m['facts']:
-        f.pop('raw_refs',None)
-        if f.get('research_tool')=='sec_financials':
-            value=json.loads(f['text'])
-            if role in ('context','bogle','reflection','memory'):
-                value={k:v for k,v in value.items() if k!='metrics'}
-                value['scope']='상세 재무는 시장 근거·기업 관점·검증에 전달. 원본 시장 fact에서 확인.'
-            else:
-                value['provenance']='수치 검증이 같은 근거를 사용할 수 있도록 접수번호·공시일·기간·단위를 보존해요.'
-            f['text']=d.dumps(value)
+    m['facts']=[project_fact(f,role) for f in m['facts']]
     return historical_market(m) if historical else m
 
 

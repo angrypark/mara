@@ -159,11 +159,17 @@ class Engine:
             m=history.market_input(m,boundary)
         if frozen:
             # Carry only evidence actually read in that run, never today's library contents.
-            ids={f['id'] for f in m['facts']}
+            ids={f['id']:f for f in m['facts']}
             for event in self.s.events('research_evidence'):
-                if event['run_id']==frozen['run_id'] and event['seq']<=frozen['seq'] and event['body']['fact']['id'] not in ids:
-                    fact=event['body']['fact'];m['facts'].append(copy.deepcopy(fact));ids.add(fact['id'])
-                    self.s.append('research_evidence',event['body'],as_of,run_id)
+                if event['run_id']==frozen['run_id'] and event['seq']<=frozen['seq']:
+                    fact=event['body']['fact']
+                    if fact['id'] in ids:
+                        if ids[fact['id']]!=fact:raise ValueError('Inherited evidence ID collision')
+                        continue
+                    m['facts'].append(copy.deepcopy(fact));ids[fact['id']]=fact
+                    carried=copy.deepcopy(event['body'])
+                    carried['carried_from']={'event_id':event['id'],'run_id':event['run_id'],'completed_id':frozen['id']}
+                    self.s.append('research_evidence',carried,as_of,run_id)
         saved_answers=answers(self.s,as_of)
         if not frozen and not external_review and not profile_id and saved_answers and p.get('clarification_answers')!=saved_answers:
             p=history.profile_input(p,boundary);p['clarification_answers']=saved_answers

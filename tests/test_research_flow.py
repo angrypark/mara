@@ -216,7 +216,7 @@ class FlowTests(unittest.TestCase):
         with patch.object(lib,'universe',return_value=(universe,'fixture')),patch.object(lib,'archive',return_value=Archive()):
             names=[r['symbol'] for r in universe];result=lib.collect(names,DAY);self.assertEqual(result['completed'],200)
             again=lib.collect(names,DAY);self.assertTrue(all(x['status']=='cached' for x in again['receipts']))
-            runner=ResearchTools(lib,self.s,self.r['run_id'],DAY)
+            runner=ResearchTools(lib,self.s,'open-batch-research',DAY)
             a=runner.execute('buffett',{'tool':'compare','arguments':{'symbols':names,'offset':180,'limit':20}},self.market)
             self.assertEqual(len(a['result']['companies']),20);self.assertIsNone(a['result']['next_offset'])
             self.market['assets']['C0']=dict(self.market['assets']['BROAD'],kind='STOCK',asset_class='equity')
@@ -250,11 +250,11 @@ class FlowTests(unittest.TestCase):
         self.assertEqual(len(series),1);self.assertEqual(series[0]['tag'],'Revenues');self.assertEqual(series[0]['observations'][0]['value'],100)
 
     def test_active_evidence_cap_archives_original_and_shape_failure_is_local(self):
-        lib=CompanyLibrary(Path(self.tmp.name)/'library',today=DAY);runner=ResearchTools(lib,self.s,self.r['run_id'],DAY)
+        lib=CompanyLibrary(Path(self.tmp.name)/'library',today=DAY);runner=ResearchTools(lib,self.s,'open-cap-research',DAY)
         for i in range(10):
             fact=dict(self.market['facts'][0],id='bounded-'+str(i),text='x'*12000)
             runner.activate('buffett',fact,self.market)
-        active=[e['body']['fact'] for e in self.s.events('research_evidence') if e['run_id']==self.r['run_id']]
+        active=[e['body']['fact'] for e in self.s.events('research_evidence') if e['run_id']=='open-cap-research']
         self.assertLessEqual(sum(len(json.dumps(f,ensure_ascii=False)) for f in active),80000);self.assertEqual(len(active),6)
         class Invalid:
             def get(self,url):return b'[]',{}

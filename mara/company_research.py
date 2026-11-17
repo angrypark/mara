@@ -223,28 +223,41 @@ class ResearchTools:
     def __init__(self,library,session,run_id,as_of):self.lib,self.s,self.run_id,self.as_of=library,session,run_id,as_of
 
     def activate(self,role,fact,market):
-        if self.s.store.in_transaction:return self._activate(role,fact,market)
-        with self.s.store.transaction():return self._activate(role,fact,market)
+        if self.s.store.in_transaction:raise src.EvidenceError('research_activation_requires_owned_transaction')
+        staged=dict(market,facts=copy.deepcopy(market['facts']))
+        with self.s.store.transaction():accepted=self._activate(role,fact,staged)
+        if accepted:market['facts']=staged['facts']
+        return accepted
 
     def _activate(self,role,fact,market):
         rows=[e['body'] for e in self.s.events('research_evidence') if e['run_id']==self.run_id]
-        existing={r['fact']['id']:r['fact'] for r in rows}
-        if fact['id'] in {f['id'] for f in market['facts']}:return True
+        existing={}
+        for row in rows:
+            old=existing.get(row['fact']['id'])
+            if old is not None and old!=row['fact']:raise src.EvidenceError('evidence_id_collision')
+            existing[row['fact']['id']]=row['fact']
+        current=next((f for f in market['facts'] if f['id']==fact['id']),None)
+        if current is not None:
+            canonical=existing.get(fact['id'])
+            if canonical is not None and canonical!=fact:raise src.EvidenceError('evidence_id_collision')
+            if current!=fact:
+                from .research import project_fact
+                if canonical is None or current!=project_fact(canonical,role):raise src.EvidenceError('evidence_id_collision')
+                # Explicit rereading restores the full same original, without a
+                # new acquisition charge or a claim that a projection was full.
+                market['facts']=[copy.deepcopy(canonical) if f['id']==fact['id'] else f for f in market['facts']]
+            return True
         if fact['id'] in existing:
+            if existing[fact['id']]!=fact:raise src.EvidenceError('evidence_id_collision')
             market['facts'].append(copy.deepcopy(existing[fact['id']]))
             return True
-        general=sum(len(dumps(r['fact'])) for r in rows if r.get('budget_bucket','general')=='general')
-        reserved=sum(len(dumps(r['fact'])) for r in rows if r.get('budget_bucket')=='role_reserved' and r['role']==role)
-        total=sum(len(dumps(r['fact'])) for r in rows);size=len(dumps(fact))
-        self.activation_budget={'policy':'shared-general-and-role-reserve/1','general_used':general,'general_limit':80000,
-            'role':role,'role_reserved_used':reserved,'role_reserved_limit':48000,'run_used':total,'run_limit':368000,
-            'requested_characters':size,'rule':'동일 실행의 재시도·검증 단계는 같은 역할 예산을 공유. 중복 근거는 다시 차감하지 않음.'}
-        research_roles={'evidence','buffett','marks','bogle','wood','validation'}
         prerequisites={'company_company','sec_financials','sec_filings','company_filing_search','company_filing_read','company_valuation','company_xbrl_read'}
-        bucket='general' if general+size<=80000 else 'role_reserved' if role in research_roles and fact.get('research_tool') in prerequisites and reserved+size<=48000 else None
-        if bucket is None or total+size>368000:return False
+        from .research_budget import allocate
+        allocation,self.activation_budget=allocate(self.s,self.run_id,self.as_of,rows,role,fact,fact.get('research_tool') in prerequisites)
+        if allocation is None:return False
+        buckets=[k for k,v in allocation.items() if v];bucket=buckets[0] if len(buckets)==1 else 'mixed'
         market['facts'].append(fact)
-        self.s.append('research_evidence',{'role':role,'fact':fact,'budget_bucket':bucket},self.as_of,self.run_id)
+        self.s.append('research_evidence',{'role':role,'fact':fact,'budget_bucket':bucket,'budget_allocation':allocation},self.as_of,self.run_id)
         return True
 
     def execute(self,role,call,market):
@@ -425,5 +438,5 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
     record_stop(stop_reason,stop_detail)
     payload['research_access']={'status':'executed','stop_reason':stop_reason,'sufficiency':'requires_independent_review','rounds':completed_rounds,'calls':len(transcript),
             'extensions':extensions,'reading_progress':progress.history,
-            'limits':'기본 4회, 자료를 새로 읽으면 최대 8회 조사. 새 목록에서 읽기로 넘어갈 기회는 한 번 허용. 최대 200기업 수집, 페이지 20개. 일반 근거 80,000자 + 연구 역할별 회사·공시·가치평가 예약 48,000자(6역할), 실행 전체 최대 368,000자. 원본과 전문은 별도 보존하며 미수집·미독해·보관만 된 자료를 명시.'}
+            'limits':'기본 4회, 자료를 새로 읽으면 최대 8회 조사. 새 목록에서 읽기로 넘어갈 기회는 한 번 허용. 최대 200기업 수집, 페이지 20개. 보충 근거는 이전 실행에서 이어온 자료를 포함해 최대 368,000자예요. 남은 공간을 공통/역할별로 배분하며 실제 몫은 budget 응답에 있어요. 원본과 전문은 별도 보존하며 미수집·미독해·보관만 된 자료를 명시.'}
     return payload
