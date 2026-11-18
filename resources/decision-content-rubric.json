@@ -1,0 +1,102 @@
+{
+  "version": "mara.decision-content-comparison/1.0",
+  "frozen_at_utc": "2026-11-18T06:57:01.167832+00:00",
+  "frozen_before_reading_baseline": true,
+  "task": "As-of 2026-11-18, explain the preceding three months for this investor and support a portfolio adjustment with amounts, decisive reasons and counterarguments.",
+  "scope": "Content utility and evidence, not code completeness or predicted investment performance",
+  "criteria": [
+    {
+      "id": "C1",
+      "name": "시장 흐름의 설명력",
+      "weight": 25,
+      "question": "지난 3개월의 중요한 변화와 원인, 서로 충돌하는 신호를 투자자가 이해할 수 있는가?",
+      "anchors": {
+        "0": "시황이 없거나 꾸며낸 전제에 의존",
+        "1": "하루 가격·환율 또는 지표 수치의 나열",
+        "2": "복수의 시장 흐름을 설명하지만 기간 변화나 이유가 약함",
+        "3": "기간을 명시한 주요 변화·이유·반대 신호와 투자 의미가 연결됨",
+        "4": "가장 중요한 2~4개 변화의 우선순위와 인과의 불확실성을 설명하고 이전 대비 전환·유지·관찰 조건을 구분"
+      }
+    },
+    {
+      "id": "C2",
+      "name": "포트폴리오 결정의 설명력",
+      "weight": 25,
+      "question": "무엇을 얼마만큼 바꾸거나 유지하며, 왜 단순 대안보다 그 선택이 나은지 설명하는가?",
+      "anchors": {
+        "0": "제안 없음 또는 핵심 제약과 모순",
+        "1": "종목·비중 또는 현금 보류만 제시",
+        "2": "금액과 이유는 있으나 비중 선택·대안 비교가 약함",
+        "3": "현재→목표 금액, 자금 출처, 유지/단순 대안과의 차이, 결정적 이유·반론을 연결",
+        "4": "비중을 정한 논리·기회비용·비용과 실행 전 조건, 판단을 바꿀 구체적 조건을 검토 가능한 수준으로 설명"
+      }
+    },
+    {
+      "id": "C3",
+      "name": "근거의 적절성과 신뢰성",
+      "weight": 20,
+      "question": "중요한 주장에 맞는 당시 원자료와 기간·단위가 있고, 관측과 가정이 구분되는가?",
+      "anchors": {
+        "0": "중대한 허위·미래자료·출처 조작",
+        "1": "출처가 없거나 제목·인용 수에 의존",
+        "2": "일부 중요 주장에 출처가 있지만 기간·범위 공백이 큼",
+        "3": "중요 주장의 출처·시점·단위를 확인하고 전망·가정·미확인을 구분",
+        "4": "핵심 수치 재현과 반대 근거·상충 자료를 검토하며 자료 공백이 결정에 미치는 영향을 설명"
+      }
+    },
+    {
+      "id": "C4",
+      "name": "개인 맥락과 일관성",
+      "weight": 15,
+      "question": "개인 목표·기간·가계/보유·현금 제약과 시황·제안·계산이 일관되는가?",
+      "anchors": {
+        "0": "개인 맥락 또는 실제/가정 금액을 중대하게 혼동",
+        "1": "페르소나를 소개만 하고 선택에 연결하지 못함",
+        "2": "일부 제약을 반영하나 일반론 또는 단위/범위 혼동이 남음",
+        "3": "관련 개인 제약을 선택과 금액·위험에 일관되게 반영",
+        "4": "어떤 개인 조건 때문에 일반적 대안과 달라지는지 설명하고 조건 변화에 따른 대응도 제시"
+      }
+    },
+    {
+      "id": "C5",
+      "name": "핵심 선정과 읽기 쉬움",
+      "weight": 15,
+      "question": "투자자가 무엇이 중요하고 무엇을 결정해야 하는지 빠르게 파악할 수 있는가?",
+      "anchors": {
+        "0": "내용 파악 불가 또는 중대 모순을 숨김",
+        "1": "장황한 나열·도구/내부과정 중심·핵심 미선정",
+        "2": "구조는 있지만 요약·설명이 반복되거나 핵심이 묻힘",
+        "3": "핵심 결론과 2~4개 결정 이유가 선명하고 상세·반론으로 이어짐",
+        "4": "자연스러운 한국어로 핵심 수치와 의미를 연결하고 불필요한 반복 없이 독자가 다음 판단을 할 수 있게 함"
+      }
+    }
+  ],
+  "scoring": "Each criterion 0..4, half steps permitted only with cited reasons; total=sum(weight*score/4). Unknown is null with score range, never inferred pass.",
+  "hard_gates": [
+    "No fabricated or as-of-ineligible decisive facts",
+    "No actual holdings / future funding / proposal / realized return conflation",
+    "Decisive facts traceable enough to audit",
+    "Material missing data and alternatives not concealed"
+  ],
+  "excluded_proxies": [
+    "model call count",
+    "tool count",
+    "source count",
+    "fact graph size",
+    "JSON/schema success",
+    "test count",
+    "output length",
+    "famous persona names",
+    "readiness labels"
+  ],
+  "comparison_protocol": {
+    "read_order": "Masked A/B documents; score independently before paired preference. Disclose if identity inferable.",
+    "inputs": "Record persona hash, as-of, available sources, model/tool limits and budget separately. Unequal inputs constitute an end-to-end product comparison, not a controlled orchestration causal test.",
+    "pairwise": [
+      "Which would you use to decide an adjustment and why?",
+      "Name at most three verified decision improvements unique to either answer.",
+      "List errors and important omissions in both, including in the preferred one."
+    ],
+    "success": "Claim observed superiority only if paired preference and criterion evidence support it with no failed hard gate; report a one-case comparison, not general superiority. Do not change these weights after outputs arrive."
+  }
+}
