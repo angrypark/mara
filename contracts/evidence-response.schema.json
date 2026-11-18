@@ -40,8 +40,20 @@
     "remaining_gap": {
       "type": "string",
       "maxLength": 2500
+    },
+    "unresolved_cause": {
+      "type": "string",
+      "enum": [
+        "none",
+        "access_failure",
+        "not_extracted",
+        "allocation_limit",
+        "calculation_missing",
+        "future_assumption",
+        "source_unverified"
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:mara:evidence-response:1.0.0"
+  "$id": "urn:mara:evidence-response:1.1.0"
 }

@@ -1,0 +1,97 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "question_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "fact_verification",
+        "calculation_link",
+        "future_judgment"
+      ]
+    },
+    "cause": {
+      "type": "string",
+      "enum": [
+        "access_failure",
+        "not_extracted",
+        "allocation_limit",
+        "source_unverified",
+        "calculation_missing",
+        "future_assumption"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "unresolved",
+        "resolved",
+        "managed_by_scenario"
+      ]
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "affects_selected": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "resolution_condition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 900
+    },
+    "next_action": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 800
+    },
+    "fact_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 240
+      },
+      "maxItems": 20,
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "calculation_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 240
+      },
+      "maxItems": 6,
+      "minItems": 0
+    }
+  },
+  "required": [
+    "question_id",
+    "kind",
+    "cause",
+    "status",
+    "subject",
+    "affects_selected",
+    "reason",
+    "resolution_condition",
+    "next_action",
+    "fact_ids",
+    "calculation_paths"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:decision-gap:1.1.0"
+}

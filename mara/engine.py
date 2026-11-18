@@ -272,6 +272,12 @@ class Engine:
                     'leader':'after perspective validation; before final proposal validation',
                     'final_validation':'after leader; assess each statement against its original stage'}}
         from . import evidence_feedback as feedback
+        from . import research_learning as learning
+        research_history=learning.history(self.s,previous) if previous else None
+        history_id=self.s.append('research_feedback_history',research_history,as_of,run_id) if research_history else None
+        learning_cycle={'status':'skipped_frozen_revision' if frozen else 'no_predecessor' if not previous else 'pending',
+            'history_event_id':history_id,'source_completed_id':previous['id'] if previous else None,
+            'reflection_output_id':None,'memory_outputs':[],'applications':[]}
         exchanges=[];feedback_seen=set();output_receipts=[];feedback_round=0
         def call(role, extra=None):
             payload = dict(common,knowledge=k.retrieve(as_of,role))
@@ -281,9 +287,12 @@ class Engine:
                 recorded=[e['body']['payload'] for e in self.s.events('agent_input') if e['run_id']==frozen['run_id'] and e['body']['role']==role]
                 payload['knowledge']=copy.deepcopy(recorded[-1].get('knowledge',{})) if recorded else {}
             payload['market']=compact_market(m,role)
+            if research_history:payload['research_feedback_history']=learning.for_role(research_history,role)
+            if payload.get('current_reflection'):payload['current_reflection']=learning.reflection_for_role(payload['current_reflection'],role)
             payload['decision_context']=semantics(p,m)
             if prior:
                 payload['previous']=previous_for_role(prior,role,compact_market(prior['market'],role,historical=True))
+                payload['previous']['reflection']=learning.reflection_for_role(payload['previous'].get('reflection'),role)
                 # These exact fields are already present under previous.proposal.
                 payload['anchors']={k:v for k,v in anchors.items() if k not in ('previous_rationale','unresolved_risks','next_checks')}
             if role in ('validation','leader'):payload['research_question_progress']=ledger(self.s,run_id,decision_scope)
@@ -315,6 +324,7 @@ class Engine:
                             'requester_input_id':self.s.get(result[1])['body']['input_id'],'assessment':assessment}
                         exchange['assessment_event_id']=self.s.append('evidence_feedback_assessment',receipt,as_of,run_id)
                         exchange['assessment']=copy.deepcopy(assessment)
+                        exchange['assessed_at']=self.s.get(exchange['assessment_event_id'])['recorded']
                         exchange['status']='reassessed'
             ids={f['id'] for f in m['facts']}
             for fact in a.research_facts:
@@ -322,6 +332,8 @@ class Engine:
             return result
         if previous and not frozen:
             reflection, reflection_id = call('reflection')
+            learning_cycle.update(status='reviewed',reflection_output_id=reflection_id,
+                reflection_input_id=self.s.get(reflection_id)['body']['input_id'])
             common['current_reflection'] = reflection
             # Every active record is inspected in bounded batches, including unrelated topics.
             active = k.active(as_of)
@@ -332,18 +344,26 @@ class Engine:
                 batch.append(item); size += n
             batches.append(batch)
             plans=[]
-            for batch in batches:
+            for batch_no,batch in enumerate(batches):
                 plan,pid = call('memory', {'review_items':batch,'reflection_id':reflection_id,
-                    'allowed_refs':[reflection_id,previous['id'],me['id'],start_id],
+                    'learning_proposals':reflection.get('research_learning',[]) if batch_no==0 else [],
+                    'allowed_refs':[reflection_id,previous['id'],me['id'],start_id]+([history_id] if history_id else []),
                     'knowledge_operation_schema':{
                         'action':'add|merge|revise|deactivate|archive', 'reason':'required',
                         'key':'existing key for all except add','text':'max 2000 chars',
                         'topic':'string','condition':'string','perspective':'string','category':'lesson|hypothesis|principle|rare_risk|market',
                         'roles':['*'],'refs':['accessible immutable event id'], 'valid_until':'YYYY-MM-DD or null','priority':'0..10'}})
                 plans.append((plan,pid))
+                learning_cycle['memory_outputs'].append({'output_id':pid,'input_id':self.s.get(pid)['body']['input_id'],
+                    'learning_applications':plan.get('learning_applications',[])})
             with self.s.store.transaction():
                 for plan,pid in plans:
-                    for op in plan['operations']: k.apply(op,as_of,run_id)
+                    for i,op in enumerate(plan['operations']):
+                        kid=k.apply(op,as_of,run_id)
+                        receipt={'memory_output_id':pid,'reflection_output_id':reflection_id,'operation_index':i,
+                            'knowledge_event_id':kid,'review_ids':[r['review_id'] for r in plan.get('learning_applications',[]) if i in r['operation_indices']]}
+                        receipt['event_id']=self.s.append('research_learning_application',receipt,as_of,run_id)
+                        learning_cycle['applications'].append(receipt)
                 audit = k.prune(as_of,run_id)
                 self.s.append('anchor_check',{'anchors':anchors,'preserved':True,'audit_id':audit},as_of,run_id)
         elif not frozen:
@@ -402,6 +422,8 @@ class Engine:
 
             if initial_perspectives is None:initial_perspectives=copy.deepcopy(perspectives)
             pending=feedback.collect(output_receipts,feedback_seen,feedback_round+1)
+            for row in pending:
+                row.update(recipient='evidence',requested_at=self.s.get(row['source_output_id'])['recorded'])
             exchanges.extend(pending)
             waiting=[r for r in exchanges if r['status'] in ('pending','deferred_capacity')]
             for row in waiting:
@@ -409,11 +431,15 @@ class Engine:
                 if feedback_round>=feedback.MAX_ROUNDS:row['status']='round_budget'
                 elif not self.research_library:row['status']='research_unavailable'
                 elif common['frozen_revision'] or as_of!=self.research_library.today:row['status']='frozen_snapshot'
-            active=[r for r in waiting if r['status']=='pending']
-            for row in active[feedback.MAX_REQUESTS:]:row['status']='deferred_capacity'
-            active=active[:feedback.MAX_REQUESTS]
+            active=feedback.schedule([r for r in waiting if r['status']=='pending'],exchanges)
             for row in pending:
                 row['request_event_id']=self.s.append('evidence_feedback_request',row,as_of,run_id)
+                row['queued_at']=self.s.get(row['request_event_id'])['recorded']
+            self.s.append('evidence_feedback_schedule',{'round':feedback_round+1,
+                'selected':[r['request_id'] for r in active],
+                'dispositions':[{'request_id':r['request_id'],'request_event_id':r.get('request_event_id'),
+                    'status':r['status'],'reason':r.get('scheduling_reason',r['status']),
+                    'priority_score':r.get('priority_score'),'research_group':r.get('research_group')} for r in waiting]},as_of,run_id)
             if not active:break
             feedback_round+=1
             assignments=[{k:v for k,v in r.items() if k not in ('dedup_key','status')} for r in active]
@@ -432,7 +458,8 @@ class Engine:
                     for f in supplied_facts if any(f['id'] in r['fact_ids'] for r in supplied['evidence_responses'])}},as_of,run_id)
             for row in active:
                 row.update(status='returned_for_reassessment',response=responses[row['request_id']],
-                    supplier_output_id=supplier_id,response_event_id=return_id)
+                    supplier_output_id=supplier_id,response_event_id=return_id,
+                    responded_at=self.s.get(return_id)['recorded'])
             # Re-reading existing evidence and an unavailable response both
             # require a new analyst judgment; new fact IDs are not the trigger.
             evidence=supplied
@@ -498,6 +525,13 @@ class Engine:
             'exchanges':exchanges,'initial_perspectives':initial_perspectives,
             'initial_evidence':{'output_id':initial_evidence_id,'analysis':initial_evidence},
             'scope':'Supplier receipts are not analytical resolution; final validation and readiness remain separate.'}
+        for row in exchanges:
+            row['final_decision']={'action':proposal['action'],'question_id':row['question_id'],
+                'proposal_output_id':proposal_id,'final_validation_output_id':next(x[2] for x in reversed(output_receipts) if x[1]=='final_validation'),
+                'linked_gaps':[g for g in proposal.get('decision_gaps',[]) if g['question_id']==row['question_id']]}
+        learning_cycle['knowledge_usage']=learning.usage_receipts(self.s,run_id)
+        learning_cycle['scope']='Stored/delivered/model-reported use are separately traceable; decision quality and investment outcomes are not inferred from receipts.'
+        report['research_learning']=learning_cycle
         report['decision_scope']=decision_scope
         report['research_questions']=ledger(self.s,run_id,decision_scope,delivery,final_review)
         report['market_observations']={'stage':'evidence_followup' if feedback_round else 'evidence','output_id':next((x['output_id'] for x in reversed(delivery) if x['role']=='evidence'),None),

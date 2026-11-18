@@ -84,6 +84,7 @@ def run_process(command,prompt,directory,timeout):
 
 
 class CodexModel:
+    decision_policy_version='mara.decision-calibration/1.0'
     mode='live'
     input_wire_version='mara.model-wire/3.0'
     evaluator_wire_version='mara.model-wire/3.0'

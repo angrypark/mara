@@ -135,7 +135,7 @@
     },
     "evidence_responses": {
       "type": "array",
-      "maxItems": 6,
+      "maxItems": 12,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -178,11 +178,70 @@
           "remaining_gap": {
             "type": "string",
             "maxLength": 2500
+          },
+          "unresolved_cause": {
+            "type": "string",
+            "enum": [
+              "none",
+              "access_failure",
+              "not_extracted",
+              "allocation_limit",
+              "calculation_missing",
+              "future_assumption",
+              "source_unverified"
+            ]
           }
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "urn:mara:evidence-response:1.0.0"
+        "$id": "urn:mara:evidence-response:1.1.0"
       }
+    },
+    "knowledge_feedback": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "knowledge_event_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "applied",
+              "considered",
+              "not_applicable",
+              "needs_revalidation"
+            ]
+          },
+          "effect": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 900
+          },
+          "fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "maxItems": 20,
+            "minItems": 0,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "knowledge_event_id",
+          "status",
+          "effect",
+          "fact_ids"
+        ]
+      },
+      "maxItems": 20,
+      "minItems": 0
     }
   },
   "required": [

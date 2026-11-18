@@ -711,6 +711,9 @@
           "path"
         ]
       }
+    },
+    "decision_calibration": {
+      "type": "object"
     }
   },
   "required": [

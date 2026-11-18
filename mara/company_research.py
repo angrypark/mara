@@ -398,6 +398,8 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         payload['research_access']={'status':'frozen_snapshot','rule':'당시 고정 근거만 사용. 최신 자료 소급 수집 불가.'};return payload
     contract=json.loads(resource('contracts/research-plan.schema.json').read_text());toolguide=resource('guides/roles/company-tools.md').read_text()
     from .contracts import validate
+    from .decision_calibration import enabled,validate_knowledge
+    if enabled(model):contract['required']=list(dict.fromkeys(contract['required']+['knowledge_feedback']))
     runner=ResearchTools(library,s,run_id,as_of);transcript=[];collected=0
     from .research_progress import Progress
     progress=Progress();extensions=[];completed_rounds=0;planning_feedback=None;repair_used=False;repair_pending=False
@@ -421,7 +423,11 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         from .planner_evidence import overview
         from .thesis_workspace import build as thesis_workspace
         request={'thesis_workspace':thesis_workspace(payload,role),'role':role,'as_of':as_of,'question':payload.get('question'),
+            'knowledge':copy.deepcopy(payload.get('knowledge',{})),
+            'research_feedback_history':copy.deepcopy(payload.get('research_feedback_history')),
+            'knowledge_policy':'전달된 지식마다 knowledge_feedback에 적용/검토/미적용/재검증과 구체적인 도구 선택 영향을 기록해요. 이력과 회고는 절차 근거이며 현재 시장의 독립 증거가 아니에요. 낡은 사실은 재검증 전 적용하지 않아요.',
             'evidence_assignments':copy.deepcopy(payload.get('evidence_assignments',[])),
+            'shared_research_policy':'같은 research_group은 기간·단위·기준이 일치하는 조사 대상이에요. 검색/원문 독해를 공유하고 각 request_id의 수용 조건은 별도로 답하세요. 그룹이 다르면 합치지 않아요. 배정 실패는 부정 근거가 아니에요.',
             'evidence_feedback':copy.deepcopy(payload.get('evidence_feedback',[])),
             'assignment_policy':'각 요청에 맞는 원문과 기존 근거를 읽고 부족하면 더 조사해요. 확보는 분석 충분성이나 매수 승인이 아니며 경제적 가정 선택은 요청자가 재검토해요.',
             'execution_boundary':'외부 브라우저·쉘 도구를 직접 실행하지 않아요. 이 계약의 calls 배열에 조사 요청을 반환하는 것은 허용돼요. Mara가 허용 도구를 실행하고 다음 입력에 결과를 전달해요.',
@@ -444,11 +450,13 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
             'research_results':transcript,'round':round_no+1,'max_rounds':8,'collected_this_call':collected,
             'research_budget':{'base_rounds':4,'hard_max_rounds':8,'extensions':extensions,
                 'recent_progress':progress.history[-2:],'rule':'After four rounds, continue only with new delivered source ranges/observations tied to the original questions. One discovery-to-read bridge is allowed. Repeated failures, pages, mere fact IDs and unactivated results do not establish progress or analytical sufficiency.'}}
-        s.append('research_plan_input',{'role':role,'guide':guide+'\n'+toolguide,'contract':contract,'payload':request,
+        plan_input_id=s.append('research_plan_input',{'role':role,'guide':guide+'\n'+toolguide,'contract':contract,'payload':request,
             'provider':model.identity},as_of,run_id)
         plan=model.complete(role,guide+'\n'+toolguide,request,contract)
+        plan_output_id=s.append('research_plan_output',{'role':role,'input_id':plan_input_id,'output':plan},as_of,run_id)
         try:
             validate(plan,contract)
+            if enabled(model):validate_knowledge(plan.get('knowledge_feedback',[]),payload)
             if any(not set(c.get('question_ids',[]))<=question_ids for c in plan['calls']):raise ValueError('Unknown decision question')
             if questions and any(not c.get('question_ids') and not c.get('discovery_reason','').strip() for c in plan['calls']):raise ValueError('Question or explicit discovery reason required')
         except ValueError as error:
@@ -482,6 +490,7 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
             s.append('research_planning_feedback',{'role':role,'round':1,'feedback':planning_feedback},as_of,run_id)
             progress.finish_round([])
             continue
+        s.append('research_plan_accepted',{'role':role,'input_id':plan_input_id,'output_id':plan_output_id,'knowledge_feedback':plan.get('knowledge_feedback',[])},as_of,run_id)
         if not plan['calls']:
             stop_reason=plan.get('stop_reason','planner_stopped_unspecified');stop_detail=plan['reason'];break
         for call in plan['calls']:

@@ -1365,6 +1365,53 @@
         "source_access_failed",
         "capability_gap"
       ]
+    },
+    "knowledge_feedback": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "knowledge_event_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "applied",
+              "considered",
+              "not_applicable",
+              "needs_revalidation"
+            ]
+          },
+          "effect": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 900
+          },
+          "fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "maxItems": 20,
+            "minItems": 0,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "knowledge_event_id",
+          "status",
+          "effect",
+          "fact_ids"
+        ]
+      },
+      "maxItems": 20,
+      "minItems": 0
     }
   },
   "required": [

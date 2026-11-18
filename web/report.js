@@ -321,6 +321,20 @@ window.MaraReport=(()=>{
     const t=el('table'),head=el('tr');for(const name of ['자산','제안 비중','기준액 배분','매회 납입 배분'])head.append(el('th','',name));t.append(head);
     for(const row of allocation.rows){const tr=el('tr');for(const value of [symbol(row.symbol),pct(row.weight),money(row.planned_amount),money(row.monthly_amount)])tr.append(el('td','',value));t.append(tr)}
     const scroll=el('div','scroll');scroll.append(t);box.append(scroll,el('p','notice','정기 납입 계획: '+(allocation.monthly_plan.status==='blocked'?'보류':allocation.monthly_plan.status==='conditional_plan'?'조건부 계획':'상태 미기록')),el('p','hint',allocation.monthly_plan.rule||'정기 납입 계획이 별도로 기록되지 않았어요.'));
+    const calibration=doc.decision_calibration;
+    if(calibration){
+      const details=el('div');
+      const kinds={fact_verification:'자료 확인',calculation_link:'계산 연결',future_judgment:'미래 판단'};
+      for(const g of calibration.gaps||[])details.append(el('h4','',g.subject+' · '+(kinds[g.kind]||g.kind)),el('p','',g.reason),el('p','','확인할 조건: '+g.resolution_condition),el('p','','다음 행동: '+g.next_action));
+      for(const c of calibration.resolution?.choices||[])details.append(el('h4','',({cash_wait:'현금 대기',small_participation:'소규모 참여',higher_participation:'더 높은 비중'}[c.participation]||'비교안')),el('p','',c.why_this_size),el('p','','기회비용: '+c.opportunity_cost),...c.scenarios.map(x=>el('p','',({adverse:'불리한 경우',base:'기준 경우',favorable:'유리한 경우'}[x.name]||x.name)+': '+x.assumptions.join(' / ')+' → '+x.implication)),el('p','','재검토: '+c.review_condition+' · '+c.review_by),el('p','','반증: '+c.falsifier));
+      if(calibration.resolution)details.append(el('p','',calibration.resolution.decisive_tradeoff));
+      box.append(fold('decision-calibration','판단 공백과 시나리오·비중 비교',details));
+      const trace=el('div');
+      for(const q of calibration.requests||[])trace.append(el('h4','',q.requester+' → '+(q.recipient||'evidence')+' · '+q.need),el('p','','요청: '+(q.requested_at||'과거 기록')+' · 상태: '+q.status),el('p','','필요한 이유: '+q.decision_impact),el('p','','수용 조건: '+q.acceptance),el('p','','처리 사유: '+(q.response?.reason||q.scheduling_reason||q.status)),el('p','','요청자 재판단: '+(q.assessment?.reason||'응답 후 평가 기록 없음')));
+      const learning=calibration.learning||{};
+      trace.append(el('p','','회고 상태: '+(learning.status||'미기록')+' · 지식 변경 '+(learning.applications?.length||0)+'건 · 사용 평가 '+(learning.knowledge_usage?.length||0)+'건'),el('p','hint','기록 전달과 모델이 보고한 사용을 뜻해요. 투자성과 개선을 확인한 수치는 아니에요.'));
+      box.append(fold('request-learning-trace','자료 요청과 회고 기록',trace));
+    }
     box.append(el('h3','','선택 이유와 마지막 검토'),el('p','hint','선택 이유와 아래 주장 상태는 리더의 판단이에요. 마지막 검토의 범위와 반론을 함께 읽어요.'),items(doc.reasons.key_points));
     box.append(el('p','notice','마지막 검토: '+(review.qualitative_pass===true?'해당 검토 범위에서 통과':review.qualitative_pass===false?'보류':'미기록')),el('p','',review.reason));
     box.append(sourceLinks(review.judgment_report?.evidence_ids||[],sources));

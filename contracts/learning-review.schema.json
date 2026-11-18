@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "repeated_gap",
+        "duplicate_request",
+        "priority_budget",
+        "acceptance_condition",
+        "calculation_failure",
+        "analysis_failure"
+      ]
+    },
+    "request_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "maxItems": 12,
+      "minItems": 1
+    },
+    "observation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "proposed_change": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "target": {
+      "type": "string",
+      "enum": [
+        "research_plan",
+        "tool_use",
+        "role_guidance",
+        "knowledge_review"
+      ]
+    },
+    "condition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 800
+    },
+    "validation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 900
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "propose",
+        "no_change",
+        "needs_test"
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "category",
+    "request_ids",
+    "observation",
+    "proposed_change",
+    "target",
+    "condition",
+    "validation",
+    "status"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:learning-review:1.1.0"
+}

@@ -136,6 +136,12 @@ def assemble(report,facts):
                        'next_evaluation':report.get('next_evaluation'),'next_rebalance':report.get('next_rebalance'),
                        'origin':leader('/proposal/investment_case/monitoring')},
         'references':{'facts':sorted(refs,key=lambda x:x['fact_id']),'calculations':calculations},'assembly_issues':issues}
+    if p.get('decision_resolution') or report.get('research_learning'):
+        document['decision_calibration']={'resolution':copy.deepcopy(p.get('decision_resolution')),
+            'gaps':copy.deepcopy(p.get('decision_gaps',[])),
+            'final_review_gaps':copy.deepcopy(review.get('decision_gaps',[])),
+            'requests':copy.deepcopy(report.get('evidence_feedback',{}).get('exchanges',[])),
+            'learning':copy.deepcopy(report.get('research_learning',{}))}
     document['provenance']['document_sha256']=digest(document)
     from .contracts import validate,schema
     validate(document,schema('final-report'))

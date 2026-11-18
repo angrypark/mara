@@ -1,0 +1,132 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "basis": {
+      "type": "string",
+      "enum": [
+        "conditional_participation",
+        "cash_preference",
+        "temporary_wait",
+        "integrity_block"
+      ]
+    },
+    "choices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "comparison_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "participation": {
+            "type": "string",
+            "enum": [
+              "cash_wait",
+              "small_participation",
+              "higher_participation",
+              "other"
+            ]
+          },
+          "scenarios": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "enum": [
+                    "adverse",
+                    "base",
+                    "favorable"
+                  ]
+                },
+                "assumptions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 400
+                  },
+                  "maxItems": 5,
+                  "minItems": 1
+                },
+                "implication": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 700
+                }
+              },
+              "required": [
+                "name",
+                "assumptions",
+                "implication"
+              ]
+            },
+            "maxItems": 3,
+            "minItems": 3
+          },
+          "opportunity_cost": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 900
+          },
+          "why_this_size": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 900
+          },
+          "falsifier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 700
+          },
+          "review_condition": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 700
+          },
+          "review_by": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "comparison_path",
+          "participation",
+          "scenarios",
+          "opportunity_cost",
+          "why_this_size",
+          "falsifier",
+          "review_condition",
+          "review_by"
+        ]
+      },
+      "maxItems": 8,
+      "minItems": 3
+    },
+    "decisive_tradeoff": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1400
+    },
+    "remaining_uncertainty_treatment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    }
+  },
+  "required": [
+    "basis",
+    "choices",
+    "decisive_tradeoff",
+    "remaining_uncertainty_treatment"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:decision-resolution:1.1.0"
+}

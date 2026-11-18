@@ -40,6 +40,8 @@ class Knowledge:
                 'omitted': len(items)-len(selected)}
 
     def apply(self, op, as_of, run_id=None):
+        from .contracts import validate,schema
+        validate(op,schema('knowledge-operation'))
         required(op, ['action', 'reason'])
         if not isinstance(op['reason'],str) or not op['reason'].strip(): raise ValueError('Change reason required')
         action = op['action']
@@ -69,7 +71,11 @@ class Knowledge:
             elif action == 'revise':
                 required(op,['text','refs'])
                 body['text'] = op['text']; body['refs'] = sorted(set(body['refs']+op['refs']))
-                if 'valid_until' in op: body['valid_until'] = op['valid_until']
+                if old['category'] in PROTECTED and op.get('category',old['category']) not in PROTECTED and not op.get('invalidating_refs'):
+                    raise ValueError('Protected knowledge downgrade needs invalidating evidence')
+                for field in ('topic','condition','perspective','category','roles','priority','valid_until'):
+                    if field in op:body[field]=op[field]
+                body['refs']=sorted(set(body['refs']+op.get('invalidating_refs',[])))
             else:
                 required(op, ['refs'])
                 body['refs'] = sorted(set(body['refs']+op['refs']))

@@ -83,12 +83,21 @@ def validate_output(role, obj, payload):
         if not set(refs) <= allowed: raise ValueError('Invented evidence ID')
         if kind == 'perspective' and allowed and not refs: raise ValueError('Evidence references required')
     if len(dumps(obj)) > (38000 if payload.get('narrative_contract') else 24000): raise ValueError('Agent output too large')
+    from .decision_calibration import validate_output as validate_calibration
+    validate_calibration(role,obj,payload)
+    if role=='memory':
+        from .research_learning import validate_memory
+        validate_memory(obj,payload)
+    if role=='reflection':
+        from .research_learning import validate_reflection
+        validate_reflection(obj,payload)
     return obj
 
 
 class HTTPModel:
     """Explicit live provider. No silent offline fallback and no agent shell/tools."""
     mode = 'live'
+    decision_policy_version='mara.decision-calibration/1.0'
     def __init__(self, config=None):
         self.key = config['api_key'] if config else os.environ['MARA_API_KEY']
         self.model = config['model'] if config else os.environ['MARA_MODEL']
@@ -226,6 +235,8 @@ class Agents:
             from .evidence_feedback import POLICY
             payload['evidence_feedback_policy']=copy.deepcopy(POLICY)
             payload['evidence_feedback_policy']['instructions']=resource('guides/skills/evidence-feedback.md').read_text()
+        from .decision_calibration import enabled,attach,contract_for
+        if enabled(self.model) or payload.get('decision_policy'):attach(payload,role)
         original=copy.deepcopy(payload)
         current=copy.deepcopy(original)
         current['citation_scope']={'market_fact_ids':[f['id'] for f in original.get('market',{}).get('facts',[])],
@@ -268,6 +279,7 @@ class Agents:
             current['input_budget'].update(version='role-envelope/1.1',serialization=VERSION,
                 measurement='shared wire document including guide and output contract',
                 max_unshared_characters=context_limit*4)
+        contract=contract_for(contract,role,current)
         for attempt in (1,2):
             original_size=len(dumps(current))
             within_source_bound=original_size<=context_limit*(4 if shared_input else 1)
@@ -300,13 +312,19 @@ class Agents:
                     current['output_feedback']['evidence_reference_rule']='위 출력 경로의 ID는 전달된 시장 근거 목록에 없어요. 필요한 자료를 실제로 읽고 citation_scope.market_fact_ids의 ID를 그대로 사용하세요. 비슷한 ID로 자동 치환하거나 무관한 근거를 붙이지 마세요. 뒷받침할 자료가 없으면 해당 주장을 미확인으로 남기고 잘못된 인용을 제거하세요.'
                 from .research_questions import QuestionReviewError
                 from .evidence_feedback import FeedbackContractError
-                if isinstance(exc,FeedbackContractError):
+                from .decision_calibration import CalibrationError
+                from .contracts import ContractError
+                if isinstance(exc,CalibrationError):
+                    current['output_feedback']['decision_policy_error']=exc.diagnostic
+                elif isinstance(exc,FeedbackContractError):
                     current['output_feedback']['evidence_feedback_error']=exc.diagnostic
                 elif isinstance(exc,QuestionReviewError):
                     current['output_feedback']['question_error']=exc.diagnostic
                 elif role=='evaluator' or code=='judgment_report':
                     # Existing local evaluator/narrative diagnostics stay private.
                     current['output_feedback']['validation_error']=str(exc)[:5000]
+                elif isinstance(exc,ContractError):
+                    current['output_feedback']['contract_error']=str(exc)[:2000]
                 continue
             self.s.append('agent_validation',{'role':role,'input_id':iid,'output_id':oid,
                 'status':'accepted','code':None,'attempt':attempt},self.as_of,self.run_id)

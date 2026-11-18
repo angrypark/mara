@@ -36,8 +36,109 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 1600
+    },
+    "gap_class": {
+      "type": "string",
+      "enum": [
+        "fact_verification",
+        "calculation_link",
+        "future_judgment"
+      ]
+    },
+    "decision_priority": {
+      "type": "string",
+      "enum": [
+        "changes_choice",
+        "changes_size",
+        "changes_timing",
+        "explanation_only"
+      ]
+    },
+    "research_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "topic": {
+          "type": "string",
+          "enum": [
+            "share_basis",
+            "cash_generation",
+            "valuation_inputs",
+            "business_conversion",
+            "fund_exposure",
+            "costs",
+            "portfolio_exposure",
+            "scenario_sensitivity",
+            "other"
+          ]
+        },
+        "period": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "measure": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "subject",
+        "topic",
+        "period",
+        "unit",
+        "basis",
+        "measure"
+      ]
+    },
+    "resolution_condition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 800
+    },
+    "stop_condition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 800
+    },
+    "related_fact_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 240
+      },
+      "maxItems": 20,
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "followup_of": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "retry_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 800
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:mara:evidence-request:1.0.0"
+  "$id": "urn:mara:evidence-request:1.1.0"
 }
