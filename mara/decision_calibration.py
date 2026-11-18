@@ -21,6 +21,8 @@ class CalibrationError(ContractError):
 def enabled(model):return getattr(model,'decision_policy_version',None)==VERSION
 
 def failure_subtype(output,error):
+ from .evidence_feedback import FeedbackContractError
+ if isinstance(error,FeedbackContractError):return 'evidence_assessment_coverage'
  if isinstance(error,CalibrationError):return error.diagnostic['code']
  if isinstance(output,dict) and isinstance(output.get('decision_gaps'),list):
   for gap in output['decision_gaps']:

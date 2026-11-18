@@ -13,6 +13,7 @@ POLICY = {
     'schema_version': VERSION,
     'instruction': '판단에 중요한 자료·독해·분석 공백이 있으면 next_checks에만 미루지 말고 evidence_requests로 자료 담당에게 요청하세요. 고정 question_id와 필요한 기간·단위·원문/계산 조건을 acceptance에 구체화하세요. 자료 요청은 개인 정보 확인이나 매수 지시가 아니에요. 응답은 증거 확보 상태이며 충분성·승인이 아니에요. 같은 요청을 반복하지 말고 받은 근거로 판단과 반증을 다시 검토하세요. 경제적 가정 선택은 요청자 책임이며 공급자에게 결론을 요구하지 않아요.',
     'retry_policy':'같은 대상의 부분 응답을 더 조사하려면 followup_of에 실제 이전 request_id, retry_reason에 새 원문 범위/출처/계산 경로와 결과를 바꿀 이유를 적어요. 새 related_fact_ids가 도착한 경우도 재조사할 수 있어요. 무근거 반복은 중단하며 미래 가정은 시나리오로 다뤄요.',
+    'assessment_scope':'이번 입력의 evidence_feedback에서 requester가 자신이고 response가 있는 요청은 이전 회차에 평가했더라도 request_id별로 빠짐없이 한 번 다시 평가하세요. 새 응답만 평가하지 마세요. 아직 응답이 없는 자기 요청은 생략하거나 still_missing만 남기고, 반복 평가를 새 자료나 독립 확인으로 세지 마세요.',
     'max_rounds': MAX_ROUNDS, 'max_requests_per_round': MAX_REQUESTS,
     'max_requester_responses_per_round':MAX_SHARED_REQUESTS,
 }

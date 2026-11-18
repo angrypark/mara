@@ -81,7 +81,9 @@ def present(session,row):
     evidence_graph=fact_view(session,r,facts,result['id'])
     from .editorial import presented as presented_brief
     brief=presented_brief(r.get('reader_brief'),r,facts)
-    result['view']={'user_persona':frozen_persona,'persona_is_current':bool(frozen_persona and latest_profile and latest_profile['id']==r['profile_id']), 'version':1,'kind':'revision' if r.get('revision_of') else 'weekly' if previous else 'initial',
+    from .report_audit import findings as audit_findings
+    from .feedback_provenance import present as feedback_provenance
+    result['view']={'audit_findings':audit_findings(session,result),'feedback_provenance':feedback_provenance(session,result),'user_persona':frozen_persona,'persona_is_current':bool(frozen_persona and latest_profile and latest_profile['id']==r['profile_id']), 'version':1,'kind':'revision' if r.get('revision_of') else 'weekly' if previous else 'initial',
         'base_currency':profile['base_currency'],'context':analyses.get('context'),
         'judgment_reports':list(role_reports.values()),
         'judgment_report_history':report_history,

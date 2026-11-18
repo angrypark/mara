@@ -30,6 +30,25 @@ def process_failures(session,completed,as_of,before_seq):
   if e['kind']!='failed' or e['seq']<=completed['seq'] or not start or e['run_id'] in finished:continue
   b=start['body']
   if b.get('previous_id')==completed['id'] and b.get('mode')==completed['body'].get('mode') and b.get('history_scope',{}).get('after_seq',0)==boundary:failed.append(e)
+ # A recovered completed execution may reuse a prefix of a failed run.
+ # Carry only that terminal diagnostic; replayed rejection events already
+ # belong to the completed run and must not become independent duplicates.
+ recovered={};carry_links={}
+ failures_by_id={e['id']:e for e in events if e['kind']=='failed'}
+ completed_start=starts.get(completed['run_id'])
+ for receipt in session.events('execution_prefix_reuse',as_of):
+  if receipt['run_id']!=completed['run_id'] or receipt['seq']>=completed['seq'] or not completed_start:continue
+  e=failures_by_id.get(receipt['body'].get('source_failed_id'));source=starts.get(e['run_id']) if e else None
+  if not e or not source or not (e['seq']<completed_start['seq']<receipt['seq']) or e['run_id'] in finished:continue
+  b=source['body'];current=completed_start['body']
+  if (b.get('previous_id') in {item['id'] for item in events if item['kind']=='completed'}
+      and receipt['body'].get('source_run_id')==e['run_id']
+      and b.get('previous_id')==current.get('previous_id')==completed['body'].get('previous_id')
+      and b.get('mode')==current.get('mode')==completed['body'].get('mode')
+      and b.get('history_scope',{}).get('after_seq',0)==current.get('history_scope',{}).get('after_seq',0)==boundary):
+   recovered[e['id']]=e
+   carry_links.setdefault(e['id'],{'receipt_id':receipt['id'],'completed_id':completed['id'],
+    'source_status':'failed','continuation_status':'completed','scope':'Original failure remains failed; its prefix was reused by this completed execution. No root cause or benefit inferred.'})
  runs={completed['run_id']}|{e['run_id'] for e in failed}
  query='SELECT * FROM events WHERE owner=? AND seq<? AND effective<=? AND kind IN (\'agent_input\',\'agent_validation\') AND run_id IN ('+','.join('?' for _ in runs)+') ORDER BY seq'
  events += [session.decode(row) for row in session.store.db.execute(query,(session.owner,before_seq,as_of,*sorted(runs)))]
@@ -44,6 +63,7 @@ def process_failures(session,completed,as_of,before_seq):
   prior=by_output.get(inp['body']['payload'].get('output_feedback',{}).get('rejected_output_id'))
   stored_detail=b.get('subtype')
   detail=stored_detail or feedback.get('decision_policy_error',{}).get('code') or feedback.get('question_error',{}).get('reason_code')
+  if not detail and isinstance(feedback.get('evidence_feedback_error'),dict) and {'required_response_ids','pending_request_ids'}<=set(feedback['evidence_feedback_error']):detail='evidence_assessment_coverage'
   if not isinstance(detail,str) or not re.fullmatch('[a-z_]{1,80}',detail):detail=None
   rows.append({'failure_id':e['id'],'case_id':prior['id'] if prior else e['id'],'kind':'output_rejection','role':b['role'],
    'stage':inp['body']['payload'].get('analysis_stage'),'code':b['code'],'subtype':detail,
@@ -51,14 +71,25 @@ def process_failures(session,completed,as_of,before_seq):
    'diagnostic_source_id':e['id'] if stored_detail else correction['id'] if detail and correction else None,'recorded_at':e['recorded'],'as_of':e['effective'],
    'run_state':'failed' if e['run_id']!=completed['run_id'] else 'completed',
    'correction_status':'accepted' if correction and correction['id'] in accepted else 'rejected' if correction and correction['id'] in rejected_inputs else 'not_completed' if correction else 'not_recorded'})
- for e in failed:
+ for e in {e['id']:e for e in failed+list(recovered.values())}.values():
   rows.append({'failure_id':e['id'],'case_id':e['id'],'kind':'execution_failure','role':'runtime','stage':'runtime',
    'code':e['body']['error_type'],'subtype':None,'recorded_at':e['recorded'],'as_of':e['effective'],'run_state':'failed','correction_status':'not_completed'})
+ for row in rows:
+  if row['failure_id'] in carry_links:row['recovery']=carry_links[row['failure_id']]
+ # Independent post-run findings are separate process observations, not model
+ # failures, market facts, new model judgments, or changed investment decisions.
+ from .report_audit import findings as audit_findings
+ for finding in audit_findings(session,completed,before_seq):
+  rows.append({'failure_id':finding['event_id'],'case_id':finding['event_id'],'kind':'independent_post_run_review',
+   'role':finding['role'],'stage':'post_run_review','code':'independent_audit','subtype':finding['code'],
+   'recorded_at':finding['recorded_at'],'as_of':completed['effective'],'run_state':'completed','correction_status':'documented_independently',
+   'source_completed_id':completed['id'],'source_output_id':finding['source_output_id'],
+   'review_summary':finding['review_summary'],'review_scope':'Process review only; not a market fact, independent financial confirmation, model self-correction, changed decision or investment performance.'})
  # Terminal failures first, then most recent diagnostics. Originals stay in DB.
  selected=sorted(rows,key=lambda r:(r['kind']=='execution_failure',r['recorded_at']),reverse=True)[:60]
  return {'items':selected,'available':len(rows),'selected':len(selected),'omitted':len(rows)-len(selected),
   'selection':'Terminal failures, then recent rejection diagnostics; maximum 60. Same case_id is one failure with repair, not independent confirmations.',
-  'scope':'Previous completed run and terminal failed runs linked to it, same owner/history/mode, before the new run start. Process evidence only; no failed investment judgment.'}
+  'scope':'Previous completed run, its verified recovered terminal failure, and later terminal failed runs linked to it; same owner/history/mode, before the new run start. Process evidence only; no failed investment judgment.'}
 
 
 def history(session,completed,as_of=None,before_seq=None):

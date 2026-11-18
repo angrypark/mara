@@ -312,6 +312,14 @@ window.MaraReport=(()=>{
     const box=el('article','final-reader');box.id='final-reader';
     box.append(el('h3','','이번 판단과 적용 범위'));
     if(!doc?.reasons){box.append(el('p','notice','최종 보고서 구성을 마치지 못했어요. 아래에 원래 분석과 확인된 상태를 보존했어요.'));return box}
+    if(v?.audit_findings?.length){
+      const audit=el('section','notice');audit.id='independent-report-audit';audit.append(el('h3','','독립 검산과 범위 검토'),el('p','','원 분석 기록과 판정은 보존했어요. 아래 정정·검토를 함께 읽어주세요.'));
+      for(const finding of v.audit_findings){
+        audit.append(el('h4','',finding.classification==='verified_arithmetic_correction'?'검산 정정':'판단 범위에 관한 검토 의견'),el('p','','원문: '+finding.original_text),el('p','',finding.correction_or_review),el('p','hint',finding.limits),el('p','hint','검토: '+finding.reviewer+' · '+finding.recorded_at));
+        const link=el('a','reader-origin','해당 단계 원문');link.href='#role-output-'+finding.source_output_id;link.addEventListener('click',()=>{const history=$('role-report-history');if(history)history.open=true});audit.append(link);
+      }
+      box.append(audit);
+    }
     const decision=doc.decision,allocation=doc.allocation,review=doc.reasons.final_review||{},open=doc.open_issues;
     const originLink=origin=>{const link=el('a','reader-origin','해당 단계 원문');link.href='#role-output-'+origin?.output_id;link.addEventListener('click',()=>{const history=$('role-report-history');if(history)history.open=true});return link};
     box.append(el('p','notice','최종 판단: '+(action[decision.action]||decision.action)+' · 실행 권한: '+(decision.decision_status?.execution_status==='not_authorized'?'부여되지 않았어요':decision.decision_status?.execution_status||'기록 없음')),
@@ -332,10 +340,23 @@ window.MaraReport=(()=>{
       if(calibration.resolution)details.append(el('p','',calibration.resolution.decisive_tradeoff));
       box.append(fold('decision-calibration','판단 공백과 시나리오·비중 비교',details));
       const trace=el('div'),requestStates={pending:'배정 대기',deferred_capacity:'조사 대상 한도로 이연',round_budget:'조사 횟수 한도',research_unavailable:'조사 도구 미연결',frozen_snapshot:'당시 자료로만 검토',duplicate:'중복 요청',reassessed:'요청자 재평가',scenario_review:'시나리오 검토',repeat_target_stopped:'근거 없는 반복 조사 중단',returned_for_reassessment:'응답 후 재평가 대기'};
-      for(const q of calibration.requests||[])trace.append(el('h4','',q.requester+' → '+(q.recipient||'evidence')+' · '+q.need),el('p','','요청: '+(q.requested_at||'과거 기록')+' · 상태: '+(requestStates[q.status]||q.status)),el('p','','필요한 이유: '+q.decision_impact),el('p','','수용 조건: '+q.acceptance),el('p','','처리 사유: '+(q.response?.reason||q.scheduling_reason||q.status)),el('p','','요청자 재판단: '+(q.assessment?.reason||'응답 후 평가 기록 없음')));
+      const traceOrigins=v?.feedback_provenance?.rows||{};
+      if(calibration.learning?.status==='reused_prefix')trace.append(el('p','hint','앞선 실행의 일부 요청·응답을 재사용해 분석을 이어갔어요. 각 기록의 최초 시각과 이번 연결 시각을 구분하며, 새 요청과 새 평가도 함께 표시해요.'));
+      for(const q of calibration.requests||[]){
+        trace.append(el('h4','',q.requester+' → '+(q.recipient||'evidence')+' · '+q.need),el('p','','상태: '+(requestStates[q.status]||q.status)),el('p','','필요한 이유: '+q.decision_impact),el('p','','수용 조건: '+q.acceptance),el('p','','처리 사유: '+(q.response?.reason||q.scheduling_reason||q.status)),el('p','','요청자 재판단: '+(q.assessment?.reason||'응답 후 평가 기록 없음')));
+        const origins=traceOrigins[q.request_event_id];
+        if(!origins)trace.append(el('p','hint','이 실행의 요청 기록 시각: '+(q.requested_at||'미기록')+' · 최초 기록 출처는 확인되지 않았어요.'));
+        for(const [edge,origin] of Object.entries(origins||{})){
+          const label={request:'요청 작성',queued:'요청 등록',response:'자료 응답',assessment:'요청자 평가'}[edge]||edge;
+          trace.append(el('p','hint',label+': '+(origin.status==='reused'?'앞선 기록 재사용 · 최초 '+origin.origin_recorded+' · 이번 연결 '+origin.current_recorded:origin.status==='new'?'이번 실행에서 작성 · '+origin.current_recorded:'원 기록 연결 미검증')));
+        }
+      }
       const learning=calibration.learning||{};
       for(const conflict of learning.memory_feedback?.conflicts||[]){trace.append(el('h4','','기억 정리에서 남긴 이견'),el('p','',conflict.text));for(const [role,reviews] of Object.entries(learning.memory_reviews||{})){const review=reviews.find(x=>x.conflict_id===conflict.id);trace.append(el('p','',({leader:'리더',final_validation:'최종 검증'}[role]||role)+': '+(review?review.reason+' · 다음 확인: '+review.next_action:'평가 기록 없음')))}}
-      trace.append(el('p','','회고 상태: '+(learning.status||'미기록')+' · 지식 변경 '+(learning.applications?.length||0)+'건 · 사용 평가 '+(learning.knowledge_usage?.length||0)+'건'),el('p','hint','기록 전달과 모델이 보고한 사용을 뜻해요. 투자성과 개선을 확인한 수치는 아니에요.'));
+      const reused=learning.status==='reused_prefix';
+      const learningState={reviewed:'완료',reused_prefix:'이전 회고 재사용',skipped_frozen_revision:'당시 자료 재검토로 생략',no_predecessor:'이전 판단 없음',pending:'진행 중'}[learning.status]||learning.status||'미기록';
+      trace.append(el('p','','회고 상태: '+learningState+' · '+(reused?'재사용한 지식 처리 ':'지식 변경 ')+(learning.applications?.length||0)+'건 · 사용 평가 '+(learning.knowledge_usage?.length||0)+'건'),el('p','hint','기록 전달과 모델이 보고한 사용을 뜻해요. 투자성과 개선을 확인한 수치는 아니에요.'));
+      if(reused)trace.append(el('p','hint','앞선 회고와 지식 처리 기록을 이어서 사용했어요. 이번 실행에서 같은 지식 변경을 다시 적용하거나 새 학습으로 집계하지 않았어요.'));
       box.append(fold('request-learning-trace','자료 요청과 회고 기록',trace));
     }
     box.append(el('h3','','선택 이유와 마지막 검토'),el('p','hint','선택 이유와 아래 주장 상태는 리더의 판단이에요. 마지막 검토의 범위와 반론을 함께 읽어요.'),items(doc.reasons.key_points));
@@ -360,7 +381,7 @@ window.MaraReport=(()=>{
     box.append(el('h3','','원래 질문과 남은 확인'));
     for(const q of open.questions){const card=el('article','final-question');card.dataset.questionId=q.id;card.append(el('h4','',q.target+' · '+q.question),
       el('p','hint','마지막 검토자 판단: '+(q.review?.status==='supported'?'검토 범위에서 근거가 뒷받침함':q.review?.status==='unresolved'?'미해결':'미검토')),
-      el('p','',q.review?.reason||q.acceptance),el('p','','다음 확인: '+(q.review?.next_action||'구체적인 후속 판단이 기록되지 않았어요.')),sourceLinks(q.fact_ids,sources));box.append(card)}
+      el('p','',q.review?.reason||q.acceptance),el('p','','다음 확인: '+(q.review?.next_action||'구체적인 후속 판단이 기록되지 않았어요.')),sourceLinks(q.fact_ids,sources));for(const finding of v?.audit_findings||[])if(finding.classification==='verified_arithmetic_correction'&&finding.original_text===q.review?.reason)card.append(el('p','notice','독립 검산 정정: '+finding.correction_or_review));box.append(card)}
     box.append(el('h3','','언제 무엇을 다시 확인하나'));
     for(const check of doc.next_review.monitoring)box.append(el('h4','',check.variable),el('p','',check.condition),el('p','',check.check_at+' · 담당 '+check.owner),el('p','','그때 할 일: '+check.action),el('p','','반례 확인: '+check.counterexample_test));
     box.append(section('다음 확인 항목',doc.next_review.next_checks),section('실행 전 조건',doc.next_review.implementation));
