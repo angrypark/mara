@@ -273,7 +273,7 @@ class Engine:
                     'final_validation':'after leader; assess each statement against its original stage'}}
         from . import evidence_feedback as feedback
         from . import research_learning as learning
-        research_history=learning.history(self.s,previous) if previous else None
+        research_history=learning.history(self.s,previous,as_of,self.s.get(start_id)['seq']) if previous else None
         history_id=self.s.append('research_feedback_history',research_history,as_of,run_id) if research_history else None
         learning_cycle={'status':'skipped_frozen_revision' if frozen else 'no_predecessor' if not previous else 'pending',
             'history_event_id':history_id,'source_completed_id':previous['id'] if previous else None,

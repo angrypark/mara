@@ -299,8 +299,9 @@ class Agents:
             try:validate_output(role,result,original)
             except (ValueError,TypeError,KeyError) as exc:
                 code=issue_code(exc)
+                from .decision_calibration import failure_subtype
                 self.s.append('agent_validation',{'role':role,'input_id':iid,'output_id':oid,
-                    'status':'rejected','code':code,'attempt':attempt},self.as_of,self.run_id)
+                    'status':'rejected','code':code,'subtype':failure_subtype(result,exc),'attempt':attempt},self.as_of,self.run_id)
                 if attempt==2:raise AgentOutputError(role,code,oid) from None
                 current=copy.deepcopy(current)
                 current['output_feedback']={'code':code,'rejected_output_id':oid,'previous_output':result,

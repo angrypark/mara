@@ -491,7 +491,8 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 240
+              "maxLength": 240,
+              "pattern": "^/analysis/"
             },
             "maxItems": 6,
             "minItems": 0

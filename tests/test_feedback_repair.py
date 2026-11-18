@@ -68,6 +68,22 @@ class FeedbackRepairTests(unittest.TestCase):
         out,s,model=self.run_planner([valid,valid,valid,invalid,stop])
         self.assertEqual(len(model.inputs),5)
         self.assertEqual(out['research_access']['extensions'],[{'round':5,'reason':'one_contract_shape_repair'}])
+        # The valid stop receipt must survive the subsequent leader/validator
+        # ledger boundary, not only the research loop that produced it.
+        from mara.research_questions import freeze,ledger
+        from mara.contracts import schema,validate,ContractError
+        result=ledger(s,'run',freeze({'goal':'fixture'},market()))
+        self.assertEqual(result['research_stops'][0]['extensions'],out['research_access']['extensions'])
+        def embedded(value):
+            if isinstance(value,dict):
+                if 'research_stops' in value.get('properties',{}):yield value
+                for child in value.values():yield from embedded(child)
+            elif isinstance(value,list):
+                for child in value:yield from embedded(child)
+        for contract in embedded(schema('workbench')):validate(result,contract)
+        invalid_result=copy.deepcopy(result)
+        invalid_result['research_stops'][0]['extensions'][0]['reason']='unbounded_research'
+        with self.assertRaises(ContractError):validate(invalid_result,schema('research-questions'))
         with patch('mara.research_progress.Progress.extend',return_value='test_new_source_progress'):
             out,s,model=self.run_planner([valid]*7+[invalid])
         self.assertEqual(len(model.inputs),8)

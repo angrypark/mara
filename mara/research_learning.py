@@ -1,5 +1,5 @@
 """Request history -> process review -> scoped knowledge -> explicit usage receipts."""
-import copy
+import copy,re
 from collections import Counter
 from .contracts import ContractError,validate,schema
 from .decision_calibration import CalibrationError
@@ -18,7 +18,50 @@ def memory_feedback(session,outputs):
  return {'conflicts':rows,'instruction':'기억 정리 역할이 남긴 이견·미해결 조건이에요. 시장 사실이나 독립 확인으로 승격하지 않아요. 리더와 검증은 각 ID를 memory_reviews로 반영/미해결/비관련 평가하고 결정 영향과 다음 확인을 남겨요. incorporated는 고려·반영이며 사실 해결이 아니에요. 선택의 사실·계산 공백은 decision_gaps에도 유지해요.'}
 
 
-def history(session,completed):
+def process_failures(session,completed,as_of,before_seq):
+ """Bounded process-only snapshot. Never copy failed investment outputs."""
+ events=[e for kind in ('run_started','completed','failed') for e in session.events(kind,as_of) if e['seq']<before_seq]
+ starts={e['run_id']:e for e in events if e['kind']=='run_started'}
+ finished={e['run_id'] for e in events if e['kind']=='completed'}
+ boundary=completed['body'].get('history_scope',{}).get('after_seq',0)
+ failed=[]
+ for e in events:
+  start=starts.get(e['run_id'])
+  if e['kind']!='failed' or e['seq']<=completed['seq'] or not start or e['run_id'] in finished:continue
+  b=start['body']
+  if b.get('previous_id')==completed['id'] and b.get('mode')==completed['body'].get('mode') and b.get('history_scope',{}).get('after_seq',0)==boundary:failed.append(e)
+ runs={completed['run_id']}|{e['run_id'] for e in failed}
+ query='SELECT * FROM events WHERE owner=? AND seq<? AND effective<=? AND kind IN (\'agent_input\',\'agent_validation\') AND run_id IN ('+','.join('?' for _ in runs)+') ORDER BY seq'
+ events += [session.decode(row) for row in session.store.db.execute(query,(session.owner,before_seq,as_of,*sorted(runs)))]
+ rejected=[e for e in events if e['run_id'] in runs and e['kind']=='agent_validation' and e['body']['status']=='rejected']
+ by_output={e['body']['output_id']:e for e in rejected}
+ corrections={e['body']['payload'].get('output_feedback',{}).get('rejected_output_id'):e for e in events if e['kind']=='agent_input' and e['run_id'] in runs}
+ accepted={e['body']['input_id'] for e in events if e['kind']=='agent_validation' and e['body']['status']=='accepted'}
+ rejected_inputs={e['body']['input_id'] for e in rejected}
+ rows=[]
+ for e in rejected:
+  b=e['body'];inp=session.get(b['input_id']);correction=corrections.get(b['output_id']);feedback=correction['body']['payload']['output_feedback'] if correction else {}
+  prior=by_output.get(inp['body']['payload'].get('output_feedback',{}).get('rejected_output_id'))
+  stored_detail=b.get('subtype')
+  detail=stored_detail or feedback.get('decision_policy_error',{}).get('code') or feedback.get('question_error',{}).get('reason_code')
+  if not isinstance(detail,str) or not re.fullmatch('[a-z_]{1,80}',detail):detail=None
+  rows.append({'failure_id':e['id'],'case_id':prior['id'] if prior else e['id'],'kind':'output_rejection','role':b['role'],
+   'stage':inp['body']['payload'].get('analysis_stage'),'code':b['code'],'subtype':detail,
+   'diagnostic_input_id':correction['id'] if detail and correction and not stored_detail else None,
+   'diagnostic_source_id':e['id'] if stored_detail else correction['id'] if detail and correction else None,'recorded_at':e['recorded'],'as_of':e['effective'],
+   'run_state':'failed' if e['run_id']!=completed['run_id'] else 'completed',
+   'correction_status':'accepted' if correction and correction['id'] in accepted else 'rejected' if correction and correction['id'] in rejected_inputs else 'not_completed' if correction else 'not_recorded'})
+ for e in failed:
+  rows.append({'failure_id':e['id'],'case_id':e['id'],'kind':'execution_failure','role':'runtime','stage':'runtime',
+   'code':e['body']['error_type'],'subtype':None,'recorded_at':e['recorded'],'as_of':e['effective'],'run_state':'failed','correction_status':'not_completed'})
+ # Terminal failures first, then most recent diagnostics. Originals stay in DB.
+ selected=sorted(rows,key=lambda r:(r['kind']=='execution_failure',r['recorded_at']),reverse=True)[:60]
+ return {'items':selected,'available':len(rows),'selected':len(selected),'omitted':len(rows)-len(selected),
+  'selection':'Terminal failures, then recent rejection diagnostics; maximum 60. Same case_id is one failure with repair, not independent confirmations.',
+  'scope':'Previous completed run and terminal failed runs linked to it, same owner/history/mode, before the new run start. Process evidence only; no failed investment judgment.'}
+
+
+def history(session,completed,as_of=None,before_seq=None):
  body=completed['body'];rows=copy.deepcopy(body.get('evidence_feedback',{}).get('exchanges',[]))
  assessments=[e for e in session.events('evidence_feedback_assessment') if e['run_id']==completed['run_id'] and e['seq']<=completed['seq']]
  for row in rows:
@@ -36,7 +79,8 @@ def history(session,completed):
   if e['run_id']==completed['run_id'] and e['seq']<=completed['seq']:
    result=e['body'].get('result',{})
    failures.append({'event_id':e['id'],'role':e['body']['role'],'tool':e['body'].get('call',{}).get('tool'),'status':result.get('status'),'reason':result.get('reason')})
- return {'schema_version':VERSION,'source_completed_id':completed['id'],'as_of':completed['effective'],
+ diagnostics=process_failures(session,completed,as_of or completed['effective'],before_seq or completed['seq']+1)
+ return {'schema_version':VERSION,'source_completed_id':completed['id'],'as_of':completed['effective'],'process_failures':diagnostics,
   'final_action':body['proposal']['action'],'requests':rows,'tool_failures':failures,
   'status_counts':dict(Counter(x['status'] for x in rows)),'instruction':INSTRUCTION,
   'source_scope':'Complete immediate-predecessor request records; older originals remain in their completed events. Process observations are not additional market facts or independent investment confirmations.'}
@@ -47,6 +91,9 @@ def for_role(value,role):
  if role in ('buffett','marks','bogle','wood'):
   result['requests']=[r for r in result['requests'] if r['requester']==role]
   result['tool_failures']=[r for r in result['tool_failures'] if r['role']==role]
+  if result.get('process_failures'):
+   result['process_failures']['items']=[r for r in result['process_failures']['items'] if r['role'] in (role,'runtime')]
+   result['process_failures']['projection']='Own rejection diagnostics and runtime failure types only; counts describe the original snapshot.'
   result['projection']='Own prior requests and process counts; other investors\' assessments are omitted.'
  elif role=='evidence':
   for r in result['requests']:
@@ -67,10 +114,12 @@ def validate_reflection(out,payload):
  hist=payload.get('research_feedback_history') or {};rows=hist.get('requests',[])
  reviews=out.get('research_learning',[]);ids=[r['id'] for r in reviews]
  if len(ids)!=len(set(ids)):raise CalibrationError('learning_ids','Research learning review IDs must be unique')
- if rows and not reviews:raise CalibrationError('learning_review','Read the request history and record at least one evidenced proposal or no_change judgment')
+ failures={r['failure_id'] for r in hist.get('process_failures',{}).get('items',[])}
+ if (rows or failures) and not reviews:raise CalibrationError('learning_review','Read the process history and record at least one evidenced proposal or no_change judgment')
  available={r['request_id'] for r in rows}
  for review in reviews:
   if not set(review['request_ids'])<=available:raise CalibrationError('learning_sources','Learning cites an unknown prior request')
+  if not set(review.get('failure_ids',[]))<=failures or not (review['request_ids'] or review.get('failure_ids')):raise CalibrationError('learning_sources','Learning requires supplied request or process-failure evidence')
   if review['category'] in ('duplicate_request','repeated_gap') and sum(r['request_id'] in review['request_ids'] for r in rows)<2:
    raise CalibrationError('learning_repetition','Repeated/duplicate finding requires multiple request records')
 

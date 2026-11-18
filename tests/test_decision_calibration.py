@@ -20,6 +20,67 @@ def gap(**changes):
 
 
 class CalibrationTests(unittest.TestCase):
+ def test_failure_history_is_scoped_bounded_and_never_copies_rejected_judgments(self):
+  from mara.agents import Agents
+  with tempfile.TemporaryDirectory() as t:
+   db=Store(Path(t)/'db');self.addCleanup(db.close);s=db.session(db.create_user('fixture'));day='2026-11-15'
+   parent=s.append('completed',{'mode':'demo','history_scope':{'after_seq':0},'proposal':{'action':'defer'}},day,'prior')
+   def failure(run,mode='demo',reset=0,correction_complete=True):
+    s.append('run_started',{'previous_id':parent,'mode':mode,'history_scope':{'after_seq':reset}},day,run)
+    i=s.append('agent_input',{'role':'buffett','payload':{'analysis_stage':'buffett'}},day,run)
+    o=s.append('agent_output',{'role':'buffett','input_id':i,'output':{'SECRET_INVESTMENT':'must not enter reflection'}},day,run)
+    rejected=s.append('agent_validation',{'role':'buffett','input_id':i,'output_id':o,'status':'rejected','code':'output_contract'},day,run)
+    correction=s.append('agent_input',{'role':'buffett','payload':{'analysis_stage':'buffett','output_feedback':{'rejected_output_id':o,'decision_policy_error':{'code':'gap_calculation','detail':'PRIVATE_DETAIL'}}}},day,run)
+    if correction_complete:s.append('agent_validation',{'role':'buffett','input_id':correction,'output_id':'fixture-corrected','status':'accepted'},day,run)
+    terminal=s.append('failed',{'error_type':'ContractError','message':'PRIVATE_EXCEPTION'},day,run)
+    return rejected,terminal
+   rejected,terminal=failure('failed');failure('different-mode','live');failure('reset',reset=10)
+   boundary=s.append('run_started',{'previous_id':parent,'mode':'demo','history_scope':{'after_seq':0}},day,'current')
+   failure('after-snapshot')
+   h=learning.history(s,s.get(parent),day,s.get(boundary)['seq']);rows=h['process_failures']['items']
+   self.assertEqual({r['failure_id'] for r in rows},{rejected,terminal})
+   r=next(r for r in rows if r['failure_id']==rejected);self.assertEqual(r['subtype'],'gap_calculation');self.assertEqual(r['correction_status'],'accepted');self.assertEqual(r['run_state'],'failed')
+   self.assertNotIn('PRIVATE',str(h));self.assertNotIn('SECRET_INVESTMENT',str(h))
+   self.assertEqual([r['role'] for r in learning.for_role(h,'wood')['process_failures']['items']],['runtime'])
+   class FailureReflection(DemoModel):
+    decision_policy_version=policy.VERSION
+    def complete(inner,role,guide,p,contract):
+     self.assertIn('research_learning',contract['required']);self.assertFalse(p['research_feedback_history']['requests'])
+     out=super().complete(role,guide,p,contract)
+     out['research_learning']=[dict(id='failure-lesson',category='calculation_failure',request_ids=[],failure_ids=[rejected],observation='Rejected reference corrected; execution still failed',proposed_change='Check allowed calculation roots',target='role_guidance',condition='Writing calculation references',validation='Reject bad root before provider; inspect next output',status='needs_test')]
+     return out
+   out,_=Agents(s,FailureReflection(),day,'review').call('reflection',{'market':market(),'research_feedback_history':h})
+   p={'decision_policy':policy.POLICY,'research_feedback_history':h}
+   out['research_learning'][0]['failure_ids']=['invented']
+   with self.assertRaises(ContractError):learning.validate_reflection(out,p)
+   out['research_learning'][0]['failure_ids']=[]
+   with self.assertRaises(ContractError):learning.validate_reflection(out,p)
+   out['research_learning'][0].update(failure_ids=[rejected,terminal],category='duplicate_request')
+   with self.assertRaises(ContractError):learning.validate_reflection(out,p)
+   interrupted,_=failure('interrupted-correction',correction_complete=False)
+   snapshot=s.append('fixture',{},day)
+   h2=learning.history(s,s.get(parent),day,s.get(snapshot)['seq'])
+   self.assertEqual(next(r for r in h2['process_failures']['items'] if r['failure_id']==interrupted)['correction_status'],'not_completed')
+   for n in range(32):failure('bounded-'+str(n))
+   later=s.append('fixture',{},day)
+   b=learning.history(s,s.get(parent),day,s.get(later)['seq'])['process_failures']
+   self.assertEqual(b['selected'],60);self.assertEqual(b['omitted'],b['available']-60)
+
+ def test_schema_rejected_calculation_root_retains_safe_subtype(self):
+  from mara.agents import Agents
+  class Model(DemoModel):
+   decision_policy_version=policy.VERSION
+   def complete(inner,role,guide,p,contract):
+    out=super().complete(role,guide,p,contract)
+    out.update(decision_gaps=[gap(kind='calculation_link',calculation_paths=[] if p.get('output_feedback') else ['/market/private-value'])],knowledge_feedback=[])
+    return out
+  with tempfile.TemporaryDirectory() as t:
+   db=Store(Path(t)/'db');self.addCleanup(db.close);s=db.session(db.create_user('fixture'))
+   from mara.research_questions import freeze
+   Agents(s,Model(),'2026-11-15','run').call('validation',{'market':market(),'decision_scope':freeze(profile(),market())})
+   rejected=s.events('agent_validation')[0]['body']
+   self.assertEqual(rejected['status'],'rejected');self.assertEqual(rejected['subtype'],'gap_calculation_root');self.assertNotIn('private-value',str(rejected))
+
  def test_priority_is_permutation_invariant_sharing_respects_units_and_period(self):
   rows=collect([(r,'perspective',r,{'evidence_requests':[calibrated_request(r,decision_priority=p)]}) for r,p in [('bogle','explanation_only'),('wood','changes_size'),('buffett','changes_choice')]],set(),1)
   a=schedule(copy.deepcopy(rows),[]);b=schedule(list(reversed(copy.deepcopy(rows))),[])

@@ -420,7 +420,8 @@
                 "reason": {
                   "enum": [
                     "recent_delivered_source_content",
-                    "one_discovery_to_read_bridge"
+                    "one_discovery_to_read_bridge",
+                    "one_contract_shape_repair"
                   ]
                 }
               },

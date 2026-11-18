@@ -20,6 +20,14 @@ class CalibrationError(ContractError):
 
 def enabled(model):return getattr(model,'decision_policy_version',None)==VERSION
 
+def failure_subtype(output,error):
+ if isinstance(error,CalibrationError):return error.diagnostic['code']
+ if isinstance(output,dict) and isinstance(output.get('decision_gaps'),list):
+  for gap in output['decision_gaps']:
+   paths=gap.get('calculation_paths') if isinstance(gap,dict) else None
+   if isinstance(paths,list) and any(isinstance(p,str) and not p.startswith('/analysis/') for p in paths):return 'gap_calculation_root'
+ return None
+
 def followups(payload):
  return payload.get('evidence_feedback',[])+(payload.get('research_feedback_history') or {}).get('requests',[])
 
@@ -34,7 +42,8 @@ def contract_for(contract,role,payload):
  if role in ANALYSTS:required.append('decision_gaps')
  if role=='leader':required.append('decision_resolution')
  if role in ANALYSTS|{'evidence'}:required.append('knowledge_feedback')
- if role=='reflection' and payload.get('research_feedback_history',{}).get('requests'):required.append('research_learning')
+ hist=payload.get('research_feedback_history',{})
+ if role=='reflection' and (hist.get('requests') or hist.get('process_failures',{}).get('items')):required.append('research_learning')
  if role=='memory' and payload.get('learning_proposals'):required.append('learning_applications')
  if role in ('leader','validation') and payload.get('memory_feedback',{}).get('conflicts'):
   required.append('memory_reviews')
@@ -42,6 +51,12 @@ def contract_for(contract,role,payload):
   result['properties']['memory_reviews']['items']['properties']['conflict_id']['enum']=[r['id'] for r in payload['memory_feedback']['conflicts']]
  if role=='reflection' and payload.get('research_feedback_history',{}).get('requests'):
   result['properties']['research_learning']['items']['properties']['request_ids']['items']['enum']=sorted({r['request_id'] for r in payload['research_feedback_history']['requests']})
+ if role=='reflection':
+  props=result['properties']['research_learning']['items']['properties']
+  if not hist.get('requests'):props['request_ids']['maxItems']=0
+  failures=sorted({r['failure_id'] for r in hist.get('process_failures',{}).get('items',[])})
+  if failures:props['failure_ids']['items']['enum']=failures
+  else:props.pop('failure_ids',None)
  # New suppliers must distinguish unresolved operational/analytical causes.
  if role=='evidence' and 'evidence_responses' in result['properties']:
   result['properties']['evidence_responses']['items']['required'].append('unresolved_cause')

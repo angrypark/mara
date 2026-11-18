@@ -148,7 +148,7 @@
               "maxLength": 100
             },
             "maxItems": 12,
-            "minItems": 1
+            "minItems": 0
           },
           "observation": {
             "type": "string",
@@ -186,6 +186,15 @@
               "no_change",
               "needs_test"
             ]
+          },
+          "failure_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "maxItems": 12
           }
         },
         "required": [
