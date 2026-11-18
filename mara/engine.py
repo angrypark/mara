@@ -77,13 +77,13 @@ class Engine:
         due = last is None or d.day(as_of) >= d.day(last['body']['next_evaluation'])
         return {'due':due,'next_evaluation':last['body']['next_evaluation'] if last else as_of}
 
-    def run(self, as_of, market_id=None, force=False, revision_reason=None, amendment=None, improvement=None, evaluate_after=True, profile_id=None, actual_id=None, external_review_id=None):
+    def run(self, as_of, market_id=None, force=False, revision_reason=None, amendment=None, improvement=None, evaluate_after=True, profile_id=None, actual_id=None, external_review_id=None, learning_review_id=None):
         d.day(as_of)
         run_id = uuid.uuid4().hex
         self.s.append('execution_intent',{'campaign_id':(improvement or {}).get('campaign_id'),'run_id':run_id,'kind':'portfolio_decision'},as_of,run_id)
         self.s.lock(run_id)
         try:
-            result=self._run(as_of,market_id,force,run_id,revision_reason,amendment,improvement,profile_id,actual_id,external_review_id)
+            result=self._run(as_of,market_id,force,run_id,revision_reason,amendment,improvement,profile_id,actual_id,external_review_id,learning_review_id)
             from .evaluation import evaluate_report
             try:
                 if evaluate_after:evaluate_report(self.s,self.model,result['event_id'])
@@ -100,13 +100,21 @@ class Engine:
         finally:
             self.s.unlock(run_id)
 
-    def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None, improvement=None, profile_id=None, actual_id=None, external_review_id=None):
+    def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None, improvement=None, profile_id=None, actual_id=None, external_review_id=None, learning_review_id=None):
         boundary=history.scope(self.s)
         if boundary['reset_id'] and self.s.get(boundary['reset_id'])['effective']>as_of:raise ValueError('Cannot create a decision before the active history reset')
         previous = history.latest(self.s,'completed',boundary=boundary)
         if previous and previous['body']['mode'] != self.model.mode: raise ValueError('Demo and live histories must use separate users')
         revision_of=None
         frozen=None
+        if learning_review_id:
+            if not force or not revision_reason or not revision_reason.strip():raise ValueError('Learning review requires force and a reason')
+            if amendment or improvement or external_review_id:raise ValueError('Learning review cannot mix revision modes')
+            if not previous or previous['id']!=learning_review_id or previous['effective']!=as_of:raise ValueError('Learning review requires the latest active same-date completed report')
+            for key,value in (('profile_id',profile_id),('actual_id',actual_id)):
+                if value and value!=previous['body'][key]:raise ValueError('Learning review pins original personal context')
+            profile_id=previous['body']['profile_id'];actual_id=previous['body']['actual_id']
+            revision_of=previous['id']
         if improvement:
             frozen=self.s.get(improvement['parent_completed_id'])
             if not previous or previous['id']!=frozen['id']:raise ValueError('A newer report exists; improvement branch must not replace it')
@@ -117,7 +125,9 @@ class Engine:
             if not previous or previous['id']!=frozen['id']:raise ValueError('A newer report exists; apply to latest report')
             if frozen['kind']!='completed' or frozen['effective']!=as_of:raise ValueError('Invalid amendment basis')
             market_id=frozen['body']['market_id']
-        if previous and as_of == previous['effective'] and revision_reason and revision_reason.strip():
+        if learning_review_id:
+            pass  # Keep the immediate predecessor for actual process learning.
+        elif previous and as_of == previous['effective'] and revision_reason and revision_reason.strip():
             revision_of=previous['id']
             earlier=[e for e in history.events(self.s,'completed',boundary=boundary) if e['effective']<as_of]
             previous=earlier[-1] if earlier else None
@@ -199,7 +209,7 @@ class Engine:
         start_id = self.s.append('run_started',{'market_id':me['id'],'profile_id':pe['id'],
              'persona_id':user_persona['id'],'persona_hash':user_persona['hash'],
              'actual_id':he['id'],'previous_id':previous['id'] if previous else None,
-             'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason,
+             'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason,'learning_review_id':learning_review_id,
              'history_scope':boundary,'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement,'external_review':external_review},as_of,run_id)
         from .research_questions import freeze,ledger
         decision_scope=copy.deepcopy(frozen['body']['decision_scope']) if frozen and frozen['body'].get('decision_scope') else freeze(p,m)
@@ -232,8 +242,14 @@ class Engine:
                      'question_followups':[{'id':q['id'],'state':q['state'],'review':q['review']} for q in pb.get('research_questions',{}).get('questions',[])],
                      'profile':history.profile_input(self.s.get(pb['profile_id'])['body'],prior_boundary)}
             flows = [e['body'] for e in self.s.events('cashflow',as_of) if e['effective'] > previous['effective']]
-            outcome = d.performance(pb['valuation']['nav'],val['nav'],flows,previous['effective'],as_of)
-            outcome['holdings_confirmed'] = (h['as_of'] == as_of and
+            if learning_review_id:
+                outcome={'start_nav':pb['valuation']['nav'],'end_nav':val['nav'],'external_net_flows':0,
+                    'pnl':None,'modified_dietz':None,'holdings_confirmed':False,
+                    'method':'Same-day learning review: valuation only, no return interval',
+                    'limitation':'Pinned holdings are not a fresh confirmation; valuation changes are not investment performance'}
+            else:
+                outcome = d.performance(pb['valuation']['nav'],val['nav'],flows,previous['effective'],as_of)
+            outcome['holdings_confirmed'] = (not learning_review_id and h['as_of'] == as_of and
                 self.s.get(pb['actual_id'])['body']['as_of'] == previous['effective'])
             if not outcome['holdings_confirmed']:
                 outcome['modified_dietz'] = None
@@ -519,7 +535,7 @@ class Engine:
             'persona_id':user_persona['id'],'persona_hash':user_persona['hash'],
             'actual_id':he['id'],'market_id':me['id'],'previous_id':previous['id'] if previous else None,
             'valuation':val,'performance':outcome,'reflection':reflection,'funding':funding,'risk_budget':d.loss_budget(p),
-            'revision_of':revision_of,'revision_reason':revision_reason,'amendment':amendment,
+            'revision_of':revision_of,'revision_reason':revision_reason,'learning_review_id':learning_review_id,'amendment':amendment,
             'history_scope':boundary,'analysis':analysis,'evidence_delivery':delivery,'improvement':improvement,'external_review':external_review,
             'perspectives':perspectives,'validation':{'numeric':checks,'critique':validation,
             'final_numeric':final_check,'final_critique':final_review}, 'proposal':proposal,

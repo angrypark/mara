@@ -60,6 +60,28 @@ class Harness(unittest.TestCase):
         self.assertEqual(self.s.get(actual)['body'],self.h)
         self.assertEqual(len(self.s.events('anchor_check')),1)
 
+    def test_same_day_learning_review_pins_inputs_and_reads_latest_without_returns(self):
+        first=self.initial();old_profile=first['profile_id'];old_actual=first['actual_id']
+        self.e.set_profile(dict(self.p,goal='later changed goal'),'2026-11-14')
+        with patch('mara.engine.answers',return_value=[{'answer':'new unsynced answer'}]), patch('mara.engine.d.performance',side_effect=AssertionError('zero day performance forbidden')):
+            second=self.e.run('2026-11-14',self.mid,force=True,revision_reason='Explicit process review',learning_review_id=first['event_id'])
+        self.assertEqual(second['profile_id'],old_profile);self.assertEqual(second['actual_id'],old_actual)
+        self.assertEqual(second['previous_id'],first['event_id']);self.assertEqual(second['revision_of'],first['event_id'])
+        self.assertEqual(second['learning_review_id'],first['event_id']);self.assertIsNone(second['performance']['pnl'])
+        self.assertIsNone(second['performance']['modified_dietz']);self.assertFalse(second['performance']['holdings_confirmed'])
+        reflections=[e for e in self.s.events('agent_input') if e['run_id']==second['run_id'] and e['body']['role']=='reflection']
+        self.assertTrue(reflections);self.assertEqual(reflections[0]['body']['payload']['research_feedback_history']['source_completed_id'],first['event_id'])
+        with self.assertRaises(ValueError):self.e.run('2026-11-14',self.mid,force=True,revision_reason='stale',learning_review_id=first['event_id'])
+
+    def test_learning_review_rejects_implicit_mixed_foreign_and_reset_sources(self):
+        first=self.initial();kwargs=dict(force=True,revision_reason='review',learning_review_id=first['event_id'])
+        for change in ({'force':False},{'revision_reason':' '},{'amendment':{'completed_id':first['event_id']}},{'improvement':{'parent_completed_id':first['event_id']}},{'external_review_id':'other'}, {'learning_review_id':'foreign'}, {'profile_id':'other'}, {'actual_id':'other'}):
+            with self.subTest(change=change),self.assertRaises(ValueError):self.e.run('2026-11-14',self.mid,**dict(kwargs,**change))
+        with self.assertRaises(ValueError):self.e.run('2026-11-15',self.mid,**kwargs)
+        with self.assertRaises(ValueError):self.e.run('2026-11-14',self.mid,force=True)
+        self.s.append('history_reset',{},'2026-11-14')
+        with self.assertRaises(ValueError):self.e.run('2026-11-14',self.mid,**kwargs)
+
     def test_independent_perspectives_and_guide_snapshots(self):
         self.initial()
         calls=[e['body'] for e in self.s.events('agent_input') if e['body']['role'] in ('buffett','marks','bogle','wood')]

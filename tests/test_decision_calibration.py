@@ -199,5 +199,20 @@ class LearningFlowTests(unittest.TestCase):
    m['as_of']='2026-11-16';e.research_library._today=m['as_of'];second=e.run(m['as_of'],db.publish_market(m),force=True,evaluate_after=False)
    trace=second['research_learning'];self.assertEqual(trace['status'],'reviewed');self.assertEqual(trace['source_completed_id'],first['event_id']);self.assertTrue(trace['applications']);self.assertTrue(trace['knowledge_usage']);self.assertEqual(len(trace['memory_feedback']['conflicts']),1);self.assertEqual(len(trace['memory_reviews']['final_validation']),1)
    applied=trace['applications'][0]['knowledge_event_id'];self.assertTrue(any(r['knowledge_event_id']==applied and r['status']=='applied' for r in trace['knowledge_usage']));self.assertTrue(second['evidence_feedback']['exchanges'][0]['final_decision'])
+   from mara.report_audit import record,digest
+   source=next(x for x in s.events('agent_output') if x['run_id']==second['run_id'] and x['body']['role']=='validation')
+   audit=dict(source_completed_id=second['event_id'],source_output_id=source['id'],source_body_sha256=digest(source['body']),source_path='/output/reason',original_text=source['body']['output']['reason'],original_sha256=digest(source['body']['output']['reason']),code='conditional_scope_mixed',classification='independent_scope_review',reviewer='synthetic independent reviewer',review_summary='Check scope',correction_or_review='Conditional research is distinct from order confirmation',limits='Synthetic process opinion, not financial evidence',scope='process_review_only',fact_hashes={})
+   record(s,audit,m['as_of'])
+   second=e.run(m['as_of'],force=True,revision_reason='Same day learning fixture',learning_review_id=second['event_id'],evaluate_after=False)
+   delivered=set()
+   for row in s.events('agent_input'):
+    if row['run_id']!=second['run_id']:continue
+    payload=row['body']['payload'];role=row['body']['role']
+    reviews=[x for x in payload.get('research_feedback_history',{}).get('process_failures',{}).get('items',[]) if x['kind']=='independent_post_run_review']
+    if role in ('reflection','leader','validation'):
+     self.assertEqual(reviews[0]['review_detail']['correction_or_review'],audit['correction_or_review']);self.assertEqual(reviews[0]['review_detail']['limits'],audit['limits']);self.assertEqual(reviews[0]['review_detail']['source_path'],audit['source_path']);delivered.add(role)
+    if role in ('buffett','marks','bogle','wood'):self.assertEqual(reviews,[])
+    self.assertNotIn(audit['correction_or_review'],str(payload.get('market',{}).get('facts',[])))
+   self.assertEqual(delivered,{'reflection','leader','validation'});trace=second['research_learning']
    third=e.run(m['as_of'],force=True,revision_reason='Frozen feedback test',improvement={'parent_completed_id':second['event_id']},evaluate_after=False)
    self.assertEqual(third['research_learning']['status'],'skipped_frozen_revision');self.assertEqual(third['research_learning']['memory_feedback']['conflicts'],trace['memory_feedback']['conflicts']);self.assertEqual(len(third['research_learning']['memory_reviews']['final_validation']),1);db.close()

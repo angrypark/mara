@@ -29,7 +29,7 @@ class ReportAuditTests(unittest.TestCase):
   before=s.get(eid)['seq'];self.assertEqual(process_failures(s,done,day,before)['items'],[])
   rows=process_failures(s,done,day,before+1)['items'];self.assertEqual(len(rows),1)
   self.assertEqual(rows[0]['kind'],'independent_post_run_review');self.assertEqual(rows[0]['run_state'],'completed');self.assertEqual(rows[0]['failure_id'],eid)
-  self.assertNotIn('original_text',rows[0]);self.assertNotIn('fact_hashes',rows[0]);self.assertEqual(s.get(done['id']),original)
+  self.assertEqual(rows[0]['review_detail']['correction_or_review'],'Correct display is 1.30');self.assertEqual(rows[0]['review_detail']['verification'],body['verification']);self.assertEqual(rows[0]['review_detail']['limits'],body['limits']);self.assertNotIn('original_text',rows[0]);self.assertNotIn('fact_hashes',rows[0]);self.assertEqual(s.get(done['id']),original)
 
  def test_bad_source_pointer_original_fact_and_proof_hashes_are_rejected(self):
   s,done,body,day=self.fixture()

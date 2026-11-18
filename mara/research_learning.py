@@ -84,7 +84,9 @@ def process_failures(session,completed,as_of,before_seq):
    'role':finding['role'],'stage':'post_run_review','code':'independent_audit','subtype':finding['code'],
    'recorded_at':finding['recorded_at'],'as_of':completed['effective'],'run_state':'completed','correction_status':'documented_independently',
    'source_completed_id':completed['id'],'source_output_id':finding['source_output_id'],
-   'review_summary':finding['review_summary'],'review_scope':'Process review only; not a market fact, independent financial confirmation, model self-correction, changed decision or investment performance.'})
+   'review_summary':finding['review_summary'],
+   'review_detail':{key:copy.deepcopy(finding[key]) for key in ('classification','correction_or_review','source_path','source_body_sha256','original_sha256','fact_hashes','verification','reviewer','limits') if key in finding},
+   'review_scope':'Process review only; not a market fact, independent financial confirmation, model self-correction, changed decision or investment performance.'})
  # Terminal failures first, then most recent diagnostics. Originals stay in DB.
  selected=sorted(rows,key=lambda r:(r['kind']=='execution_failure',r['recorded_at']),reverse=True)[:60]
  return {'items':selected,'available':len(rows),'selected':len(selected),'omitted':len(rows)-len(selected),
