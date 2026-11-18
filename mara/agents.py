@@ -293,6 +293,11 @@ class Agents:
                 current=copy.deepcopy(current)
                 current['output_feedback']={'code':code,'rejected_output_id':oid,'previous_output':result,
                     'instruction':'직전 자기 응답을 원본 입력과 계약에 대조하여 한 번 교정하세요. 전체 JSON을 다시 반환하세요. 무관한 인용으로 치환하거나 자료 공백·반론·위험을 숨기지 마세요. 정성 검증 통과나 매수를 강요하지 않으며 필요하면 보류하세요.'}
+                from .output_validation import evidence_reference_errors
+                reference_errors=evidence_reference_errors(result,original)
+                if reference_errors:
+                    current['output_feedback']['evidence_reference_errors']=reference_errors
+                    current['output_feedback']['evidence_reference_rule']='위 출력 경로의 ID는 전달된 시장 근거 목록에 없어요. 필요한 자료를 실제로 읽고 citation_scope.market_fact_ids의 ID를 그대로 사용하세요. 비슷한 ID로 자동 치환하거나 무관한 근거를 붙이지 마세요. 뒷받침할 자료가 없으면 해당 주장을 미확인으로 남기고 잘못된 인용을 제거하세요.'
                 from .research_questions import QuestionReviewError
                 from .evidence_feedback import FeedbackContractError
                 if isinstance(exc,FeedbackContractError):

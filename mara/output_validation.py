@@ -14,6 +14,25 @@ REASONS={
 }
 
 
+def evidence_reference_errors(output,payload):
+    """Private repair diagnostics, never automatic ID substitution or acceptance."""
+    allowed={f['id'] for f in payload.get('market',{}).get('facts',[])}
+    errors=[]
+    def visit(value,path=''):
+        if isinstance(value,dict):
+            for key,item in value.items():
+                pointer=path+'/'+key.replace('~','~0').replace('/','~1')
+                if key in ('facts','evidence_ids','fact_ids') and isinstance(item,list):
+                    for i,ref in enumerate(item):
+                        if isinstance(ref,str) and ref not in allowed:
+                            errors.append({'path':pointer+'/'+str(i),'undelivered_id':ref})
+                else:visit(item,pointer)
+        elif isinstance(value,list):
+            for i,item in enumerate(value):visit(item,path+'/'+str(i))
+    visit(output)
+    return errors[:32]
+
+
 def issue_code(exc):
     if str(exc).startswith('Judgment report:'):return 'judgment_report'
     # Match only errors produced by local validation, never arbitrary exception text.

@@ -74,3 +74,31 @@ class FeedbackRepairTests(unittest.TestCase):
         self.assertEqual(out['research_access']['status'],'invalid_plan')
         self.assertEqual(out['research_access']['planning_repairs'],0)
         self.assertEqual(len(s.events('research_tool_result')),7)
+
+    def test_reference_diagnostics_cover_all_citation_fields_without_substitution(self):
+        from mara.output_validation import evidence_reference_errors
+        p={'market':{'facts':[{'id':'known'}]}}
+        out={'evidence_ids':['known','typo'],'facts':['unknown'], 'nested':{'fact_ids':['other']},'explanation':'typo'}
+        original=copy.deepcopy(out)
+        self.assertEqual(evidence_reference_errors(out,p),[
+            {'path':'/evidence_ids/1','undelivered_id':'typo'},
+            {'path':'/facts/0','undelivered_id':'unknown'},
+            {'path':'/nested/fact_ids/0','undelivered_id':'other'}])
+        self.assertEqual(out,original)
+
+    def test_repair_sees_nested_and_top_level_invalid_ids_together(self):
+        class Repair(DemoModel):
+            def complete(inner,role,guide,p,c):
+                out=super().complete(role,guide,p,c)
+                if p.get('output_feedback'):
+                    self.assertEqual({r['undelivered_id'] for r in p['output_feedback']['evidence_reference_errors']},{'top-typo','assessment-typo'})
+                    out['evidence_assessments']=[dict(request_id='pending',status='still_missing',reason='Unverified',fact_ids=[])]
+                else:
+                    out['evidence_ids'].append('top-typo')
+                    out['evidence_assessments']=[dict(request_id='pending',status='still_missing',reason='Waiting',fact_ids=['assessment-typo'])]
+                return out
+        with tempfile.TemporaryDirectory() as tmp:
+            db=Store(Path(tmp)/'db');self.addCleanup(db.close);s=db.session(db.create_user('fixture'))
+            out,_=Agents(s,Repair(),'2026-11-15','run').call('wood',{'market':market(),'valuation':{'weights':{'CASH':1}},'evidence_feedback':[{'request_id':'pending','requester':'wood'}]})
+            self.assertNotIn('top-typo',out['evidence_ids'])
+            self.assertEqual([x['body']['status'] for x in s.events('agent_validation')],['rejected','accepted'])
