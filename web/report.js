@@ -1,7 +1,30 @@
 /* Read-only report renderer. Model/source text is always inserted as text, never HTML. */
 'use strict';
 window.MaraReport=(()=>{
-  let renderedId=null;
+  let renderedId=null, selectedChapter='all', selectedAsset=null;
+  const chapters=[['portfolio-market','01','현재 시장 상황'],['portfolio-current','02','포트폴리오 요약'],['portfolio-adjustment','03','포트폴리오 조정안'],['portfolio-reasons','04','주요 근거']];
+  function chooseChapter(id){
+    selectedChapter=id;
+    for(const [key] of chapters){const section=$(key);if(section)section.hidden=id!=='all'&&key!==id}
+    for(const button of document.querySelectorAll('.reader-navigation button'))button.setAttribute('aria-pressed',String(button.dataset.chapter===id));
+  }
+  function revealAnchor(hash){
+    const target=$(hash.replace(/^#/,''));if(!target)return;
+    const section=target.closest('.portfolio-section');if(section&&section.hidden)chooseChapter(section.id);
+    for(let node=target;node;node=node.parentElement)if(node.tagName==='DETAILS')node.open=true;
+  }
+  window.addEventListener('hashchange',()=>revealAnchor(location.hash));
+  document.addEventListener('click',event=>{const a=event.target.closest('a[href^="#"]');if(a)revealAnchor(a.hash)});
+  function highlightAsset(figure,value){
+    selectedAsset=value;figure.dataset.selectedAsset=value||'';
+    for(const node of figure.querySelectorAll('.allocation-segment,.allocation-legend-item')){
+      node.classList.toggle('allocation-dimmed',Boolean(value)&&node.dataset.symbol!==value);
+      node.classList.toggle('allocation-selected',Boolean(value)&&node.dataset.symbol===value);
+    }
+    for(const button of figure.querySelectorAll('.allocation-legend-title'))button.setAttribute('aria-pressed',String(button.closest('[data-symbol]').dataset.symbol===value));
+    const reset=figure.querySelector('.allocation-reset');if(reset)reset.setAttribute('aria-pressed',String(!value));
+    const status=figure.querySelector('.allocation-selection');if(status)status.textContent=value?symbol(value)+' 강조 중 · 전체 비중과 금액은 그대로 표시해요.':'자산을 선택하면 현재와 조정 후 비중을 함께 강조해요.';
+  }
   const $=id=>document.getElementById(id);
   const el=(tag,cls,value)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(value!=null)n.textContent=value;return n};
   const text=(id,value)=>{$(id).textContent=value??'기록 없음'};
@@ -178,7 +201,7 @@ window.MaraReport=(()=>{
     const legend=el('ul','allocation-legend');legend.setAttribute('aria-label','자산별 비중과 금액');
     for(const s of symbols){
       const item=el('li','allocation-legend-item');item.dataset.symbol=s;
-      const title=el('div','allocation-legend-title'),swatch=el('span','allocation-swatch');swatch.style.backgroundColor=colors.get(s);swatch.setAttribute('aria-hidden','true');title.append(swatch,el('b','',symbol(s)));item.append(title);
+      const title=el('button','allocation-legend-title'),swatch=el('span','allocation-swatch');swatch.style.backgroundColor=colors.get(s);swatch.setAttribute('aria-hidden','true');title.type='button';title.setAttribute('aria-pressed','false');title.addEventListener('click',()=>highlightAsset(figure,selectedAsset===s?null:s));title.append(swatch,el('b','',symbol(s)));item.append(title);
       const beforeWeight=actualValid&&nav>0?(values[s]||0)/nav:null,afterWeight=afterValid&&afterTotal>0?after[s]/afterTotal:null;
       item.append(el('div','allocation-legend-weights',(beforeWeight==null?'비중 없음':pct(beforeWeight))+' → '+(afterWeight==null?'계산 불가':pct(afterWeight))));
       if(!partial&&beforeWeight!=null&&afterWeight!=null){const delta=(afterWeight-beforeWeight)*100;item.append(el('span','allocation-weight-change',(delta>0?'+':'')+delta.toFixed(1)+'%p'))}
@@ -187,7 +210,9 @@ window.MaraReport=(()=>{
       if(!(weights[s]>0)&&(values[s]||0)>0)item.append(el('span','hint',newContribution?'기존 보유 유지 · 신규 납입 없음':partial?'이번 제안에 미포함':'목표에서 제외'));
       legend.append(item);
     }
-    figure.append(legend);return figure;
+    const controls=el('div','allocation-controls'),reset=el('button','allocation-reset','전체 자산');reset.type='button';reset.addEventListener('click',()=>highlightAsset(figure,null));
+    const selection=el('p','hint allocation-selection');selection.setAttribute('role','status');controls.append(reset,selection);
+    figure.append(controls,legend);highlightAsset(figure,symbols.includes(selectedAsset)?selectedAsset:null);return figure;
   }
   function portfolioLayout(box,doc,r,v,sources,money){
     const makeSection=(id,index,title)=>{const s=el('section','portfolio-section');s.id=id;const head=el('div','section-title');head.append(el('span','section-index',index),el('h3','',title));s.append(head);return s};
@@ -276,7 +301,12 @@ window.MaraReport=(()=>{
     if(!claims.length)reasons.append(el('p','notice','구조화된 판단 근거가 없어요. 아래 종합 의견과 원문을 확인해 주세요.'));
     if(claims.length)reasons.append(more);
     reviewOriginal.querySelector('h3')?.remove();reasons.append(fold('portfolio-final-review','종합 의견·최종 검토와 남은 문제',...reviewOriginal.childNodes));
-    box.replaceChildren(market,current,plan,reasons,appendix);
+    const overview=el('div','reader-verdict');overview.setAttribute('aria-label','최종 판단 요약');
+    overview.append(el('span','eyebrow','이번 판단'),el('h3','',action[doc.decision.action]||doc.decision.action),el('p','',doc.decision.rationale));
+    const navigation=el('nav','reader-navigation');navigation.setAttribute('aria-label','보고서 항목 선택');
+    for(const [id,index,label] of [['all','','전체 보기'],...chapters]){const button=el('button');button.type='button';button.dataset.chapter=id;button.setAttribute('aria-pressed',String(selectedChapter===id));if(index)button.append(el('span','',index));button.append(document.createTextNode(label));button.addEventListener('click',()=>chooseChapter(id));navigation.append(button)}
+    box.replaceChildren(overview,navigation,market,current,plan,reasons,appendix);
+    for(const section of [market,current,plan,reasons])section.hidden=selectedChapter!=='all'&&selectedChapter!==section.id;
   }
   function readerDocument(doc,status,r,sources,money,v){
     const box=el('article','final-reader');box.id='final-reader';
@@ -416,6 +446,8 @@ window.MaraReport=(()=>{
     table('weights',symbols.map(s=>[symbol(s),pct(maps[1][s]||0),money((maps[1][s]||0)*capital),maps[0]?pct(maps[0][s]||0):'보유 없음',maps[2]?pct(maps[2][s]||0):'비교 없음']));
   }
   function render(row){
+    const focused=document.activeElement,focusedChapter=focused?.dataset.chapter,focusedAsset=focused?.matches('.allocation-legend-title')?focused.closest('[data-symbol]').dataset.symbol:null,focusedReset=focused?.matches('.allocation-reset');
+    const changedReport=renderedId!==row.id;if(changedReport){selectedChapter='all';selectedAsset=null}
     const opened=renderedId===row.id?[...$('report-content').querySelectorAll('details[id][open]')].map(n=>n.id):[];
     // These are rebuilt each render; persistent legacy sections stay in the archive.
     for(const id of ['reader-supporting','role-report-history'])$(id)?.remove();
@@ -427,10 +459,10 @@ window.MaraReport=(()=>{
     $('report-empty').hidden=true;$('report-content').hidden=false;$('report-demo').hidden=r.mode!=='demo';
     text('report-kind',r.revision_of?'같은 날 수정본':prior?'주간 평가':'최초 포트폴리오');
     text('report-title',(prior?'주간 분석':'초기 포트폴리오')+' 리포트');
-    text('report-period',(prior?prior.as_of+' → ':'')+r.as_of+' · 기준통화 '+currency+(r.revision_reason?' · 수정 이유: '+r.revision_reason:''));
+    text('report-period',(prior?prior.as_of+' → ':'')+r.as_of+' · 기준통화 '+currency);
     text('action',action[p.action]||p.action);$('action').dataset.status=p.action;text('rationale',p.rationale);
     let budgetNotice=$('risk-budget-notice');if(!budgetNotice){budgetNotice=el('p','notice');budgetNotice.id='risk-budget-notice';$('report-context').before(budgetNotice)}const budget=r.risk_budget;budgetNotice.hidden=budget?.scope!=='analysis_only';budgetNotice.textContent=budget?.scope==='analysis_only'?`분석 전용 · 이번 제안의 충격 비교 예산 ${pct(budget.effective_fraction)} / 기존 기준 ${pct(budget.reference_fraction)}. 실제 감내손실은 미확인이고 이 보고서로 주문 계획을 만들 수 없어요.`:'';
-    if(r.history_scope?.reset_id){const n=el('p','notice','초기화 이전의 분석·회고·학습 기억은 제외했어요. 초기화 이후에 쌓인 판단과 학습은 다시 사용할 수 있어요. 원본 기록과 현재 개인 사실은 보존돼요.');$('report-period').append(n)}
+    $('report-metadata')?.remove();if(r.revision_reason||r.history_scope?.reset_id){const metadata=el('details','report-metadata');metadata.id='report-metadata';metadata.append(el('summary','','보고서 작성 이력'));if(r.revision_reason)metadata.append(el('p','hint','수정 이유: '+r.revision_reason));if(r.history_scope?.reset_id)metadata.append(el('p','hint','초기화 이전의 분석·회고·학습 기억은 제외했어요. 초기화 이후에 쌓인 판단과 학습은 다시 사용할 수 있어요. 원본 기록과 현재 개인 사실은 보존돼요.'));$('report-period').after(metadata)}
     text('report-context',v.context?.summary||v.criteria?.goal||'당시 투자 맥락은 원본 실행 기록에서 확인해요.');
     let structured=$('structured-report');if(!structured){structured=el('div');structured.id='structured-report';$('report-context').after(structured)}structured.replaceChildren();
     if(v.final_report)structured.append(readerDocument(v.final_report,v.final_report_status,r,sources,money,v));
@@ -515,7 +547,7 @@ window.MaraReport=(()=>{
       for(const id of ['reader-context-original','early-market-record','reader-extra-agents','reader-extra-proposal','reader-extra-evaluation','reader-extra-reflection-report','reader-extra-sources-report','reader-supporting','role-report-history']){const node=$(id);if(node&&!archive.contains(node))archive.append(node)}
     }
     if(keepEvidence){const next=[...$('report-content').querySelectorAll('[data-evidence-ids]')].find(n=>n.dataset.evidenceIds===keptIds&&n.dataset.calculationPaths===keptPaths);if(next){evidenceTrigger=next;evidenceReturnTrigger=next;next.setAttribute('aria-expanded','true')}else closeEvidence()}
-    if(renderedId!==row.id)early.open=false;for(const id of opened){const item=$(id);if(item)item.open=true}renderedId=row.id;
+    if(renderedId!==row.id)early.open=false;for(const id of opened){const item=$(id);if(item)item.open=true}renderedId=row.id;if(changedReport)revealAnchor(location.hash);else{const control=focusedChapter?[...document.querySelectorAll('.reader-navigation button')].find(n=>n.dataset.chapter===focusedChapter):focusedAsset?[...document.querySelectorAll('.allocation-legend-title')].find(n=>n.closest('[data-symbol]').dataset.symbol===focusedAsset):focusedReset?document.querySelector('.allocation-reset'):null;control?.focus({preventScroll:true})}
   }
   return {render};
 })();

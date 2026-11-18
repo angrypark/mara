@@ -12,7 +12,7 @@ let demoReport=null, viewChosen=false, showingDemo=false, generateLabel='초기 
 let latestJobStatus=null,advancedDirty=false;
 form.addEventListener('input',e=>{if(e.target.closest('#advanced-settings'))advancedDirty=true});
 function selectView(name,chosen=true){
-  if(chosen)viewChosen=true;const report=name==='report';
+  if(chosen)viewChosen=true;const report=name==='report';document.body.dataset.view=name;
   form.hidden=report;$('report-panel').hidden=!report;$('setup-toc').hidden=report;$('report-toc').hidden=!report;
   $('tab-setup').setAttribute('aria-pressed',String(!report));$('tab-report').setAttribute('aria-pressed',String(report));
 }
