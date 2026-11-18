@@ -9,6 +9,15 @@
 - `evaluation` v2.0 (v1.0 호환): 기준 실행/시점, 고정 rubric와 해시, 별도 평가자 출력, 코드로 계산한 가중 점수. 투자 승인이나 수익 예측이 아니에요.
 - `dialogue`/`dialogue-answer` v1.0: 기존 필드를 유지하고 선택적 `proposed_change`를 추가했어요. `scope`는 `reasoning`, `settings`, `none`이에요.
 
+## 최종 보고서와 fact
+
+- `final-report` v1.0: 확정된 상태·비중·이유·대안·미해결 질문·후속 확인·출처와 구성 근거예요. 원본 역할 출력은 그대로 유지해요.
+- `fact-snapshot` v1.0: 논리 fact ID, 원문 전체, 출처·시점·내용 해시와 부모 자료 버전이에요.
+- `fact-graph` v1.0: 완료 보고서의 판단과 fact snapshot 연결, 저장 검증 상태와 미확인 항목이에요.
+- `price-series` v1.0: 종가 종류, 통화, 요청 기간과 실제 관측점이에요. 근거 없는 값 보간이나 연속 하락 추론은 하지 않아요.
+
+보고서 API의 `view.final_report`와 `view.evidence_graph`에서 확인해요. 저장한 문서는 원본 재조립 결과와 대조하고, 이전 형식에서 만든 표시 문서는 원래 저장본과 구분해요. [fact 저장 구조](../docs/facts.md)를 함께 확인해요.
+
 ## 행동 API
 
 모든 POST는 loopback Host, 동일 Origin, 화면의 `X-Mara-CSRF`를 검사해요. `scope`는 `portfolio` 또는 `demo`이며 서로 다른 DB/사용자를 사용해요.
