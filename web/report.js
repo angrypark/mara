@@ -32,7 +32,7 @@ window.MaraReport=(()=>{
     }
     if(limit!=null)box.append(el('p','hint','세로선: 설정 상한 '+pct(limit)));
   }
-  let factGraph=null,factSources=[],evidencePanel=null,evidenceTrigger=null,evidencePinned=false,evidenceTimer=null,evidenceRestoring=false,evidenceReturnTrigger=null;
+  let factGraph=null,factReport=null,factSources=[],evidencePanel=null,evidenceTrigger=null,evidencePinned=false,evidenceTimer=null,evidenceRestoring=false,evidenceReturnTrigger=null;
   const factNode=id=>factGraph?.facts?.find(n=>n.fact_id===id);
   function closeEvidence(restore=false){
     clearTimeout(evidenceTimer);if(evidencePanel)evidencePanel.hidden=true;
@@ -78,7 +78,16 @@ window.MaraReport=(()=>{
     try{const url=new URL(f.source);if(url.protocol==='https:'){const a=el('a','','출처 원문 · '+url.hostname);a.href=url.href;a.target='_blank';a.rel='noopener noreferrer';card.append(a)}}catch(e){}
     return card;
   }
-  function showEvidence(trigger,ids,pinned=false){
+  function calculationContent(path){
+    const card=el('article','fact-detail');card.append(el('h4','','계산 근거'),el('p','hint',path));
+    try{if(!/^\/(analysis|funding|valuation|proposal)\//.test(path))throw new Error('Unsupported calculation');
+      let value=factReport;for(const token of path.slice(1).split('/')){const key=token.replace(/~1/g,'/').replace(/~0/g,'~');if(value===null||typeof value!=='object'||!Object.hasOwn(value,key))throw new Error('Missing calculation');value=value[key]}
+      if(value===undefined||value===null||value===''||(typeof value==='object'&&!Object.keys(value).length))throw new Error('Missing calculation');
+      card.append(el('pre','',JSON.stringify(value,null,2)),el('p','hint','이 보고서에 저장된 계산과 가정이에요. 외부 관측 사실과 구분해요.'));
+    }catch(e){card.append(el('p','notice','당시 계산을 찾지 못했어요. 이 연결은 확인이 필요해요.'))}
+    return card;
+  }
+  function showEvidence(trigger,ids,pinned=false,paths=[]){
     clearTimeout(evidenceTimer);if(evidencePinned&&!pinned&&evidenceTrigger!==trigger)return;
     if(!evidencePanel){evidencePanel=el('div','evidence-panel');evidencePanel.id='evidence-panel';evidencePanel.setAttribute('role','dialog');evidencePanel.setAttribute('aria-label','판단의 근거');
       evidencePanel.addEventListener('mouseenter',()=>clearTimeout(evidenceTimer));evidencePanel.addEventListener('mouseleave',()=>{if(!evidencePinned)evidenceTimer=setTimeout(()=>closeEvidence(),200)});
@@ -88,16 +97,16 @@ window.MaraReport=(()=>{
     evidenceTrigger?.setAttribute('aria-expanded','false');evidenceTrigger=trigger;evidencePinned=pinned||evidencePinned;trigger.setAttribute('aria-expanded','true');
     const head=el('div','evidence-heading'),title=el('b','','판단에 인용한 근거'),pin=el('button','',evidencePinned?'고정됨':'고정해서 읽기'),close=el('button','','닫기');pin.type=close.type='button';
     pin.addEventListener('click',()=>{evidencePinned=true;pin.textContent='고정됨'});close.addEventListener('click',()=>closeEvidence(true));head.append(title,pin,close);
-    evidencePanel.replaceChildren(head,el('p','hint','보고서 당시 자료예요. 최신 값으로 바꾸지 않아요.'),...ids.map(evidenceContent));
+    evidencePanel.replaceChildren(head,el('p','hint','보고서 당시 자료예요. 최신 값으로 바꾸지 않아요.'),...ids.map(evidenceContent),...paths.map(calculationContent));
     if(factGraph?.storage_status==='index_mismatch_source_projection')evidencePanel.insertBefore(el('p','notice','저장 색인이 원본과 달라 원본 실행에서 근거를 다시 구성했어요.'),head.nextSibling);
     else if(factGraph?.storage_status==='source_projection_not_indexed')evidencePanel.insertBefore(el('p','hint','별도 DB 색인이 없는 과거 보고서예요. 당시 실행 원본에서 구성했어요.'),head.nextSibling);evidencePanel.hidden=false;
     if(pinned)close.focus();
   }
-  function attachEvidence(node,ids){
-    if(!ids?.length)return;node.dataset.evidenceIds=JSON.stringify(ids);node.classList.add('evidence-trigger');node.setAttribute('aria-controls','evidence-panel');node.setAttribute('aria-expanded','false');node.setAttribute('aria-haspopup','dialog');
-    node.addEventListener('mouseenter',()=>showEvidence(node,ids));node.addEventListener('mouseleave',()=>{if(!evidencePinned)evidenceTimer=setTimeout(()=>closeEvidence(),200)});
-    node.addEventListener('focus',()=>{if(!evidenceRestoring)showEvidence(node,ids)});node.addEventListener('blur',e=>{if(!evidencePinned&&!evidencePanel?.contains(e.relatedTarget))closeEvidence()});
-    node.addEventListener('click',e=>{e.preventDefault();showEvidence(node,ids,true)});
+  function attachEvidence(node,ids,paths=[]){
+    ids=ids||[];if(!ids.length&&!paths.length)return;node.dataset.calculationPaths=JSON.stringify(paths);node.dataset.evidenceIds=JSON.stringify(ids);node.classList.add('evidence-trigger');node.setAttribute('aria-controls','evidence-panel');node.setAttribute('aria-expanded','false');node.setAttribute('aria-haspopup','dialog');
+    node.addEventListener('mouseenter',()=>showEvidence(node,ids,false,paths));node.addEventListener('mouseleave',()=>{if(!evidencePinned)evidenceTimer=setTimeout(()=>closeEvidence(),200)});
+    node.addEventListener('focus',()=>{if(!evidenceRestoring)showEvidence(node,ids,false,paths)});node.addEventListener('blur',e=>{if(!evidencePinned&&!evidencePanel?.contains(e.relatedTarget))closeEvidence()});
+    node.addEventListener('click',e=>{e.preventDefault();showEvidence(node,ids,true,paths)});
   }
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&evidencePanel&&!evidencePanel.hidden){e.preventDefault();closeEvidence(true)}});
   function sourceLinks(ids,sources){
@@ -138,7 +147,7 @@ window.MaraReport=(()=>{
       if(values?.length)box.append(section(label,values));
     }
     for(const entry of doc.reasons.claims){const c=entry.claim,card=el('article','final-claim');card.dataset.claimId=c.id;
-      const heading=el('h4'),claimButton=el('button','claim-statement',c.statement);claimButton.type='button';attachEvidence(claimButton,c.fact_ids);heading.append(claimButton);
+      const heading=el('h4'),claimButton=el('button','claim-statement',c.statement);claimButton.type='button';attachEvidence(claimButton,c.fact_ids,c.calculation_paths);heading.append(claimButton);
       card.append(heading,el('p','hint','리더 판단: '+({supported:'근거가 뒷받침한다고 판단',conditional:'조건부',unresolved:'미해결'}[c.status]||c.status)+(review.qualitative_pass===false?' · 최종 검토는 보류됐어요.':'')),
         section('가정',c.assumptions),el('p','','반대 근거: '+c.counterevidence),el('p','','결정에 미친 영향: '+c.decision_impact),sourceLinks(c.fact_ids,sources));
       if(c.calculation_paths?.length){const links=el('div','source-chips');for(const path of c.calculation_paths){const i=doc.references.calculations.findIndex(x=>x.path===path);const a=el('a','source-chip','계산 근거');a.href='#final-calculation-'+i;a.title=path;a.addEventListener('click',()=>{const parent=$('final-calculations'),item=$('final-calculation-'+i);if(parent)parent.open=true;if(item)item.open=true});links.append(a)}card.append(links);if(!c.fact_ids?.length){const empty=card.querySelector('.source-chips');if(empty)empty.firstChild.textContent='별도 외부 fact 인용 없이 아래 계산 경로를 참조한 판단이에요.'}}
@@ -256,7 +265,7 @@ window.MaraReport=(()=>{
   function render(row){
     const opened=renderedId===row.id?[...$('report-content').querySelectorAll('details[id][open]')].map(n=>n.id):[];
     const keepEvidence=renderedId===row.id&&evidencePinned&&factGraph&&JSON.stringify(factGraph)===JSON.stringify(row.view?.evidence_graph);
-    const keptIds=evidenceReturnTrigger?.dataset.evidenceIds||evidenceTrigger?.dataset.evidenceIds;if(!keepEvidence)closeEvidence();factGraph=row.view?.evidence_graph;factSources=row.view?.sources||[];
+    const keptIds=evidenceReturnTrigger?.dataset.evidenceIds||evidenceTrigger?.dataset.evidenceIds,keptPaths=evidenceReturnTrigger?.dataset.calculationPaths||evidenceTrigger?.dataset.calculationPaths;if(!keepEvidence)closeEvidence();factGraph=row.view?.evidence_graph;factReport=row.body;factSources=row.view?.sources||[];
     const r=row.body,v=row.view||{},p=r.proposal,a=r.validation.final_numeric,m=a.metrics||{},h=a.historical||{},prior=v.previous;
     const currency=v.base_currency||'KRW',money=n=>n==null?'계산 불가':number(n,currency==='KRW'?0:2)+' '+currency;
     const capital=r.funding?.proposal_capital??r.valuation.nav,sources=v.sources||[],market=v.market_analysis||{},reflection=r.reflection;
@@ -344,7 +353,7 @@ window.MaraReport=(()=>{
     // The early market opinion remains accessible, but never reads as the
     // final allocation. This also applies to older immutable reports.
     let early=$('early-market-record');if(!early){early=el('details','early-market-record');early.id='early-market-record';early.append(el('summary','','초기 시황 기록 · 최종 제안 전에 작성했어요.'));$('market-report').before(early);early.append($('market-report'))}
-    if(keepEvidence){const next=[...$('report-content').querySelectorAll('[data-evidence-ids]')].find(n=>n.dataset.evidenceIds===keptIds);if(next){evidenceTrigger=next;evidenceReturnTrigger=next;next.setAttribute('aria-expanded','true')}else closeEvidence()}
+    if(keepEvidence){const next=[...$('report-content').querySelectorAll('[data-evidence-ids]')].find(n=>n.dataset.evidenceIds===keptIds&&n.dataset.calculationPaths===keptPaths);if(next){evidenceTrigger=next;evidenceReturnTrigger=next;next.setAttribute('aria-expanded','true')}else closeEvidence()}
     if(renderedId!==row.id)early.open=false;for(const id of opened){const item=$(id);if(item)item.open=true}renderedId=row.id;
   }
   return {render};
