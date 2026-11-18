@@ -33,6 +33,12 @@ try{
  const attack=structuredClone(fixture);attack.view.final_report.reasons.claims[0].claim.statement='<img src=x onerror=alert(1)>';attack.view.final_report.references.facts[0].source='javascript:alert(1)';
  w.MaraReport.render(attack);assert.equal($('final-reader').querySelectorAll('img,script').length,0);
  assert.ok([...$('final-reader').querySelectorAll('a')].every(a=>!a.href.startsWith('javascript:')));
+ const calibrated=structuredClone(fixture);calibrated.view.final_report.decision_calibration={gaps:[{subject:'Synthetic source',kind:'fact_verification',status:'unresolved',reason:'Missing dated denominator',resolution_condition:'Match the period',next_action:'Read the original table'}],final_review_gaps:[{subject:'Final validator gap',kind:'calculation_link',status:'unresolved',reason:'Calculation remains missing',resolution_condition:'Bind the original source',next_action:'Recompute'}],resolution:{choices:[{participation:'cash_wait',why_this_size:'Bounded wait',opportunity_cost:'Foregone participation',scenarios:[{name:'adverse',assumptions:['Synthetic assumption'],implication:'Reconsider'}],review_condition:'Source arrives',review_by:'Next week',falsifier:'New counterevidence'}],decisive_tradeoff:'Same risk limits'},requests:[{requester:'buffett',recipient:'evidence',need:'Read original',status:'reassessed',requested_at:'2026-11-19',decision_impact:'May change allocation',acceptance:'Dated source',response:{reason:'Partial evidence'},assessment:{reason:'Still missing denominator'}}],learning:{status:'reviewed',applications:[{}],knowledge_usage:[{}]}};
+ w.MaraReport.render(calibrated);
+ assert.match($('decision-calibration').textContent,/Missing dated denominator.*최종 검증.*Calculation remains missing/s);
+ assert.match($('decision-calibration').textContent,/기회비용: Foregone participation/);
+ assert.match($('request-learning-trace').textContent,/buffett → evidence.*수용 조건: Dated source.*Still missing denominator/s);
+ assert.match($('request-learning-trace').textContent,/투자성과 개선을 확인한 수치는 아니/);
  const fallback=structuredClone(fixture);fallback.view.final_report={assembly_status:'incomplete'};w.MaraReport.render(fallback);
  assert.match($('final-reader').textContent,/구성을 마치지 못/);
  console.log('PASS report order, final state, conditions, questions, citations, early/history separation, inert text, incomplete fallback');
