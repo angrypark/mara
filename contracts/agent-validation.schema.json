@@ -221,6 +221,97 @@
           "next_action"
         ]
       }
+    },
+    "evidence_requests": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question_id",
+          "need",
+          "gap_type",
+          "acceptance",
+          "decision_impact"
+        ],
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "need": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1600
+          },
+          "gap_type": {
+            "type": "string",
+            "enum": [
+              "access",
+              "extraction",
+              "analysis"
+            ]
+          },
+          "acceptance": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1600
+          },
+          "decision_impact": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1600
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "urn:mara:evidence-request:1.0.0"
+      }
+    },
+    "evidence_assessments": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "request_id",
+          "status",
+          "reason",
+          "fact_ids"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "incorporated",
+              "still_missing",
+              "not_relevant"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "fact_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        }
+      }
     }
   },
   "required": [

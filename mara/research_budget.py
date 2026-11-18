@@ -81,11 +81,17 @@ def allocate(session,run_id,as_of,rows,role,fact,eligible):
         'released_characters':released,'borrowed_characters':borrowed,'available_borrow':available_borrow,
         'rule':'이전 근거도 보충 자료 전체 한도에서 차감해요. 남은 몫은 실행 시작에 고정하며 재시도와 마지막 검토가 함께 사용해요. 실제 역할 입력 상한은 별도로 유지해요.'}
     if total+requested>TOTAL:return None,dict(receipt,blocked_reason='supplemental_global_limit')
-    if role in closed:return None,dict(receipt,blocked_reason='research_role_already_closed')
+    dispatches=[e for e in session.events('evidence_feedback_dispatch') if e['run_id']==run_id]
+    returns=[e for e in session.events('evidence_feedback_return') if e['run_id']==run_id]
+    feedback_active=role=='evidence' and bool(dispatches) and (not returns or dispatches[-1]['seq']>returns[-1]['seq'])
+    receipt['feedback_supplier']=feedback_active
+    if role in closed and not feedback_active:return None,dict(receipt,blocked_reason='research_role_already_closed')
     parts={'general':min(requested,max(0,frozen['general_limit']-general)),'role_reserved':0,'borrowed':0}
     remainder=requested-parts['general']
     if eligible and role in ROLES:
-        parts['role_reserved']=min(remainder,max(0,limit-own[role]));remainder-=parts['role_reserved']
+        # A closed supplier's old reserve has already been released (and may
+        # have been borrowed). Use the shared released balance, never reclaim it.
+        parts['role_reserved']=0 if role in closed else min(remainder,max(0,limit-own[role]));remainder-=parts['role_reserved']
         parts['borrowed']=min(remainder,available_borrow);remainder-=parts['borrowed']
     if remainder:return None,dict(receipt,blocked_reason='protected_role_or_general_limit')
     return parts,receipt

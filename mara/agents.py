@@ -37,6 +37,8 @@ def validate_output(role, obj, payload):
     from .judgment_reports import validate_report
     if isinstance(obj,dict):validate_report(obj,payload)
     validate(obj,output_schema(role))
+    from .evidence_feedback import validate_output as validate_feedback
+    validate_feedback(role,obj,payload)
     if payload.get('adopted_dialogue_change') and 'change_response' not in obj:raise ValueError('Explicit change_response required')
     schema = CONTRACTS[kind]
     required(obj, list(schema))
@@ -188,7 +190,7 @@ class Agents:
             'rule':'판단의 근거·반론·가정·자료 공백은 해당 구조화 필드에 남겨요. 같은 시황·개인 맥락을 역할마다 장문으로 반복하지 않아요.'}
         if not payload.get('narrative_contract'):
             guide += '\n역할별 출력 규칙 v1.1: 이 호출은 구조화 필드로 설명해요. judgment_report나 최소 글자 수를 요구하지 않아요. 각 필드에는 이 역할의 판단, 결정적인 근거와 fact ID, 반대 근거, 결론이 바뀌는 조건을 해당 계약에 맞게 구체적으로 적어요. 다른 역할의 시황·개인 맥락을 반복하거나 필수 위험·공백을 생략하지 않아요. 상세문을 요청하는 이전 가이드보다 이 호출의 출력 계약을 우선해요.'
-        if self.research_library:
+        if self.research_library and not payload.get('evidence_feedback_reassessment'):
             from .company_research import research_loop
             before={f['id'] for f in payload.get('market',{}).get('facts',[])}
             payload=research_loop(self.s,self.model,role,guide,payload,self.run_id,self.as_of,self.research_library)
@@ -221,6 +223,9 @@ class Agents:
             from .thesis_workspace import build as thesis_workspace
             payload['thesis_workspace']=thesis_workspace(payload,role)
             payload['thesis_workspace']['instructions']=resource('guides/skills/thesis-workspace.md').read_text()
+            from .evidence_feedback import POLICY
+            payload['evidence_feedback_policy']=copy.deepcopy(POLICY)
+            payload['evidence_feedback_policy']['instructions']=resource('guides/skills/evidence-feedback.md').read_text()
         original=copy.deepcopy(payload)
         current=copy.deepcopy(original)
         current['citation_scope']={'market_fact_ids':[f['id'] for f in original.get('market',{}).get('facts',[])],
@@ -230,6 +235,9 @@ class Agents:
             current['citation_scope']['raw_reference_paths']=raw_reference_paths(original)
             current['citation_scope']['raw_reference_rule']='원본 해시를 인용할 때는 위 실제 경로를 그대로 사용. 배열 위치를 추측하지 않아요. 해시는 수집 원본 식별자이며 내용의 진실성·분석 충분성 증명이 아니에요. 다른 주장은 해당 실제 입력 필드에 직접 연결하세요.'
         contract = output_schema(role)
+        if role=='evidence' and payload.get('evidence_assignments'):
+            contract=copy.deepcopy(contract)
+            contract['required']=list(dict.fromkeys(contract['required']+['evidence_responses']))
         if role=='validation':
             contract=copy.deepcopy(contract)
             if not original.get('final_proposal'):

@@ -420,6 +420,9 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         from .planner_evidence import overview
         from .thesis_workspace import build as thesis_workspace
         request={'thesis_workspace':thesis_workspace(payload,role),'role':role,'as_of':as_of,'question':payload.get('question'),
+            'evidence_assignments':copy.deepcopy(payload.get('evidence_assignments',[])),
+            'evidence_feedback':copy.deepcopy(payload.get('evidence_feedback',[])),
+            'assignment_policy':'각 요청에 맞는 원문과 기존 근거를 읽고 부족하면 더 조사해요. 확보는 분석 충분성이나 매수 승인이 아니며 경제적 가정 선택은 요청자가 재검토해요.',
             'execution_boundary':'외부 브라우저·쉘 도구를 직접 실행하지 않아요. 이 계약의 calls 배열에 조사 요청을 반환하는 것은 허용돼요. Mara가 허용 도구를 실행하고 다음 입력에 결과를 전달해요.',
             'planning_feedback':copy.deepcopy(planning_feedback),
             'research_capabilities':'mara.research-tools/1.2','decision_questions':questions,'objective':payload.get('profile',{}).get('goal'),'available_symbols':list(payload['market'].get('assets',{})),

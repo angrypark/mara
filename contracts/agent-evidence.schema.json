@@ -132,6 +132,57 @@
           "uniqueItems": true
         }
       }
+    },
+    "evidence_responses": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "request_id",
+          "status",
+          "fact_ids",
+          "reason",
+          "remaining_gap"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "evidence_supplied",
+              "unavailable",
+              "analysis_required"
+            ]
+          },
+          "fact_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2500
+          },
+          "remaining_gap": {
+            "type": "string",
+            "maxLength": 2500
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "urn:mara:evidence-response:1.0.0"
+      }
     }
   },
   "required": [

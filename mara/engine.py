@@ -271,6 +271,8 @@ class Engine:
                   'analysis_flow':{'perspectives':'independent; no current peer outputs',
                     'leader':'after perspective validation; before final proposal validation',
                     'final_validation':'after leader; assess each statement against its original stage'}}
+        from . import evidence_feedback as feedback
+        exchanges=[];feedback_seen=set();output_receipts=[];feedback_round=0
         def call(role, extra=None):
             payload = dict(common,knowledge=k.retrieve(as_of,role))
             if improvement and role not in ('leader','validation'):
@@ -285,12 +287,35 @@ class Engine:
                 # These exact fields are already present under previous.proposal.
                 payload['anchors']={k:v for k,v in anchors.items() if k not in ('previous_rationale','unresolved_risks','next_checks')}
             if role in ('validation','leader'):payload['research_question_progress']=ledger(self.s,run_id,decision_scope)
+            if exchanges:
+                payload['evidence_feedback']=feedback.for_role(exchanges,role)
+                payload['evidence_feedback_reassessment']=True
+                # Explicitly requested source content must not disappear in a
+                # role's usual projection (e.g. Bogle's financial metrics).
+                requested={fid for x in payload['evidence_feedback'] if x.get('response')
+                    for fid in x['response']['fact_ids']}
+                from .research import project_fact
+                originals={f['id']:f for f in m['facts']}
+                payload['market']['facts']=[project_fact(originals[f['id']],'validation') if f['id'] in requested else f
+                    for f in payload['market']['facts']]
+            payload['evidence_feedback_rounds_remaining']=feedback.MAX_ROUNDS-feedback_round
             payload.update(extra or {})
             payload['analysis_stage']='final_validation' if role=='validation' and 'final_proposal' in payload else 'perspective_validation' if role=='validation' else 'proposal_synthesis' if role=='leader' else role
+            if role=='evidence' and payload.get('evidence_assignments'):payload['analysis_stage']='evidence_followup'
             if amendment and role==amendment.get('target_role',amendment['agent_id']) and (not amendment.get('target_stage') or amendment['target_stage']==payload['analysis_stage']):
                 payload['adopted_dialogue_change']=amendment
                 payload['change_policy']='사용자가 재검토를 요청한 판단. 명시적으로 수용/거절 이유를 출력 설명에 남기고 제약·근거 검증을 유지해요. profile/actual은 고정이며 변경 명령이 아니에요.'
             result=a.call(role,payload)
+            output_receipts.append((role,payload['analysis_stage'],result[1],result[0]))
+            for assessment in result[0].get('evidence_assessments',[]):
+                for exchange in exchanges:
+                    if exchange['request_id']==assessment['request_id'] and exchange['requester']==role and exchange.get('response'):
+                        receipt={'request_id':exchange['request_id'],'request_event_id':exchange['request_event_id'],
+                            'response_event_id':exchange['response_event_id'],'requester_output_id':result[1],
+                            'requester_input_id':self.s.get(result[1])['body']['input_id'],'assessment':assessment}
+                        exchange['assessment_event_id']=self.s.append('evidence_feedback_assessment',receipt,as_of,run_id)
+                        exchange['assessment']=copy.deepcopy(assessment)
+                        exchange['status']='reassessed'
             ids={f['id'] for f in m['facts']}
             for fact in a.research_facts:
                 if fact['id'] not in ids:m['facts'].append(fact);ids.add(fact['id'])
@@ -332,42 +357,86 @@ class Engine:
             if repeated_questions(context,p):raise ContextRepeatError(ContextRepeatError.message)
         if context['missing']: raise ContextNeedsInput(context['missing'],context_id,questions(context))
         common['context_analysis']=context
-        evidence, _ = call('evidence')
+        evidence, initial_evidence_id = call('evidence')
+        initial_evidence=copy.deepcopy(evidence)
         common.update(context_analysis=context,evidence_analysis=evidence)
-        perspectives = {}
-        for role in personas():
-            # No peer output enters any perspective call. Separate requests, no shared conversation state.
-            perspectives[role], _ = call(role)
-        # Peer allocations are attached only AFTER every independent perspective.
-        comparison_perspectives.update(perspectives)
-        common['analysis']=build_analysis(p,h,m,val,capital)
-        checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
-        validation, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks})
-        checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
-        common['analysis']=build_analysis(p,h,m,val,capital)
-        proposal, proposal_id = call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation})
-        from .report_references import errors as reference_errors
-        for reference_attempt in (1,2,3):
-            alternatives={str(i):item['weights'] for i,item in enumerate(proposal.get('investment_case',{}).get('alternatives',[]))}
-            allocation_changed=common['analysis']['selected_weights']!=proposal['weights'] or comparison_alternatives!=alternatives
-            comparison_alternatives.clear();comparison_alternatives.update(alternatives)
-            common['analysis']=build_analysis(p,h,m,val,capital,proposal['weights'])
-            errors=reference_errors(proposal,common['analysis'],funding,val)
-            self.s.append('proposal_reference_validation',{'output_id':proposal_id,'attempt':reference_attempt,
-                'status':'failed' if errors or allocation_changed else 'passed','errors':errors,
-                'reference_status':'failed' if errors else 'passed',
-                'allocation_reconciliation_required':allocation_changed,
-                'code':'allocation_reconciliation' if allocation_changed else 'proposal_reference' if errors else None},as_of,run_id)
-            if not errors and not allocation_changed:break
-            if reference_attempt==3:raise AgentOutputError('leader','allocation_reconciliation' if allocation_changed else 'proposal_reference',proposal_id,attempts=3)
-            proposal,proposal_id=call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation,
-                'reference_feedback':{'errors':errors,'previous_output':proposal,
-                    'selected_weights_recomputed':common['analysis']['selected_weights'],
-                    'allocation_instruction':'선택한 비중의 계산을 새로 완료했어요. 같은 비중을 유지하고 보고서·주장·반대 근거의 모든 수치를 지금 analysis와 대조해 다시 작성해요. 잠정 비교안의 수치를 최종 제안의 성과로 서술하지 않아요. 수익률이 미확인인 선택 자산은 대체 지수 이력으로 채우지 않아요.',
-                    'instruction':'계산 연결을 실제 report body 기준으로 교정해 전체 JSON을 다시 작성해요. evaluator가 평가 입력에서 쓰는 /report 접두사는 저자 calculation_paths에 붙이지 않아요. /input도 존재하지 않아요. 다른 값에 억지로 연결하거나 자료 공백을 숨기지 말고 주장의 범위와 반대 근거를 유지해요.'}})
-        final_check = evaluate(proposal['weights'],p,m,capital,val)
-        final_review, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks,
-                                         'final_proposal':proposal,'final_numeric_check':final_check})
+        initial_perspectives=None
+        while True:
+            output_receipts.clear()
+            comparison_perspectives.clear();comparison_alternatives.clear()
+            common['analysis']=build_analysis(p,h,m,val,capital)
+            perspectives = {}
+            for role in personas():
+                # No peer output enters any perspective call. Separate requests, no shared conversation state.
+                perspectives[role], _ = call(role)
+            # Peer allocations are attached only AFTER every independent perspective.
+            comparison_perspectives.update(perspectives)
+            common['analysis']=build_analysis(p,h,m,val,capital)
+            checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
+            validation, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks})
+            checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
+            common['analysis']=build_analysis(p,h,m,val,capital)
+            proposal, proposal_id = call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation})
+            from .report_references import errors as reference_errors
+            for reference_attempt in (1,2,3):
+                alternatives={str(i):item['weights'] for i,item in enumerate(proposal.get('investment_case',{}).get('alternatives',[]))}
+                allocation_changed=common['analysis']['selected_weights']!=proposal['weights'] or comparison_alternatives!=alternatives
+                comparison_alternatives.clear();comparison_alternatives.update(alternatives)
+                common['analysis']=build_analysis(p,h,m,val,capital,proposal['weights'])
+                errors=reference_errors(proposal,common['analysis'],funding,val)
+                self.s.append('proposal_reference_validation',{'output_id':proposal_id,'attempt':reference_attempt,
+                    'status':'failed' if errors or allocation_changed else 'passed','errors':errors,
+                    'reference_status':'failed' if errors else 'passed',
+                    'allocation_reconciliation_required':allocation_changed,
+                    'code':'allocation_reconciliation' if allocation_changed else 'proposal_reference' if errors else None},as_of,run_id)
+                if not errors and not allocation_changed:break
+                if reference_attempt==3:raise AgentOutputError('leader','allocation_reconciliation' if allocation_changed else 'proposal_reference',proposal_id,attempts=3)
+                proposal,proposal_id=call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation,
+                    'reference_feedback':{'errors':errors,'previous_output':proposal,
+                        'selected_weights_recomputed':common['analysis']['selected_weights'],
+                        'allocation_instruction':'선택한 비중의 계산을 새로 완료했어요. 같은 비중을 유지하고 보고서·주장·반대 근거의 모든 수치를 지금 analysis와 대조해 다시 작성해요. 잠정 비교안의 수치를 최종 제안의 성과로 서술하지 않아요. 수익률이 미확인인 선택 자산은 대체 지수 이력으로 채우지 않아요.',
+                        'instruction':'계산 연결을 실제 report body 기준으로 교정해 전체 JSON을 다시 작성해요. evaluator가 평가 입력에서 쓰는 /report 접두사는 저자 calculation_paths에 붙이지 않아요. /input도 존재하지 않아요. 다른 값에 억지로 연결하거나 자료 공백을 숨기지 말고 주장의 범위와 반대 근거를 유지해요.'}})
+            final_check = evaluate(proposal['weights'],p,m,capital,val)
+            final_review, _ = call('validation',{'perspectives':perspectives,'numeric_checks':checks,
+                                             'final_proposal':proposal,'final_numeric_check':final_check})
+
+            if initial_perspectives is None:initial_perspectives=copy.deepcopy(perspectives)
+            pending=feedback.collect(output_receipts,feedback_seen,feedback_round+1)
+            exchanges.extend(pending)
+            waiting=[r for r in exchanges if r['status'] in ('pending','deferred_capacity')]
+            for row in waiting:
+                row['status']='pending'
+                if feedback_round>=feedback.MAX_ROUNDS:row['status']='round_budget'
+                elif not self.research_library:row['status']='research_unavailable'
+                elif common['frozen_revision'] or as_of!=self.research_library.today:row['status']='frozen_snapshot'
+            active=[r for r in waiting if r['status']=='pending']
+            for row in active[feedback.MAX_REQUESTS:]:row['status']='deferred_capacity'
+            active=active[:feedback.MAX_REQUESTS]
+            for row in pending:
+                row['request_event_id']=self.s.append('evidence_feedback_request',row,as_of,run_id)
+            if not active:break
+            feedback_round+=1
+            assignments=[{k:v for k,v in r.items() if k not in ('dedup_key','status')} for r in active]
+            dispatch_id=self.s.append('evidence_feedback_dispatch',{'round':feedback_round,'requests':assignments},as_of,run_id)
+            supplied,supplier_id=call('evidence',{'evidence_assignments':assignments,
+                'evidence_feedback_reassessment':False,'evidence_feedback':[]})
+            responses={r['request_id']:r for r in supplied['evidence_responses']}
+            supplier_input_id=self.s.get(supplier_id)['body']['input_id']
+            supplied_facts=self.s.get(supplier_input_id)['body']['payload']['market']['facts']
+            tool_events=[e['id'] for kind in ('research_tool_result','research_tool_failure','research_stop')
+                for e in self.s.events(kind) if e['run_id']==run_id and e['seq']>self.s.get(dispatch_id)['seq']]
+            return_id=self.s.append('evidence_feedback_return',{'dispatch_id':dispatch_id,
+                'supplier_output_id':supplier_id,'supplier_input_id':supplier_input_id,
+                'tool_event_ids':tool_events,'responses':supplied['evidence_responses'],
+                'delivered_facts':{f['id']:__import__('hashlib').sha256(d.dumps(f).encode()).hexdigest()
+                    for f in supplied_facts if any(f['id'] in r['fact_ids'] for r in supplied['evidence_responses'])}},as_of,run_id)
+            for row in active:
+                row.update(status='returned_for_reassessment',response=responses[row['request_id']],
+                    supplier_output_id=supplier_id,response_event_id=return_id)
+            # Re-reading existing evidence and an unavailable response both
+            # require a new analyst judgment; new fact IDs are not the trigger.
+            evidence=supplied
+            common['evidence_analysis']={k:v for k,v in evidence.items() if k!='evidence_responses'}
         final_check = evaluate(proposal['weights'],p,m,capital,val)
         checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
         differences = {s:proposal['weights'].get(s,0)-val['weights'].get(s,0)
@@ -425,9 +494,13 @@ class Engine:
             'rebalance_due':rebalance_due,'next_rebalance':(d.day(h['last_rebalanced'])+timedelta(days=p['rebalance_every_days'])).isoformat()}
         from .analysis_pack import coverage_ledger
         report['coverage_ledger']=coverage_ledger(report,m)
+        report['evidence_feedback']={'schema_version':feedback.VERSION,'rounds':feedback_round,
+            'exchanges':exchanges,'initial_perspectives':initial_perspectives,
+            'initial_evidence':{'output_id':initial_evidence_id,'analysis':initial_evidence},
+            'scope':'Supplier receipts are not analytical resolution; final validation and readiness remain separate.'}
         report['decision_scope']=decision_scope
         report['research_questions']=ledger(self.s,run_id,decision_scope,delivery,final_review)
-        report['market_observations']={'stage':'evidence','output_id':next((x['output_id'] for x in reversed(delivery) if x['role']=='evidence'),None),
+        report['market_observations']={'stage':'evidence_followup' if feedback_round else 'evidence','output_id':next((x['output_id'] for x in reversed(delivery) if x['role']=='evidence'),None),
             'analysis':copy.deepcopy(evidence),'scope':'최종 제안 전에 작성한 시황 기록이에요. 당시 비중 설명을 최종 상태로 해석하지 않아요.'}
         from .decision import contributions
         report['contribution_basis']=dict(contributions(p),every_days=p.get('contribution_every_days') if p.get('contribution_schedule')!='monthly' else None)

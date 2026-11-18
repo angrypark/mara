@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "question_id",
+    "need",
+    "gap_type",
+    "acceptance",
+    "decision_impact"
+  ],
+  "properties": {
+    "question_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "need": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1600
+    },
+    "gap_type": {
+      "type": "string",
+      "enum": [
+        "access",
+        "extraction",
+        "analysis"
+      ]
+    },
+    "acceptance": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1600
+    },
+    "decision_impact": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1600
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:evidence-request:1.0.0"
+}
