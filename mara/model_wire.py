@@ -1,4 +1,4 @@
-"""Lossless JSON sharing for large evaluator inputs; persisted inputs remain original."""
+"""Lossless JSON sharing for role inputs; persisted inputs remain original."""
 import json
 import re
 from collections import Counter
@@ -6,6 +6,11 @@ from collections import Counter
 MARKER='$mara_input_ref'
 VALUE_MARKER='$mara_value'
 VERSION='mara.model-wire/2.0'
+
+def supported(model,role):
+    return (getattr(model,'input_wire_version',None)==VERSION or
+        role=='evaluator' and getattr(model,'evaluator_wire_version',None)==VERSION)
+
 INSTRUCTION=('Input serialization mara.model-wire/2.0: root is the original JSON document. '
     'An object with only $mara_value and an integer means the EXACT value at that index in values, recursively. '
     'Resolve these references before reading role_guide, contract and input. '

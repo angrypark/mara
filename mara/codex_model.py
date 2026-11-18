@@ -85,6 +85,7 @@ def run_process(command,prompt,directory,timeout):
 
 class CodexModel:
     mode='live'
+    input_wire_version='mara.model-wire/2.0'
     evaluator_wire_version='mara.model-wire/2.0'
     def __init__(self,model='',runner=run_process):
         if not isinstance(model,str) or (model and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:\-]{0,119}',model)):
@@ -94,7 +95,7 @@ class CodexModel:
         if not info['authenticated']:raise CodexError('Codex 로그인이 필요해요. 터미널에서 codex login을 실행해주세요.')
         self.binary=executable();self.model=model;self.runner=runner
         self.identity={'provider':'codex-cli','model':model or 'CLI default','cli_version':info['version'],
-            'mode':self.mode,'ephemeral':True,'sandbox':'read-only','adapter':'1.1'}
+            'mode':self.mode,'ephemeral':True,'sandbox':'read-only','adapter':'1.2','input_wire':self.input_wire_version}
 
     def complete(self,role,guide,payload,contract):
         prompt=('You are the '+role+' analyst in Mara. Analyze only the supplied data. Explain in Korean. '
@@ -103,7 +104,8 @@ class CodexModel:
             'Weights apply to funding.proposal_capital when present; planned money is not actual cash. '
             'Return the JSON envelope result_json, whose string value is a JSON object matching the contract below.\n'
             +dumps({'role_guide':guide,'contract':contract,'input':payload}))
-        if role=='evaluator':
+        from .model_wire import supported
+        if supported(self,role):
             from .model_wire import packed,serialized,INSTRUCTION
             wire={'role_guide':guide,'contract':contract,'input':payload}
             prefix=prompt[:prompt.index('{"contract":')]

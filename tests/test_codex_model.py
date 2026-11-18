@@ -34,7 +34,8 @@ class CodexTests(unittest.TestCase):
             self.assertLess(len(prompt),1048576)
             self.reply(command)
             return json.dumps({'type':'turn.completed'})
-        self.assertEqual(self.model(runner).complete('evaluator','guide',payload,CONTRACTS['context']),RESULT)
+        for role in ('evaluator','evidence','buffett','leader','validation'):
+            self.assertEqual(self.model(runner).complete(role,'guide',payload,CONTRACTS['context']),RESULT)
 
     def test_independent_private_calls_with_no_shell_or_credentials(self):
         calls=[]

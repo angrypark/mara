@@ -2,6 +2,34 @@ import unittest
 from mara.model_wire import packed,unpacked,serialized,MARKER,VALUE_MARKER,VERSION
 
 class ModelWireTests(unittest.TestCase):
+    def test_role_wire_preserves_source_and_output_repair_inputs(self):
+        import tempfile
+        from pathlib import Path
+        from mara.agents import Agents,DemoModel
+        from mara.store import Store
+        class ReachedModel(Exception):pass
+        class Model(DemoModel):
+            input_wire_version=VERSION
+            count=0
+            def complete(self,role,guide,payload,contract):
+                self.count+=1
+                original={'role_guide':guide,'contract':contract,'input':payload}
+                assert unpacked(packed(original))==original
+                if self.count==1:return {}  # output correction must keep the same source
+                assert payload['output_feedback']['previous_output']=={}
+                raise ReachedModel()
+        text='unchanged original source '*18000
+        payload={'analysis':{'source':text,'again':text,'third':text},'market':{'facts':[]},'valuation':{'weights':{'CASH':1}}}
+        for role in ('evidence','buffett','leader','validation'):
+            with self.subTest(role=role),tempfile.TemporaryDirectory() as tmp:
+                db=Store(Path(tmp)/'db');s=db.session(db.create_user('fixture'));model=Model()
+                with self.assertRaises(ReachedModel):Agents(s,model,'2026-11-18','run').call(role,payload)
+                inputs=s.events('agent_input');self.assertEqual(len(inputs),2)
+                self.assertEqual(inputs[-1]['body']['payload']['analysis'],payload['analysis'])
+                model.input_wire_version=None
+                with self.assertRaisesRegex(ValueError,'context budget'):Agents(s,model,'2026-11-18','other').call(role,payload)
+                db.close()
+
     def test_lossless_nested_values_escaped_paths_and_distinct_types(self):
         row={'a/b~c':['한국어 원문  \n'*100,3.5,False,None]}
         original={'array':[row,row], 'another':row,'numeric':1,'string':'1','empty':[]}
