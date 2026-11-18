@@ -39,22 +39,48 @@ def quality(fin):
 
 def owner_value(a,known_ids,as_of):
     required={'owner_earnings_per_share','currency','earnings_period','share_basis','normalization','price','price_as_of','source_ids','scenarios','margin_of_safety'}
-    if set(a)!=required or a['currency']!='USD':raise ValueError('Explicit USD per-share valuation inputs required')
+    if set(a) not in (required,required|{'earnings_cases'}) or a['currency']!='USD':raise ValueError('Explicit USD per-share valuation inputs required')
     if not a['source_ids'] or not set(a['source_ids'])<=known_ids:raise ValueError('Valuation needs supplied evidence references')
     if not all(isinstance(a[k],str) and a[k].strip() for k in ('earnings_period','share_basis','normalization')):raise ValueError('Normalization and share basis required')
     if day(a['price_as_of'])>day(as_of) or (day(as_of)-day(a['price_as_of'])).days>10:raise ValueError('Price is future or stale')
-    earn=src.finite(a['owner_earnings_per_share'],.000001);price=src.finite(a['price'],.000001);mos=src.finite(a['margin_of_safety'],0,.9)
+    def positive_earnings(value):
+        number=src.finite(value)
+        if number<=0:raise src.EvidenceError('valuation_model_nonpositive_earnings')
+        return number
+    earn=positive_earnings(a['owner_earnings_per_share']);price=src.finite(a['price'],.000001);mos=src.finite(a['margin_of_safety'],0,.9)
     if len(a['scenarios'])!=3 or {s.get('name') for s in a['scenarios']}!={'bear','base','bull'}:raise ValueError('Three distinct scenarios required')
-    values=[]
+    cases=a.get('earnings_cases');case_earnings={}
+    if 'earnings_cases' in a:
+        from .valuation_evidence import references
+        if not isinstance(cases,dict) or set(cases)!={'bear','base','bull'}:raise ValueError('Three named earnings cases required')
+        for name,case in cases.items():
+            if not isinstance(case,dict) or set(case)!={'owner_earnings_per_share','normalization','reinvestment','dilution','source_ids','falsifier'}:raise ValueError('Explicit normalization, reinvestment, dilution and falsifier required')
+            case_earnings[name]=positive_earnings(case['owner_earnings_per_share'])
+            if not references(case['source_ids'])<=set(a['source_ids']):raise ValueError('Earnings case references must be included in source_ids')
+            if not all(isinstance(case[k],str) and case[k].strip() for k in ('normalization','reinvestment','dilution','falsifier')):raise ValueError('Earnings case explanations required')
+        if case_earnings['base']!=earn:raise ValueError('Base earnings must match owner_earnings_per_share')
+    values=[];parsed_scenarios={}
+    def calculate(e,g,r,t,n):
+        flows=sum(e*(1+g)**i/(1+r)**i for i in range(1,n+1));terminal=e*(1+g)**n*(1+t)/(r-t)/(1+r)**n
+        value=flows+terminal
+        if not math.isfinite(value) or value<=0:raise ValueError('Finite positive valuation required')
+        return {'value_per_share':value,'price_margin':1-price/value,'buy_ceiling':value*(1-mos),'terminal_value_fraction':terminal/value}
     for s in a['scenarios']:
         if set(s)!={'name','growth','discount','terminal_growth','years','reason'} or not isinstance(s['reason'],str) or not s['reason'].strip():raise ValueError('Scenario assumptions required')
         g=src.finite(s['growth'],-.5,.5);r=src.finite(s['discount'],.01,.5);t=src.finite(s['terminal_growth'],-.05,.1);n=s['years']
         if type(n)!=int or not 1<=n<=20 or t>=r:raise ValueError('Discount must exceed terminal growth; horizon 1..20')
-        flows=sum(earn*(1+g)**i/(1+r)**i for i in range(1,n+1));terminal=earn*(1+g)**n*(1+t)/(r-t)/(1+r)**n
-        value=flows+terminal
-        values.append(dict(s,value_per_share=value,price_margin=1-price/value,buy_ceiling=value*(1-mos),terminal_value_fraction=terminal/value))
+        e=case_earnings[s['name']] if cases else earn
+        parsed_scenarios[s['name']]={'growth':g,'discount':r,'terminal_growth':t,'years':n}
+        values.append(dict(s,owner_earnings_per_share=e,**calculate(e,g,r,t,n)))
+    base=parsed_scenarios['base']
+    sensitivity=[dict(name=name,owner_earnings_per_share=e,
+        **calculate(e,base['growth'],base['discount'],base['terminal_growth'],base['years'])) for name,e in sorted(case_earnings.items())]
     return {'method':'discounted normalized owner earnings per share; analyst assumptions, not observed fair value',
         'assumptions':a,'scenarios':values,'formula':'sum(E*(1+g)^t/(1+r)^t,t=1..N)+E*(1+g)^N*(1+terminal)/(r-terminal)/(1+r)^N',
+        'normalization_sensitivity':{'mode':'case_earnings' if cases else 'fixed_earnings','rows':sensitivity,
+            'held_constant':{k:base[k] for k in ('growth','discount','terminal_growth','years')},
+            'scope':'base의 성장·할인·영구성장·기간을 고정하고 정상화 이익만 바꿨어요.' if cases else '모든 시나리오가 같은 정상화 이익을 사용해요. 정상화 이익의 민감도는 검증하지 않았어요.'},
+        'assumption_scope':'경우별 재투자·희석 설명은 이익과 주당 성장률에 반영한 분석 가정이에요. 별도 투자 지출·주식 수 경로를 계산하지 않아요. bear도 최대 손실 보장이 아니에요. 0·음수 이익의 하방은 이 양수 이익 모형이 표현하지 못해요.',
         'limits':'정상화와 주당/분할 기준은 분석자의 명시 가정. 자동 검증된 가치 아님. 부채를 다시 차감하지 않는 equity per-share 모델. 기업가치 FCFF/WACC와 혼용 금지. 음수 이익·은행/보험 등에는 적합한 별도 방법 필요.'}
 
 
@@ -310,15 +336,12 @@ class ResearchTools:
             from .xbrl_read import run
             result=run(self.lib,tool,args,self.as_of)
         elif tool=='valuation':
-            a=args['assumptions'];quotes=[]
-            for fact in market['facts']:
-                if fact['id'] not in a.get('source_ids',[]) or fact.get('research_tool')!='company_company':continue
-                for company in json.loads(fact['text']).get('companies',[]):
-                    if company.get('symbol')==symbol(args['symbol']) and company.get('quote'):quotes.append(company['quote'])
-            if not any(q['currency']=='USD' and q['price']==a.get('price') and q['observed_at']==a.get('price_as_of') for q in quotes):raise ValueError('Valuation price must match cited company USD quote')
+            from .valuation_evidence import validate_sources
+            a=args['assumptions'];binding=validate_sources(a,market,symbol(args['symbol']),self.as_of)
             result=owner_value(a,{f['id'] for f in market['facts']},self.as_of)
             result['symbol']=symbol(args['symbol'])
             result['identity_basis']='validated company dossier and matching USD quote/source_ids'
+            result['source_validation']=binding
         else:raise ValueError('Unknown research tool')
         # Receipts and discovery results are not financial evidence.
         fact=None
