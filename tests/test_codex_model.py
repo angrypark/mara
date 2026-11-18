@@ -24,6 +24,18 @@ class CodexTests(unittest.TestCase):
         path=Path(command[command.index('-o')+1])
         path.write_text(json.dumps({'result_json':json.dumps(result)}))
 
+    def test_evaluator_wire_resolves_to_the_exact_source_document(self):
+        from mara.model_wire import INSTRUCTION,unpacked,VERSION
+        payload={'original':['source text '*1000,0,False,None], 'again':['source text '*1000,0,False,None]}
+        def runner(command,prompt,directory,timeout):
+            wire=json.loads(prompt.split(INSTRUCTION,1)[1])
+            self.assertEqual(wire['version'],VERSION)
+            self.assertEqual(unpacked(wire),{'role_guide':'guide','contract':CONTRACTS['context'],'input':payload})
+            self.assertLess(len(prompt),1048576)
+            self.reply(command)
+            return json.dumps({'type':'turn.completed'})
+        self.assertEqual(self.model(runner).complete('evaluator','guide',payload,CONTRACTS['context']),RESULT)
+
     def test_independent_private_calls_with_no_shell_or_credentials(self):
         calls=[]
         def runner(command,prompt,directory,timeout):

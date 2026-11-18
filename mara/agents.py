@@ -238,8 +238,17 @@ class Agents:
         current['input_budget']={'version':'role-envelope/1.0','max_characters':context_limit,
             'knowledge_characters':6000,'previous_completed_runs':1,
             'rule':'현재 근거와 현재 관점은 자르지 않아요. 이전 기록은 역할별 투영으로 전달하고 원본은 보존해요. 상한 초과는 명시적으로 실패하며 결론을 강제하지 않아요.'}
+        from .model_wire import VERSION,packed,serialized
+        shared_evaluator=role=='evaluator' and getattr(self.model,'evaluator_wire_version',None)==VERSION
+        if shared_evaluator:
+            current['input_budget'].update(version='role-envelope/1.1',serialization=VERSION,
+                measurement='shared wire document including guide and output contract',
+                max_unshared_characters=context_limit*4)
         for attempt in (1,2):
-            if len(guide)>22000 or len(dumps(current))>context_limit:
+            original_size=len(dumps(current))
+            within_source_bound=original_size<=context_limit*(4 if shared_evaluator else 1)
+            measured_size=len(serialized(packed({'role_guide':guide,'contract':contract,'input':current}))) if shared_evaluator and within_source_bound else original_size
+            if len(guide)>22000 or not within_source_bound or measured_size>context_limit:
                 if attempt==2:raise AgentOutputError(role,code,oid,attempts=1)
                 raise ValueError('Role context budget exceeded; curate evidence')
             iid = self.s.append('agent_input', {'role':role, 'guide':guide,
