@@ -37,6 +37,8 @@ class Store:
         CREATE TRIGGER IF NOT EXISTS events_no_delete BEFORE DELETE ON events
           BEGIN SELECT RAISE(ABORT,'immutable event'); END;
         ''')
+        from .fact_catalog import DDL
+        self.db.executescript(DDL)
         self.db.commit()
 
     def create_user(self, user):

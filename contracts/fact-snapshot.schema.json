@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:fact-snapshot:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "fact_id",
+    "kind",
+    "as_of",
+    "current_at_report",
+    "content_sha256",
+    "original",
+    "parents",
+    "series",
+    "epistemic_scope",
+    "derivation_status"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "mara.fact-snapshot/1.0"
+    },
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^fact:[0-9a-f]{64}$"
+    },
+    "fact_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": [
+        "text",
+        "filing_excerpt",
+        "xbrl_observations",
+        "valuation",
+        "price_series"
+      ]
+    },
+    "as_of": {
+      "type": "string"
+    },
+    "current_at_report": {
+      "type": "boolean"
+    },
+    "content_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "original": {
+      "type": "object",
+      "required": [
+        "id",
+        "text",
+        "topic",
+        "source",
+        "published_at",
+        "known_at",
+        "valid_until",
+        "uncertainty"
+      ]
+    },
+    "parents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "fact_id",
+          "snapshot_id"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "fact_id": {
+            "type": "string"
+          },
+          "snapshot_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "series": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "epistemic_scope": {
+      "enum": [
+        "analyst_assumptions_and_calculation",
+        "supplied_evidence_not_independently_certified"
+      ]
+    },
+    "derivation_status": {
+      "enum": [
+        "not_derived",
+        "legacy_report_citations",
+        "bound_parent_snapshots",
+        "parent_snapshot_mismatch"
+      ]
+    }
+  }
+}

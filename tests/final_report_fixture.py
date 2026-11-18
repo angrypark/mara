@@ -26,8 +26,17 @@ def fixture():
                 'filing':{'form':'10-Q','accession':'0000000001-26-000001'},'raw_ref':{'sha256':'f'*64}})}
         case.s.append('research_evidence',{'role':'validation','fact':opposing},DAY,report['run_id'])
         report['validation']['final_critique']['judgment_report']={'evidence_ids':['synthetic-opposing']}
+        from test_fact_catalog import series
+        price_fact={'id':'synthetic-prices','topic':'합성 가격 시계열 · 실제 투자 자료 아님','source':'https://example.com/source',
+            'published_at':DAY,'known_at':DAY,'valid_until':DAY,'uncertainty':'화면 검증용 합성 관측값이에요.',
+            'text':'관측 시작과 끝 사이에 가격이 낮아졌지만 중간에 상승한 관측도 있어요.','series':series()}
+        case.s.append('research_evidence',{'role':'evidence','fact':price_fact},DAY,report['run_id'])
+        price_claim=copy.deepcopy(c);price_claim.update(id='synthetic-price-claim',statement='이 표본의 처음과 마지막 가격을 비교하면 20% 하락했어요.',
+            fact_ids=['synthetic-prices'],counterevidence='중간 관측에서는 가격이 올랐어요. 계속 하락했다는 뜻은 아니에요.',
+            assumptions=['관측된 종가끼리만 비교했어요. 배당과 거래 비용은 반영하지 않았어요.'])
+        case_doc['claims'].append(price_claim)
         report['market_observations']['analysis']['changes']=['EARLY_EMPTY_ALLOCATION_SENTINEL: 초기에는 제안 비중이 비어 있었어요.']
-        report['final_report']=assemble(report,case.market['facts']+[opposing])
+        report['final_report']=assemble(report,case.market['facts']+[opposing,price_fact])
         eid=case.s.append('completed',report,DAY,report['run_id']);row=present(case.s,case.s.get(eid))
         row['view']['market_analysis']=copy.deepcopy(report['market_observations']['analysis'])
         row['view']['judgment_report_history'].append({'role':'leader','stage':'proposal_synthesis','source_output_id':'synthetic-old-opinion',

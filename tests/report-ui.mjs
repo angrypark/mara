@@ -19,6 +19,11 @@ try{
  $('role-report-history').open=true;$('final-calculations').open=true;w.MaraReport.render(fixture);
  assert.equal($('role-report-history').open,true);assert.equal($('final-calculations').open,true);
  for(const link of $('final-reader').querySelectorAll('.reader-origin'))assert.ok(w.document.querySelector(link.getAttribute('href')));
+ const trigger=reader.querySelector('.claim-statement');trigger.click();assert.equal($('evidence-panel').hidden,false);assert.match($('evidence-panel').textContent,/fact demo-1/);
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal($('evidence-panel').hidden,true);
+ trigger.click();[...$('evidence-panel').querySelectorAll('button')].find(b=>b.textContent==='닫기').click();assert.equal($('evidence-panel').hidden,true);
+ trigger.click();w.MaraReport.render(fixture);assert.equal($('evidence-panel').hidden,false);w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal($('evidence-panel').hidden,true);
+ const issue=structuredClone(fixture);issue.view.evidence_graph.storage_status='index_mismatch_source_projection';issue.view.evidence_graph.issues.push({code:'invalid_price_series',fact_id:'demo-1'});w.MaraReport.render(issue);$('final-reader').querySelector('.claim-statement').click();assert.match($('evidence-panel').textContent,/저장 색인이 원본과 달라/);assert.match($('evidence-panel').textContent,/invalid_price_series/);
  const rejected=structuredClone(fixture);rejected.view.judgment_report_history.push({role:'leader',stage:'proposal_synthesis',source_output_id:'broken-output',contract_accepted:false,report:{title:'Rejected incomplete draft'},structured_output:{judgment_report:{title:'Rejected incomplete draft'}}});
  w.MaraReport.render(rejected);assert.match($('role-output-broken-output').textContent,/Rejected incomplete draft/);assert.match($('final-reader').textContent,/최종 판단: 보류/);
  const attack=structuredClone(fixture);attack.view.final_report.reasons.claims[0].claim.statement='<img src=x onerror=alert(1)>';attack.view.final_report.references.facts[0].source='javascript:alert(1)';

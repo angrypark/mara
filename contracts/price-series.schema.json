@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:price-series:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "symbol",
+    "currency",
+    "unit",
+    "price_kind",
+    "frequency",
+    "requested_start",
+    "requested_end",
+    "source",
+    "observations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "mara.price-series/1.0"
+    },
+    "symbol": {
+      "type": "string",
+      "minLength": 1
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "unit": {
+      "const": "currency_per_share"
+    },
+    "price_kind": {
+      "enum": [
+        "close",
+        "adjusted_close"
+      ]
+    },
+    "frequency": {
+      "enum": [
+        "daily",
+        "weekly",
+        "monthly",
+        "irregular"
+      ]
+    },
+    "requested_start": {
+      "type": "string"
+    },
+    "requested_end": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "pattern": "^https://"
+    },
+    "observations": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "date",
+          "value"
+        ],
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      }
+    }
+  }
+}

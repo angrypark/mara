@@ -343,6 +343,12 @@ class ResearchTools:
             result['identity_basis']='validated company dossier and matching USD quote/source_ids'
             result['source_validation']=binding
         else:raise ValueError('Unknown research tool')
+        if tool=='valuation':
+            from .fact_catalog import derivation_binding
+            result['derivation']={'schema_version':'mara.valuation-derivation/1.0','operation':'owner_value/1',
+                'implementation_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                'parents':derivation_binding(self.s,self.run_id,self.as_of,role,market['facts'],args['assumptions']['source_ids']),
+                'scope':'계산을 만들 때 사용한 원자료 버전이에요. 가정의 경제적 타당성을 인증하지 않아요.'}
         # Receipts and discovery results are not financial evidence.
         fact=None
         if tool in ('compare','company','filing_search','filing_read','valuation','xbrl_read') and result.get('status')!='no_observations':
@@ -377,7 +383,7 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
     from .contracts import validate
     runner=ResearchTools(library,s,run_id,as_of);transcript=[];collected=0
     from .research_progress import Progress
-    progress=Progress();extensions=[];completed_rounds=0
+    progress=Progress();extensions=[];completed_rounds=0;planning_feedback=None
     questions=(payload.get('decision_scope') or {}).get('questions',[])
     question_ids={q['id'] for q in questions}
     stop_reason='round_budget';stop_detail='8 research rounds reached'
@@ -395,6 +401,8 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         prior_review=(payload.get('improvement') or payload.get('external_review') or {}).get('feedback',{})
         analysis=payload.get('analysis',{});comparison=analysis.get('comparison',{})
         request={'role':role,'as_of':as_of,'question':payload.get('question'),
+            'execution_boundary':'외부 브라우저·쉘 도구를 직접 실행하지 않아요. 이 계약의 calls 배열에 조사 요청을 반환하는 것은 허용돼요. Mara가 허용 도구를 실행하고 다음 입력에 결과를 전달해요.',
+            'planning_feedback':copy.deepcopy(planning_feedback),
             'research_capabilities':'mara.research-tools/1.2','decision_questions':questions,'objective':payload.get('profile',{}).get('goal'),'available_symbols':list(payload['market'].get('assets',{})),
             'prior_review':{k:copy.deepcopy(prior_review[k]) for k in ('criteria','gates','coverage','deterministic_findings','instruction') if k in prior_review},
             'available_analysis':{'comparison_available':comparison.get('available',False),
@@ -425,6 +433,14 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
             payload['research_access']={'status':'invalid_plan','limits':'추가 조사 계획이 계약 검증에 실패했어요. 기존 근거만으로 판단하고 공백을 명시해요.'}
             return payload
         s.append('research_plan',{'role':role,'plan':plan,'provider':model.identity,'round':round_no+1},as_of,run_id)
+        if not plan['calls'] and round_no==0 and plan.get('stop_reason')=='capability_gap' and request['existing_evidence']:
+            planning_feedback={'code':'check_readable_payload_before_capability_stop',
+                'rule':'existing_evidence는 현재 payload에서 evidence_read로 읽을 수 있는 fact ID 목록이에요. 등록된 내용이 목록·요약·발췌·역할 투영일 수도 있어 필요한 공시 전문이 있다는 뜻은 아니에요. 필요한 자료와 연결되는 ID를 읽거나, 현재 도구로 해결할 수 없는 이유를 구분해 다시 계획해요. 외부 도구 금지는 JSON calls 반환 금지가 아니에요. 그래도 자료·분석 역량이 부족하면 capability_gap으로 종료할 수 있어요.',
+                'original_reason':plan['reason'],'remaining_base_rounds_at_feedback':3,
+                'scope':'한 번의 계획 재검토이며 새 자료·충분성·주장 지지를 뜻하지 않아요.'}
+            s.append('research_planning_feedback',{'role':role,'round':1,'feedback':planning_feedback},as_of,run_id)
+            progress.finish_round([])
+            continue
         if not plan['calls']:
             stop_reason=plan.get('stop_reason','planner_stopped_unspecified');stop_detail=plan['reason'];break
         for call in plan['calls']:

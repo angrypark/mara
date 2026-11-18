@@ -432,4 +432,6 @@ class Engine:
             proposal_id = self.s.append('proposal',proposal,as_of,run_id)
             report['proposal_id'] = proposal_id
             eid = self.s.append('completed',report,as_of,run_id)
+            from .fact_catalog import persist
+            persist(self.s,eid,m['facts'])
         return dict(report,event_id=eid)

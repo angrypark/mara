@@ -70,3 +70,31 @@ class ReadLoopTests(unittest.TestCase):
         self.assertTrue(all(q['state']=='awaiting_analysis_review' for q in value['questions']))
         self.assertEqual(len(self.s.events('research_tool_result')),2)
         self.assertTrue(all(e['body']['fact_id'] is None for e in self.s.events('research_activity')))
+
+
+class PlanningBoundaryTests(unittest.TestCase):
+    setUp=fixture.EvidenceResolutionTests.setUp
+    def payload(self,facts=True):return {'profile':self.p,'market':dict(copy.deepcopy(self.m),facts=copy.deepcopy(self.m['facts']) if facts else []),'analysis':{},'decision_scope':self.scope}
+    def test_capability_stop_gets_one_bounded_reading_check_with_original_plan_preserved(self):
+        fact=self.m['facts'][0];qid=self.scope['questions'][0]['id'];seen=[]
+        class Planner(DemoModel):
+            mode='live'
+            def complete(inner,role,g,p,c):
+                seen.append(p)
+                if p['round']==1:return {'reason':'Only catalog supplied','calls':[],'stop_reason':'capability_gap'}
+                if p['round']==2:
+                    self.assertEqual(p['planning_feedback']['code'],'check_readable_payload_before_capability_stop')
+                    return {'reason':'Read available scope','calls':[{'tool':'evidence_read','arguments':{'fact_id':fact['id']},'question_ids':[qid]}]}
+                return {'reason':'Observed scope remains insufficient','calls':[],'stop_reason':'capability_gap'}
+        result=research_loop(self.s,Planner(),'buffett','guide',self.payload(),'bounded-read-check',fixture.DAY,self.lib)
+        self.assertEqual(len(seen),3);self.assertEqual(result['research_access']['calls'],1);self.assertEqual(result['research_access']['stop_reason'],'capability_gap')
+        self.assertEqual(len(self.s.events('research_planning_feedback')),1);self.assertEqual(len(self.s.events('research_plan')),3)
+        self.assertFalse(self.s.events('research_evidence'))
+    def test_no_retry_for_sufficient_or_no_data_and_second_capability_stop_is_respected(self):
+        for stop,has_facts,expected in [('evidence_sufficient',True,1),('capability_gap',False,1),('capability_gap',True,2)]:
+            seen=[]
+            class Planner(DemoModel):
+                mode='live'
+                def complete(inner,role,g,p,c):seen.append(p);return {'reason':'Explicit stop','calls':[],'stop_reason':stop}
+            result=research_loop(self.s,Planner(),'buffett','guide',self.payload(has_facts),'stop-'+str(expected)+stop,fixture.DAY,self.lib)
+            self.assertEqual(len(seen),expected);self.assertEqual(result['research_access']['calls'],0);self.assertEqual(result['research_access']['extensions'],[])

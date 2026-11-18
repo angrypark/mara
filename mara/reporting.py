@@ -77,11 +77,13 @@ def present(session,row):
     from .persona import snapshot
     frozen_persona=snapshot(session.get(r['persona_id'])) if r.get('persona_id') else None
     latest_profile=session.latest('profile')
+    from .fact_catalog import present as fact_view
+    evidence_graph=fact_view(session,r,facts,result['id'])
     result['view']={'user_persona':frozen_persona,'persona_is_current':bool(frozen_persona and latest_profile and latest_profile['id']==r['profile_id']), 'version':1,'kind':'revision' if r.get('revision_of') else 'weekly' if previous else 'initial',
         'base_currency':profile['base_currency'],'context':analyses.get('context'),
         'judgment_reports':list(role_reports.values()),
         'judgment_report_history':report_history,
-        'final_report':reader,'final_report_status':reader_status,
+        'final_report':reader,'final_report_status':reader_status,'evidence_graph':evidence_graph,
         'judgment_report_status':{'available':bool(role_reports),'final_action':r['proposal']['action'],
             'eligibility':r['proposal']['eligibility'],
             'rule':'각 문서는 해당 역할·단계의 원문 의견. 리더 종합안도 최종 검증 전 문서이며 공식 행동·보류 여부는 최종 검증을 반영한 상태가 우선해요.'},

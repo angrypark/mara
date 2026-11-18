@@ -32,10 +32,77 @@ window.MaraReport=(()=>{
     }
     if(limit!=null)box.append(el('p','hint','세로선: 설정 상한 '+pct(limit)));
   }
+  let factGraph=null,factSources=[],evidencePanel=null,evidenceTrigger=null,evidencePinned=false,evidenceTimer=null,evidenceRestoring=false,evidenceReturnTrigger=null;
+  const factNode=id=>factGraph?.facts?.find(n=>n.fact_id===id);
+  function closeEvidence(restore=false){
+    clearTimeout(evidenceTimer);if(evidencePanel)evidencePanel.hidden=true;
+    evidenceTrigger?.setAttribute('aria-expanded','false');const old=evidenceReturnTrigger||evidenceTrigger;evidenceTrigger=null;evidencePinned=false;evidenceReturnTrigger=null;
+    if(restore&&old?.isConnected){evidenceRestoring=true;old.focus();evidenceRestoring=false;}
+  }
+  function chart(series){
+    const figure=el('figure','fact-series'),ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
+    svg.setAttribute('viewBox','0 0 360 150');svg.setAttribute('role','img');svg.setAttribute('aria-label',series.symbol+' '+series.price_kind+' 가격 관측');
+    const points=series.observations,values=points.map(p=>p.value),times=points.map(p=>Date.parse(p.date)),lo=Math.min(...values),hi=Math.max(...values);
+    const line=document.createElementNS(ns,'polyline');line.setAttribute('fill','none');line.setAttribute('stroke','currentColor');line.setAttribute('stroke-width','2');
+    line.setAttribute('points',points.map((p,i)=>`${15+(times[i]-times[0])/(times.at(-1)-times[0]||1)*330},${125-(p.value-lo)/(hi-lo||1)*110}`).join(' '));svg.append(line);
+    figure.append(el('figcaption','',series.symbol+' · '+series.currency+' · '+({close:'종가',adjusted_close:'수정종가'}[series.price_kind]||series.price_kind)),svg,
+      el('p','hint',points[0].date+' → '+points.at(-1).date+' · 최저 '+number(lo,3)+' / 최고 '+number(hi,3)),
+      el('p','','실제 관측 구간 변동률 '+pct(series.calculation.period_return)),el('p','hint',series.calculation.scope));
+    const d=el('details');d.append(el('summary','','관측값·계산 규칙'));const t=el('table');
+    for(const p of points){const row=el('tr');row.append(el('td','',p.date),el('td','',number(p.value,4)));t.append(row)}
+    d.append(t,el('pre','',JSON.stringify(series.calculation,null,2)));figure.append(d);return figure;
+  }
+  function evidenceContent(id){
+    const node=factNode(id),f=node?.original||factSources.find(f=>f.id===id),card=el('article','fact-detail');
+    card.dataset.factId=id;if(!f){card.append(el('h4','',id),el('p','notice','이 판단의 근거를 당시 자료에서 찾지 못했어요.'));return card}
+    card.append(el('h4','',f.topic||id),el('p','hint','fact '+id),el('p','hint',`발표 ${f.published_at} · 인지 ${f.known_at} · 당시 유효 ${f.valid_until}`));
+    if(node)card.append(el('p','hint','버전 '+node.snapshot_id),el('p','hint',node.kind==='valuation'?'분석 가정에 따른 계산 · 관측 사실과 구분해요.':'당시 제공된 자료 · 인용 연결 자체가 주장의 타당성을 보증하지 않아요.'));
+    if(node?.current_at_report===false)card.append(el('p','notice','보고서 기준 시점과 맞지 않는 자료예요.'));
+    for(const issue of factGraph?.issues||[])if(issue.fact_id===id)card.append(el('p','notice','근거 연결 검사: '+issue.code+' · 이 항목은 확인이 필요해요.'));
+    let parsed;try{parsed=JSON.parse(f.text)}catch(e){}
+    let excerpt=f.text;
+    if(parsed&&typeof parsed==='object'){
+      if(typeof parsed.text==='string')excerpt=parsed.text;
+      else if(Array.isArray(parsed.hits))excerpt=parsed.hits.map(h=>h.excerpt||h.text||'').join('\n\n');
+      else if(Array.isArray(parsed.observations))excerpt=JSON.stringify({namespace:parsed.namespace,tag:parsed.tag,unit:parsed.unit,observations:parsed.observations},null,2);
+    }
+    card.append(el('p','fact-excerpt',excerpt.length>900?excerpt.slice(0,900)+'\n[미리보기 일부 · 전체 내용은 아래에서 확인해요.]':excerpt));
+    if(node?.series)card.append(chart(node.series));
+    if(f.uncertainty)card.append(el('p','notice','자료의 한계: '+f.uncertainty));
+    if(node?.parents?.length){card.append(el('p','hint',node.derivation_status==='bound_parent_snapshots'?'계산 생성 때 기록한 원자료 버전':'보고서의 인용 연결 · 계산 생성 때의 자료 버전은 확인되지 않았어요.'));for(const parent of node.parents){
+      const b=el('button','source-chip',parent.fact_id+(parent.snapshot_id?'':' · 연결 누락'));b.type='button';
+      b.disabled=!parent.snapshot_id||factNode(parent.fact_id)?.snapshot_id!==parent.snapshot_id;b.addEventListener('click',()=>showEvidence(b,[parent.fact_id],true));card.append(b);
+    }}
+    const raw=el('details');raw.append(el('summary','','보존한 전체 근거와 schema'),el('pre','',JSON.stringify(node||f,null,2)));card.append(raw);
+    try{const url=new URL(f.source);if(url.protocol==='https:'){const a=el('a','','출처 원문 · '+url.hostname);a.href=url.href;a.target='_blank';a.rel='noopener noreferrer';card.append(a)}}catch(e){}
+    return card;
+  }
+  function showEvidence(trigger,ids,pinned=false){
+    clearTimeout(evidenceTimer);if(evidencePinned&&!pinned&&evidenceTrigger!==trigger)return;
+    if(!evidencePanel){evidencePanel=el('div','evidence-panel');evidencePanel.id='evidence-panel';evidencePanel.setAttribute('role','dialog');evidencePanel.setAttribute('aria-label','판단의 근거');
+      evidencePanel.addEventListener('mouseenter',()=>clearTimeout(evidenceTimer));evidencePanel.addEventListener('mouseleave',()=>{if(!evidencePinned)evidenceTimer=setTimeout(()=>closeEvidence(),200)});
+      document.body.append(evidencePanel);
+    }
+    if(pinned&&!evidencePanel.contains(trigger))evidenceReturnTrigger=trigger;
+    evidenceTrigger?.setAttribute('aria-expanded','false');evidenceTrigger=trigger;evidencePinned=pinned||evidencePinned;trigger.setAttribute('aria-expanded','true');
+    const head=el('div','evidence-heading'),title=el('b','','판단에 인용한 근거'),pin=el('button','',evidencePinned?'고정됨':'고정해서 읽기'),close=el('button','','닫기');pin.type=close.type='button';
+    pin.addEventListener('click',()=>{evidencePinned=true;pin.textContent='고정됨'});close.addEventListener('click',()=>closeEvidence(true));head.append(title,pin,close);
+    evidencePanel.replaceChildren(head,el('p','hint','보고서 당시 자료예요. 최신 값으로 바꾸지 않아요.'),...ids.map(evidenceContent));
+    if(factGraph?.storage_status==='index_mismatch_source_projection')evidencePanel.insertBefore(el('p','notice','저장 색인이 원본과 달라 원본 실행에서 근거를 다시 구성했어요.'),head.nextSibling);
+    else if(factGraph?.storage_status==='source_projection_not_indexed')evidencePanel.insertBefore(el('p','hint','별도 DB 색인이 없는 과거 보고서예요. 당시 실행 원본에서 구성했어요.'),head.nextSibling);evidencePanel.hidden=false;
+    if(pinned)close.focus();
+  }
+  function attachEvidence(node,ids){
+    if(!ids?.length)return;node.dataset.evidenceIds=JSON.stringify(ids);node.classList.add('evidence-trigger');node.setAttribute('aria-controls','evidence-panel');node.setAttribute('aria-expanded','false');node.setAttribute('aria-haspopup','dialog');
+    node.addEventListener('mouseenter',()=>showEvidence(node,ids));node.addEventListener('mouseleave',()=>{if(!evidencePinned)evidenceTimer=setTimeout(()=>closeEvidence(),200)});
+    node.addEventListener('focus',()=>{if(!evidenceRestoring)showEvidence(node,ids)});node.addEventListener('blur',e=>{if(!evidencePinned&&!evidencePanel?.contains(e.relatedTarget))closeEvidence()});
+    node.addEventListener('click',e=>{e.preventDefault();showEvidence(node,ids,true)});
+  }
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&evidencePanel&&!evidencePanel.hidden){e.preventDefault();closeEvidence(true)}});
   function sourceLinks(ids,sources){
     const box=el('div','source-chips');
     for(const id of ids||[]){const i=sources.findIndex(s=>s.id===id);if(i<0){box.append(el('span','hint','연결되지 않은 근거: '+id));continue}
-      const a=el('a','source-chip','근거 '+(i+1));a.href='#'+sourceId(i);a.title=sources[i].topic+' · '+id;box.append(a)}
+      const a=el('a','source-chip','근거 '+(i+1));a.href='#'+sourceId(i);a.title=sources[i].topic+' · '+id;attachEvidence(a,[id]);box.append(a)}
     if(!box.childElementCount)box.append(el('span','hint','인용된 근거가 없어요.'));return box;
   }
   function sourcesView(sources,expired){
@@ -70,8 +137,10 @@ window.MaraReport=(()=>{
       if(values?.length)box.append(section(label,values));
     }
     for(const entry of doc.reasons.claims){const c=entry.claim,card=el('article','final-claim');card.dataset.claimId=c.id;
-      card.append(el('h4','',c.statement),el('p','hint','리더 판단: '+({supported:'근거가 뒷받침한다고 판단',conditional:'조건부',unresolved:'미해결'}[c.status]||c.status)+(review.qualitative_pass===false?' · 최종 검토는 보류됐어요.':'')),
+      const heading=el('h4'),claimButton=el('button','claim-statement',c.statement);claimButton.type='button';attachEvidence(claimButton,c.fact_ids);heading.append(claimButton);
+      card.append(heading,el('p','hint','리더 판단: '+({supported:'근거가 뒷받침한다고 판단',conditional:'조건부',unresolved:'미해결'}[c.status]||c.status)+(review.qualitative_pass===false?' · 최종 검토는 보류됐어요.':'')),
         section('가정',c.assumptions),el('p','','반대 근거: '+c.counterevidence),el('p','','결정에 미친 영향: '+c.decision_impact),sourceLinks(c.fact_ids,sources));
+      if(c.calculation_paths?.length){const links=el('div','source-chips');for(const path of c.calculation_paths){const i=doc.references.calculations.findIndex(x=>x.path===path);const a=el('a','source-chip','계산 근거');a.href='#final-calculation-'+i;a.title=path;a.addEventListener('click',()=>{const parent=$('final-calculations'),item=$('final-calculation-'+i);if(parent)parent.open=true;if(item)item.open=true});links.append(a)}card.append(links);if(!c.fact_ids?.length){const empty=card.querySelector('.source-chips');if(empty)empty.firstChild.textContent='별도 외부 fact 인용 없이 아래 계산과 개인 맥락을 참조한 판단이에요.'}}
       if(entry.origin.output_id)card.append(originLink(entry.origin));box.append(card);
     }
     box.append(section('판단의 적용 범위와 한계',doc.reasons.scope_limits),section('남은 위험',open.risks));
@@ -106,7 +175,44 @@ window.MaraReport=(()=>{
     const integrity=el('details','final-integrity');integrity.id='final-integrity';integrity.append(el('summary','','보고서 구성 검사와 버전'),el('p','',doc.assembly_scope),
       el('p','',status==='stored_verified'?'실행 당시 저장한 문서와 입력을 대조했어요.':status==='display_projection'?'기존 원본을 현재 표시 규칙으로 구성했어요. 새 분석이 아니에요.':'저장 문서를 확인하지 못해 원래 결과에서 표시본을 만들었어요.'),el('pre','',JSON.stringify(doc.provenance,null,2)));
     if(doc.assembly_issues.length){box.prepend(el('p','notice','보고서 구성에서 확인할 문제가 남았어요. 원본 판단은 아래에 보존했어요.'));integrity.append(el('pre','',JSON.stringify(doc.assembly_issues,null,2)))}
-    box.append(integrity);return box;
+    box.append(integrity);
+    for(const card of box.querySelectorAll('.final-claim')){
+      const assumptions=card.querySelector('.reason-group');if(assumptions){const d=el('details');d.append(el('summary','','가정과 적용 조건'),assumptions);card.append(d)}
+    }
+    for(const card of [...box.querySelectorAll('.final-claim')]){
+      const d=el('details','final-claim reader-claim-row');d.id='reader-claim-'+card.dataset.claimId;d.dataset.claimId=card.dataset.claimId;
+      const summary=el('summary'),heading=card.querySelector('h4'),state=heading.nextElementSibling;
+      summary.append(heading,state,el('span','hint','가정·반론·결정 영향 펼치기'));d.append(summary);
+      while(card.firstChild)d.append(card.firstChild);card.replaceWith(d);
+    }
+    // Exact repeated objections are shown once, under the final review.
+    const objections=new Set([...(open.final_review_issues||[]),...(open.unsupported_claims||[]),...(open.dissent||[])]);
+    for(const group of box.querySelectorAll('.reason-group'))if(group.querySelector('h4')?.textContent==='남은 위험'){
+      for(const li of [...group.querySelectorAll('li')])if(objections.has(li.textContent))li.remove();
+      if(!group.querySelector('li'))group.remove();
+    }
+    const firstHeading=box.querySelector('h3'),reasonHeading=[...box.querySelectorAll('h3')].find(n=>n.textContent==='선택 이유와 마지막 검토');
+    if(firstHeading&&reasonHeading){
+      const grid=el('div','reader-overview-grid'),left=el('div'),right=el('div');firstHeading.before(grid);grid.append(left,right);
+      let n=firstHeading;while(n&&n!==reasonHeading){const next=n.nextSibling;left.append(n);n=next}
+      n=reasonHeading;while(n&&!n.classList.contains('final-claim')){const next=n.nextSibling;right.append(n);n=next}
+    }
+    // Preserve all sentences; collapse complete sections, never truncate a claim.
+    function fold(title,nextTitle,id,label){
+      const headings=[...box.children],start=headings.find(n=>n.tagName==='H3'&&n.textContent===title);if(!start)return;
+      const d=el('details','reader-fold');d.id=id;d.append(el('summary','',label));start.before(d);
+      let n=start;while(n){const next=n.nextSibling;if(n!==start&&n.tagName==='H3'&&n.textContent===nextTitle)break;d.append(n);n=next}
+    }
+    fold('비교한 대안','원래 질문과 남은 확인','reader-alternatives','대안 '+doc.alternatives.length+'개 · 선택 이유와 변경 조건');
+    fold('원래 질문과 남은 확인','언제 무엇을 다시 확인하나','reader-questions','질문 '+open.questions.length+'개 · 미해결 '+open.questions.filter(q=>q.review?.status!=='supported').length+'개 · 전체 근거와 다음 확인');
+    const monitorHeading=[...box.children].find(n=>n.tagName==='H3'&&n.textContent==='언제 무엇을 다시 확인하나');
+    if(monitorHeading){let n=monitorHeading.nextSibling;while(n&&n!==refs){
+      if(n.tagName==='H4'){const d=el('details','reader-monitor-row'),summary=el('summary');summary.append(n.cloneNode(true));n.before(d);let current=n;while(current&&current!==refs&&(current===n||current.tagName!=='H4')&&!current.classList?.contains('reason-group')){const next=current.nextSibling;d.append(current);current=next}d.prepend(summary);n=current}
+      else if(n.classList?.contains('reason-group')){const next=n.nextSibling;const d=el('details','reader-fold');n.before(d);d.append(el('summary','',n.querySelector('h4')?.textContent||'후속 조건'),n);n=next}
+      else n=n.nextSibling;
+    }}
+    const refDetails=el('details','reader-fold');refDetails.id='reader-references';refs.before(refDetails);refDetails.append(el('summary','','핵심 출처 '+doc.references.facts.length+'개 · 읽은 범위와 한계'),refs);
+    return box;
   }
   function personas(r,v,sources){
     const recorded=(v.agent_registry?.length?v.agent_registry.map(a=>a.id):Object.keys(names)).filter(id=>r.perspectives?.[id]);
@@ -148,6 +254,8 @@ window.MaraReport=(()=>{
   }
   function render(row){
     const opened=renderedId===row.id?[...$('report-content').querySelectorAll('details[id][open]')].map(n=>n.id):[];
+    const keepEvidence=renderedId===row.id&&evidencePinned&&factGraph&&JSON.stringify(factGraph)===JSON.stringify(row.view?.evidence_graph);
+    const keptIds=evidenceReturnTrigger?.dataset.evidenceIds||evidenceTrigger?.dataset.evidenceIds;if(!keepEvidence)closeEvidence();factGraph=row.view?.evidence_graph;factSources=row.view?.sources||[];
     const r=row.body,v=row.view||{},p=r.proposal,a=r.validation.final_numeric,m=a.metrics||{},h=a.historical||{},prior=v.previous;
     const currency=v.base_currency||'KRW',money=n=>n==null?'계산 불가':number(n,currency==='KRW'?0:2)+' '+currency;
     const capital=r.funding?.proposal_capital??r.valuation.nav,sources=v.sources||[],market=v.market_analysis||{},reflection=r.reflection;
@@ -223,10 +331,19 @@ window.MaraReport=(()=>{
     list('memory-conflicts',[...memory.flatMap(x=>x.conflicts||[]),...(v.pruning?.unresolved_groups||[]).map(x=>'추가 검토: '+x.topic+' · 적용 조건 '+x.condition)],'미해결 충돌이 별도로 기록되지 않았어요.');
     text('anchor-summary',`정기 전체 점검 변경 기록 ${v.pruning?.changes?.length??0}건. 목표·제약, 현재 보유 이유, 미해결 위험과 다음 확인은 실행 기록에 보존돼요. 원본 기록은 가지치기로 삭제하지 않아요.`);
     sourcesView(sources,v.expired_source_count);text('agent-records',JSON.stringify(v.agent_records||{},null,2));const {view,...original}=row;text('raw',JSON.stringify(original,null,2));
+    if(v.final_report?.reasons){
+      let context=$('reader-context-original');if(!context){context=el('details','reader-fold');context.id='reader-context-original';context.append(el('summary','','개인 맥락과 종합 원문'));$('structured-report').before(context);for(const n of [$('rationale')?.closest('.decision-strip'),$('report-context'),$('report-persona')])if(n)context.append(n)}
+      const support=el('details','reader-fold');support.id='reader-supporting';support.append(el('summary','','수치 비교와 후속 평가 상세'));
+      const core=$('final-reader');let n=core.nextSibling;while(n){const next=n.nextSibling;support.append(n);n=next}structured.append(support);
+      for(const [id,label] of [['agents','관점별 비교'],['proposal','배분 상세'],['evaluation','위험 수치와 전체 검증'],['reflection-report','결과와 회고'],['sources-report','전체 근거 DB · fact ID와 원문']]){
+        const section=$(id);if(!section)continue;let wrapper=$('reader-extra-'+id);if(!wrapper){wrapper=el('details','reader-fold reader-extra');wrapper.id='reader-extra-'+id;section.before(wrapper);wrapper.append(el('summary','',label),section)}
+      }
+    }
     structured.append(history);
     // The early market opinion remains accessible, but never reads as the
     // final allocation. This also applies to older immutable reports.
     let early=$('early-market-record');if(!early){early=el('details','early-market-record');early.id='early-market-record';early.append(el('summary','','초기 시황 기록 · 최종 제안 전에 작성했어요.'));$('market-report').before(early);early.append($('market-report'))}
+    if(keepEvidence){const next=[...$('report-content').querySelectorAll('[data-evidence-ids]')].find(n=>n.dataset.evidenceIds===keptIds);if(next){evidenceTrigger=next;evidenceReturnTrigger=next;next.setAttribute('aria-expanded','true')}else closeEvidence()}
     if(renderedId!==row.id)early.open=false;for(const id of opened){const item=$(id);if(item)item.open=true}renderedId=row.id;
   }
   return {render};
