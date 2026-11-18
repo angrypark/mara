@@ -35,12 +35,14 @@ def code_manifest():
         if not name.startswith('mara.'):continue
         for key,value in vars(module).items():
             if isinstance(value,types.FunctionType) and value.__module__==name:
-                runtime[name+'.'+key]=hashlib.sha256(marshal.dumps(value.__code__)).hexdigest()
+                runtime[name+'.'+key]=hashlib.sha256(marshal.dumps(value.__code__,2)).hexdigest()
             elif isinstance(value,type) and value.__module__==name:
                 for method,fn in vars(value).items():
                     if isinstance(fn,(staticmethod,classmethod)):fn=fn.__func__
-                    if isinstance(fn,types.FunctionType):runtime[name+'.'+key+'.'+method]=hashlib.sha256(marshal.dumps(fn.__code__)).hexdigest()
-    return {'filesystem':files,'loaded_python_code':runtime,
+                    if isinstance(fn,types.FunctionType):runtime[name+'.'+key+'.'+method]=hashlib.sha256(marshal.dumps(fn.__code__,2)).hexdigest()
+    # Marshal v3+ reference flags can change when unchanged code constants gain
+    # references during execution. v2 encodes code without those object flags.
+    return {'filesystem':files,'loaded_python_code':runtime,'loaded_python_code_format':'python-marshal-v2',
         'rule':'Filesystem snapshot and actually loaded Python code are separate; changing a file does not hot-reload a running interpreter.'}
 
 
