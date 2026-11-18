@@ -142,7 +142,8 @@ class CodexModel:
                 if not completed or not answer.exists() or answer.stat().st_size>(524288 if payload.get('narrative_contract') else 131072):raise ValueError()
                 raw=json.loads(answer.read_text())['result_json']
                 result=json.loads(raw)
-                if not isinstance(result,dict) or len(dumps(result))>(38000 if payload.get('narrative_contract') else 24000):raise ValueError()
+                from .output_budget import characters
+                if not isinstance(result,dict) or len(dumps(result))>characters(role,payload):raise ValueError()
                 return result
             except (ValueError,KeyError,TypeError,OSError):
                 raise CodexError('Codex 분석 결과가 필요한 JSON 형식에 맞지 않아요. 다시 시도해주세요.') from None

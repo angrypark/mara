@@ -82,7 +82,8 @@ def validate_output(role, obj, payload):
         refs = obj['evidence_ids'] if kind == 'perspective' else obj['facts']
         if not set(refs) <= allowed: raise ValueError('Invented evidence ID')
         if kind == 'perspective' and allowed and not refs: raise ValueError('Evidence references required')
-    if len(dumps(obj)) > (38000 if payload.get('narrative_contract') else 24000): raise ValueError('Agent output too large')
+    from .output_budget import characters
+    if len(dumps(obj)) > characters(role,payload): raise ValueError('Agent output too large')
     from .decision_calibration import validate_output as validate_calibration
     validate_calibration(role,obj,payload)
     if role=='memory':

@@ -93,6 +93,55 @@ class CodexTests(unittest.TestCase):
         model.complete('marks','',{'market':{'source_text':'x'*260000}}, {})
         self.assertEqual(deadlines,[300,900,900])
 
+    def test_calibrated_validation_size_boundaries_match_provider_and_agent(self):
+        from mara.domain import dumps
+        from mara.output_budget import characters
+        payload={'analysis_stage':'perspective_validation',
+                 'decision_policy':{'schema_version':'mara.decision-calibration/1.0'},
+                 'market':{'facts':[]}}
+        def result_at(size):
+            obj={'issues':['x'*11000,'y'*11000], 'unsupported_claims':[],
+                 'qualitative_pass':False,'reason':'r','decision_gaps':[],
+                 'knowledge_feedback':[]}
+            obj['reason']='r'*(1+size-len(dumps(obj)))
+            self.assertEqual(len(dumps(obj)),size)
+            return obj
+        for p,limit in ((payload,38000),({},24000)):
+            for size in (24000,24001,38000,38001):
+                result=result_at(size)
+                def runner(command,*args):
+                    self.reply(command,result);return json.dumps({'type':'turn.completed'})
+                if size<=limit:
+                    self.assertEqual(self.model(runner).complete('validation','',p,{}),result)
+                    validate_output('validation',result,p)
+                else:
+                    with self.assertRaises(CodexError):self.model(runner).complete('validation','',p,{})
+                    with self.assertRaisesRegex(ValueError,'too large'):validate_output('validation',result,p)
+        for role,p in [('evidence',payload),('validation',dict(payload,analysis_stage='research_plan')),
+                       ('validation',dict(payload,analysis_stage=None)),
+                       ('validation',dict(payload,decision_policy={'schema_version':'unsupported'}))]:
+            self.assertEqual(characters(role,p),24000)
+        self.assertEqual(characters('leader',{'narrative_contract':'mara.judgment-report/1.0'}),38000)
+        result=result_at(28000)
+        def padded_raw(command,*args):
+            self.reply(command,result)
+            path=Path(command[command.index('-o')+1]);path.write_text(path.read_text()+' '*131073)
+            return json.dumps({'type':'turn.completed'})
+        with self.assertRaises(CodexError):self.model(padded_raw).complete('validation','',payload,{})
+
+    def test_larger_validation_budget_keeps_fact_integrity_checks(self):
+        from mara.contracts import ContractError
+        payload={'analysis_stage':'perspective_validation',
+                 'decision_policy':{'schema_version':'mara.decision-calibration/1.0'},
+                 'market':{'facts':[]},'decision_scope':{'questions':[{'id':'q'}]}}
+        result={'issues':['x'*14000], 'unsupported_claims':[], 'qualitative_pass':False,
+                'reason':'r'*14000,'knowledge_feedback':[],
+                'decision_gaps':[{'question_id':'q','kind':'fact_verification','cause':'not_extracted',
+                'status':'unresolved','subject':'Synthetic gap','affects_selected':False,
+                'reason':'Missing source','resolution_condition':'Read the source',
+                'next_action':'Research','fact_ids':['invented'],'calculation_paths':[]}]}
+        with self.assertRaisesRegex(ContractError,'gap_sources'):validate_output('validation',result,payload)
+
     def test_logged_out_and_unsupported_cli_fail_before_analysis(self):
         for update in [{'installed':False},{'compatible':False},{'authenticated':False}]:
             with patch('mara.codex_model.status',return_value=dict(READY,**update)):
