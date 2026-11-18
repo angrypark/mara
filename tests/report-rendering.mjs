@@ -78,7 +78,7 @@ test('dashboard navigation, stored history and print preserve the setup draft',a
     const state={onboarding:{draft:{goal:'keep my draft'},snapshot:null,model:{provider:'codex',configured:true,codex:{version:'test'}},job:null,latest:fixture.weekly,history:[{id:fixture.initial.id,as_of:'2026-11-14',action:'hold'}],capital_limit:30000000},latest:fixture.weekly,broker_check:{},broker_connected:true};
     h.w.fetch=async path=>({ok:true,json:async()=>structuredClone(path==='/api/state'?state:fixture.initial)});
     h.w.eval(dashboard);await tick();await tick();
-    assert.equal(h.$('report-panel').hidden,true);assert.equal(h.$('setup-form').hidden,false);assert.match(h.$('generate').textContent,/평가·제안/);
+    assert.equal(h.$('report-panel').hidden,false);assert.equal(h.$('setup-form').hidden,true);assert.match(h.$('generate').textContent,/평가·제안/);
     h.$('tab-setup').click();assert.equal(h.$('setup-form').hidden,false);
     h.$('setup-form').elements.namedItem('goal').value='draft changed';h.$('tab-report').click();
     assert.equal(h.$('setup-form').elements.namedItem('goal').value,'draft changed');assert.equal(h.$('tab-report').getAttribute('aria-pressed'),'true');

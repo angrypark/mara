@@ -18,6 +18,12 @@ function selectView(name,chosen=true){
 }
 $('tab-setup').onclick=()=>selectView('setup');
 $('tab-report').onclick=()=>selectView('report');
+function revealReportAnchor(){
+  const target=document.getElementById(location.hash.slice(1));if(!target||!target.closest('#report-panel'))return;
+  selectView('report',false);for(let node=target.parentElement;node&&node!==$('report-panel');node=node.parentElement)if(node.tagName==='DETAILS')node.open=true;
+}
+window.addEventListener('hashchange',revealReportAnchor);
+$('report-toc').addEventListener('click',event=>{const link=event.target.closest('a[href^="#"]');if(!link)return;const target=$(link.hash.slice(1));for(let node=target;node&&node!==$('report-panel');node=node.parentElement)if(node.tagName==='DETAILS')node.open=true});
 const busy=new Set();
 function text(id,value){$(id).textContent=value??'—'}
 function list(id,items){$(id).replaceChildren(...items.map(x=>{const e=document.createElement('li');e.textContent=x;return e}))}
@@ -92,7 +98,8 @@ function modelStatus(s,reset=false){
   if(!s.configured)$('model-settings').open=true;
   if(!modelSettingsInitialized||reset){$('model-provider').value=savedModelProvider;$('model-id').value=s.model||'';modelSettingsInitialized=true;providerFields()}
 }
-function show(row){displayed=row.id;showingDemo=row.body.mode==='demo';window.MaraReport.render(row);$('report-document').dataset.reportId=row.id;window.MaraWorkbench?.openReport(row)}
+function show(row){$('analysis-process').open=false;$('report-document').hidden=false;displayed=row.id;showingDemo=row.body.mode==='demo';window.MaraReport.render(row);$('report-document').dataset.reportId=row.id;window.MaraWorkbench?.openReport(row)}
+function openSelectedReport(row){show(row);selectedHistory=true;selectView('report');const heading=$('report-title');heading.tabIndex=-1;heading.scrollIntoView({block:'start',behavior:'smooth'});heading.focus({preventScroll:true})}
 async function load(){const sequence=++loadSequence;try{
   const s=await api('/api/state');if(sequence!==loadSequence)return;const o=s.onboarding;text('service','실행 중');text('broker-state',s.broker_connected?'조회 연결 확인':'연결 확인 필요');text('broker-time',s.broker_check?.checked_at?'최근 확인 '+new Date(s.broker_check.checked_at).toLocaleString('ko-KR'):'보유 불러오기로 확인해주세요.');
   if(!initialized){snapshot(o.snapshot,true);restore(o.draft);if(o.snapshot)form.elements.snapshot_id.value=o.snapshot.id;form.elements.confirmed.checked=false;initialized=true}
@@ -100,8 +107,8 @@ async function load(){const sequence=++loadSequence;try{
   latestJobStatus=o.job?.status;window.MaraPersona?.refresh(o);
   window.MaraClarifications?.update(o.job,o.clarification_answers,o.context_note_history);
   $('generate').textContent=running?'포트폴리오 분석 중…':busy.has('generate')?'요청 확인 중…':generateLabel;updateJob(o.job);
-  if(o.latest&&o.latest.id!==displayed&&!selectedHistory){show(o.latest);if(o.job?.id===expectedJobId)selectView('report',false)}
-  $('historylist').replaceChildren(...o.history.map(r=>{const div=document.createElement('div'),b=document.createElement('button');b.type='button';b.className='rowbutton';b.textContent=r.as_of+' · '+({adjust:'조정 제안',hold:'유지',defer:'보류'}[r.action]||r.action)+(r.revision_of?' · 수정본':'');b.onclick=async()=>{try{show(await api('/api/portfolio/report/'+r.id));selectedHistory=true;selectView('report')}catch(e){text('message',e.message)}};div.append(b);return div}));
+  if(o.latest&&o.latest.id!==displayed&&!selectedHistory){show(o.latest);if(!viewChosen||o.job?.id===expectedJobId)selectView('report',false)}
+  $('historylist').replaceChildren(...o.history.map(r=>{const div=document.createElement('div'),b=document.createElement('button');b.type='button';b.className='rowbutton';b.textContent=r.as_of+' · '+({adjust:'조정 제안',hold:'유지',defer:'보류'}[r.action]||r.action)+(r.revision_of?' · 수정본':'');b.onclick=async()=>{try{openSelectedReport(await api('/api/portfolio/report/'+r.id))}catch(e){text('message',e.message)}};div.append(b);return div}));
   demoReport=s.latest;$('demo-view').disabled=!demoReport;
   window.MaraWorkbench?.refresh();
   if(s.latest)text('demo-result',pretty({구분:'합성 데모',평가일:s.latest.effective,제안:s.latest.body.proposal,회고:s.latest.body.reflection}));
@@ -133,7 +140,7 @@ form.onsubmit=async e=>{
 };
 // Handle native constraints explicitly so even an invalid submit gives feedback beside the button.
 form.noValidate=true;
-$('demo-view').onclick=()=>{if(demoReport){show(demoReport);selectedHistory=true;selectView('report')}};
+$('demo-view').onclick=()=>{if(demoReport)openSelectedReport(demoReport)};
 $('print-report').onclick=()=>window.print();
 let printDetails=[];
 window.addEventListener('beforeprint',()=>{printDetails=Array.from($('report-panel').querySelectorAll('details:not([open])'));printDetails.forEach(d=>d.open=true)});
@@ -142,4 +149,4 @@ $('demo-next').onclick=()=>action($('demo-next'),async()=>{const r=await fetch('
 function theme(value){document.documentElement.dataset.theme=value;$('theme').textContent=value==='dark'?'라이트 모드':'다크 모드'}
 try{theme(localStorage.getItem('workspace-theme')||'light')}catch(e){theme('light')}
 $('theme').onclick=()=>{const value=document.documentElement.dataset.theme==='dark'?'light':'dark';theme(value);try{localStorage.setItem('workspace-theme',value)}catch(e){}};
-load();setInterval(load,5000);
+load().then(revealReportAnchor);setInterval(load,5000);

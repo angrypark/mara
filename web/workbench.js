@@ -305,11 +305,12 @@ window.MaraWorkbench=(()=>{
     try{
       const r=await api('/api/workbench/'+scope);if(ticket!==epoch||requestedScope!==scope)return;
       const selectedValue=runId,select=$('wb-run');select.replaceChildren(...r.runs.map(r=>{const o=el('option','',r.as_of+' · '+(statuses[r.status]||r.status)+(r.revision_of?' · 수정본':''));o.value=r.id;return o}));
-      if(!r.runs.length){runId=null;doc=null;signature='';$('wb-content').hidden=true;$('wb-empty').hidden=false;select.append(el('option','','아직 분석 없음'));return}
+      if(!r.runs.length){runId=null;doc=null;signature='';$('wb-content').hidden=true;$('wb-empty').hidden=false;$('report-document').hidden=true;$('analysis-process').open=true;select.append(el('option','','아직 분석 없음'));return}
       runId=r.runs.some(r=>r.id===selectedValue)?selectedValue:r.runs[0].id;select.value=runId;
       const id=runId,d=await api('/api/workbench/'+scope+'/'+id);if(ticket!==epoch||id!==runId)return;
       const sig=JSON.stringify(d);if(sig!==signature){saveDraft();signature=sig;render(d);resetChat()}
       $('report-document').hidden=!d.run.report_id;
+      if(!d.run.report_id)$('analysis-process').open=true;
       if(d.run.report_id&&$('report-document').dataset.reportId!==d.run.report_id){
         const report=await api((scope==='demo'?'/api/report/':'/api/portfolio/report/')+d.run.report_id);
         if(ticket!==epoch||id!==runId)return;
