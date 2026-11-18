@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:fact-graph:1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "completed_id",
+    "as_of",
+    "facts",
+    "claims",
+    "issues"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "mara.fact-graph/1.0"
+    },
+    "completed_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "as_of": {
+      "type": "string"
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fact"
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim_id",
+          "statement",
+          "author",
+          "scope",
+          "path",
+          "fact_refs",
+          "calculation_paths",
+          "support_status",
+          "support_scope"
+        ],
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "author": {
+            "const": "leader"
+          },
+          "scope": {
+            "const": "explicit_claim_citation"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^/proposal/investment_case/claims/[0-9]+$"
+          },
+          "fact_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "fact_id",
+                "snapshot_id"
+              ],
+              "properties": {
+                "fact_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "snapshot_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "calculation_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "support_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "support_scope": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "fact_id": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "claim_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "storage_status": {
+      "enum": [
+        "stored_verified",
+        "source_projection_not_indexed",
+        "index_mismatch_source_projection"
+      ]
+    }
+  },
+  "$defs": {
+    "fact": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "urn:mara:fact-snapshot:1.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "snapshot_id",
+        "fact_id",
+        "kind",
+        "as_of",
+        "current_at_report",
+        "content_sha256",
+        "original",
+        "parents",
+        "series",
+        "epistemic_scope",
+        "derivation_status"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "mara.fact-snapshot/1.0"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^fact:[0-9a-f]{64}$"
+        },
+        "fact_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "text",
+            "filing_excerpt",
+            "xbrl_observations",
+            "valuation",
+            "price_series"
+          ]
+        },
+        "as_of": {
+          "type": "string"
+        },
+        "current_at_report": {
+          "type": "boolean"
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "original": {
+          "type": "object",
+          "required": [
+            "id",
+            "text",
+            "topic",
+            "source",
+            "published_at",
+            "known_at",
+            "valid_until",
+            "uncertainty"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "topic": {
+              "type": "string",
+              "minLength": 1
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^https://"
+            },
+            "published_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "known_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "valid_until": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uncertainty": {
+              "type": "string"
+            }
+          }
+        },
+        "parents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "fact_id",
+              "snapshot_id"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "fact_id": {
+                "type": "string"
+              },
+              "snapshot_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "series": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "epistemic_scope": {
+          "enum": [
+            "analyst_assumptions_and_calculation",
+            "supplied_evidence_not_independently_certified"
+          ]
+        },
+        "derivation_status": {
+          "enum": [
+            "not_derived",
+            "legacy_report_citations",
+            "bound_parent_snapshots",
+            "parent_snapshot_mismatch"
+          ]
+        }
+      }
+    }
+  }
+}

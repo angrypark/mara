@@ -179,7 +179,10 @@ def graph(report,facts,completed_id):
             'path':'/proposal/investment_case/claims/'+str(index),'fact_refs':refs,
             'calculation_paths':copy.deepcopy(c.get('calculation_paths',[])),
             'support_status':c.get('status'),'support_scope':'작성자의 판단이에요. 인용 연결 자체는 주장 지지나 최종 승인을 뜻하지 않아요.'})
-    return {'schema_version':GRAPH,'completed_id':completed_id,'as_of':report['as_of'],'facts':nodes,'claims':claims,'issues':issues}
+    result={'schema_version':GRAPH,'completed_id':completed_id,'as_of':report['as_of'],'facts':nodes,'claims':claims,'issues':issues}
+    from .contracts import validate,schema
+    validate(result,schema('fact-graph'))
+    return result
 
 
 def authoritative_facts(session,row):

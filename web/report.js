@@ -45,9 +45,10 @@ window.MaraReport=(()=>{
     const points=series.observations,values=points.map(p=>p.value),times=points.map(p=>Date.parse(p.date)),lo=Math.min(...values),hi=Math.max(...values);
     const line=document.createElementNS(ns,'polyline');line.setAttribute('fill','none');line.setAttribute('stroke','currentColor');line.setAttribute('stroke-width','2');
     line.setAttribute('points',points.map((p,i)=>`${15+(times[i]-times[0])/(times.at(-1)-times[0]||1)*330},${125-(p.value-lo)/(hi-lo||1)*110}`).join(' '));svg.append(line);
-    figure.append(el('figcaption','',series.symbol+' · '+series.currency+' · '+({close:'종가',adjusted_close:'수정종가'}[series.price_kind]||series.price_kind)),svg,
-      el('p','hint',points[0].date+' → '+points.at(-1).date+' · 최저 '+number(lo,3)+' / 최고 '+number(hi,3)),
-      el('p','','실제 관측 구간 변동률 '+pct(series.calculation.period_return)),el('p','hint',series.calculation.scope));
+    figure.append(el('figcaption','',series.symbol+' · '+series.currency+'/주 · '+({close:'종가',adjusted_close:'수정종가'}[series.price_kind]||series.price_kind)),svg,
+      el('p','hint','요청 기간 '+series.requested_start+' → '+series.requested_end+' · '+({daily:'일별',weekly:'주별',monthly:'월별',irregular:'불규칙 표본'}[series.frequency]||series.frequency)),
+      el('p','hint','실제 관측 '+points[0].date+' → '+points.at(-1).date+' · 최저 '+number(lo,3)+' / 최고 '+number(hi,3)),
+      el('p','','실제 관측 구간 변동률 '+pct(series.calculation.period_return)),el('p','hint',series.calculation.scope),el('p','hint','선은 관측점을 연결한 표시예요. 사이의 가격을 관측하거나 채운 값이 아니에요.'));
     const d=el('details');d.append(el('summary','','관측값·계산 규칙'));const t=el('table');
     for(const p of points){const row=el('tr');row.append(el('td','',p.date),el('td','',number(p.value,4)));t.append(row)}
     d.append(t,el('pre','',JSON.stringify(series.calculation,null,2)));figure.append(d);return figure;
@@ -140,7 +141,7 @@ window.MaraReport=(()=>{
       const heading=el('h4'),claimButton=el('button','claim-statement',c.statement);claimButton.type='button';attachEvidence(claimButton,c.fact_ids);heading.append(claimButton);
       card.append(heading,el('p','hint','리더 판단: '+({supported:'근거가 뒷받침한다고 판단',conditional:'조건부',unresolved:'미해결'}[c.status]||c.status)+(review.qualitative_pass===false?' · 최종 검토는 보류됐어요.':'')),
         section('가정',c.assumptions),el('p','','반대 근거: '+c.counterevidence),el('p','','결정에 미친 영향: '+c.decision_impact),sourceLinks(c.fact_ids,sources));
-      if(c.calculation_paths?.length){const links=el('div','source-chips');for(const path of c.calculation_paths){const i=doc.references.calculations.findIndex(x=>x.path===path);const a=el('a','source-chip','계산 근거');a.href='#final-calculation-'+i;a.title=path;a.addEventListener('click',()=>{const parent=$('final-calculations'),item=$('final-calculation-'+i);if(parent)parent.open=true;if(item)item.open=true});links.append(a)}card.append(links);if(!c.fact_ids?.length){const empty=card.querySelector('.source-chips');if(empty)empty.firstChild.textContent='별도 외부 fact 인용 없이 아래 계산과 개인 맥락을 참조한 판단이에요.'}}
+      if(c.calculation_paths?.length){const links=el('div','source-chips');for(const path of c.calculation_paths){const i=doc.references.calculations.findIndex(x=>x.path===path);const a=el('a','source-chip','계산 근거');a.href='#final-calculation-'+i;a.title=path;a.addEventListener('click',()=>{const parent=$('final-calculations'),item=$('final-calculation-'+i);if(parent)parent.open=true;if(item)item.open=true});links.append(a)}card.append(links);if(!c.fact_ids?.length){const empty=card.querySelector('.source-chips');if(empty)empty.firstChild.textContent='별도 외부 fact 인용 없이 아래 계산 경로를 참조한 판단이에요.'}}
       if(entry.origin.output_id)card.append(originLink(entry.origin));box.append(card);
     }
     box.append(section('판단의 적용 범위와 한계',doc.reasons.scope_limits),section('남은 위험',open.risks));

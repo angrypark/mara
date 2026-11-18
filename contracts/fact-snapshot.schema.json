@@ -59,7 +59,41 @@
         "known_at",
         "valid_until",
         "uncertainty"
-      ]
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "topic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^https://"
+        },
+        "published_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "known_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "valid_until": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uncertainty": {
+          "type": "string"
+        }
+      }
     },
     "parents": {
       "type": "array",
