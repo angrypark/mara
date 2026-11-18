@@ -102,6 +102,16 @@ class CodexModel:
             'Weights apply to funding.proposal_capital when present; planned money is not actual cash. '
             'Return the JSON envelope result_json, whose string value is a JSON object matching the contract below.\n'
             +dumps({'role_guide':guide,'contract':contract,'input':payload}))
+        if role=='evaluator':
+            from .model_wire import packed
+            wire={'role_guide':guide,'contract':contract,'input':payload}
+            prefix=prompt[:prompt.index('{"contract":')]
+            prompt=(prefix+'Input serialization mara.model-wire/1.0: an object with only $mara_input_ref means the EXACT value at that JSON Pointer '
+                'from the following JSON root, recursively. It shares identical values, not missing evidence. '
+                'All original text, numbers and evidence remain present; resolve references before assessing claims. '
+                +json.dumps(packed(wire),ensure_ascii=False,sort_keys=True,separators=(',',':'),allow_nan=False))
+        if len(prompt)>1048576:
+            raise CodexError('분석 입력이 CLI의 1,048,576자 한도를 넘었어요. 근거를 보존한 입력 구성이 필요해요.')
         with tempfile.TemporaryDirectory(prefix='mara-codex-analysis-') as tmp:
             root=Path(tmp);schema=root/'response-schema.json';answer=root/'response.json'
             schema.write_text(dumps(ENVELOPE));schema.chmod(0o600)
