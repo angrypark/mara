@@ -400,7 +400,7 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
     from .contracts import validate
     runner=ResearchTools(library,s,run_id,as_of);transcript=[];collected=0
     from .research_progress import Progress
-    progress=Progress();extensions=[];completed_rounds=0;planning_feedback=None
+    progress=Progress();extensions=[];completed_rounds=0;planning_feedback=None;repair_used=False;repair_pending=False
     questions=(payload.get('decision_scope') or {}).get('questions',[])
     question_ids={q['id'] for q in questions}
     stop_reason='round_budget';stop_detail='8 research rounds reached'
@@ -410,10 +410,11 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
             'extensions':extensions,'reading_progress':progress.history},as_of,run_id)
     for round_no in range(8):
         if round_no>=4:
-            extension=progress.extend()
+            extension='one_contract_shape_repair' if repair_pending else progress.extend()
             if not extension:
                 stop_reason='no_recent_source_progress';stop_detail='No new delivered source range/observation or unused discovery-to-read bridge';break
             extensions.append({'round':round_no+1,'reason':extension})
+        repair_pending=False
         completed_rounds=round_no+1;round_progress=[]
         prior_review=(payload.get('improvement') or payload.get('external_review') or {}).get('feedback',{})
         analysis=payload.get('analysis',{});comparison=analysis.get('comparison',{})
@@ -450,11 +451,28 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
             validate(plan,contract)
             if any(not set(c.get('question_ids',[]))<=question_ids for c in plan['calls']):raise ValueError('Unknown decision question')
             if questions and any(not c.get('question_ids') and not c.get('discovery_reason','').strip() for c in plan['calls']):raise ValueError('Question or explicit discovery reason required')
-        except ValueError:
+        except ValueError as error:
             s.append('research_tool_failure',{'role':role,'call':{'tool':'plan'},'result':{'status':'invalid_plan','output':plan}},as_of,run_id)
+            diagnostics=[str(error)[:1000]]
+            if isinstance(plan,dict) and isinstance(plan.get('calls'),list):
+                for i,call in enumerate(plan['calls']):
+                    if not isinstance(call,dict):continue
+                    option=next((v for v in contract['properties']['calls']['items']['oneOf'] if v['properties']['tool'].get('const')==call.get('tool')),None)
+                    if option:
+                        try:validate(call,option,'$.calls['+str(i)+']')
+                        except ValueError as detail:diagnostics.append(str(detail)[:1000])
+            if not repair_used and round_no<7:
+                repair_used=True;repair_pending=True
+                planning_feedback={'code':'invalid_plan','errors':diagnostics[:4],'previous_plan':plan,
+                    'instruction':'이 계획의 도구는 아직 실행하지 않았어요. 형식·질문 ID 오류를 한 번 교정하여 전체 계획을 다시 반환하세요. hash/ID/기간/단위를 추측하지 말고 실제 입력의 값을 그대로 사용하세요. 필요한 값을 확인할 수 없으면 읽기부터 요청하거나 공백을 명시하세요. 이것은 계약 교정이며 새 근거나 분석 완료가 아니에요.'}
+                s.append('research_planning_feedback',{'role':role,'round':round_no+1,'feedback':planning_feedback},as_of,run_id)
+                progress.finish_round([])
+                continue
             record_stop('invalid_plan','Plan or question reference rejected')
-            payload['research_access']={'status':'invalid_plan','limits':'추가 조사 계획이 계약 검증에 실패했어요. 기존 근거만으로 판단하고 공백을 명시해요.'}
+            payload['research_access']={'status':'invalid_plan','planning_repairs':int(repair_used),'last_plan_errors':diagnostics[:4],
+                'limits':'추가 조사 계획이 계약 검증에 실패했어요. 기존 근거만으로 판단하고 공백을 명시해요. 자료 부재와 도구 요청 형식 실패를 구분해요.'}
             return payload
+        if planning_feedback and planning_feedback.get('code')=='invalid_plan':planning_feedback=None
         s.append('research_plan',{'role':role,'plan':plan,'provider':model.identity,'round':round_no+1},as_of,run_id)
         if not plan['calls'] and round_no==0 and plan.get('stop_reason')=='capability_gap' and request['existing_evidence']:
             planning_feedback={'code':'check_readable_payload_before_capability_stop',
@@ -498,7 +516,7 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         if len(dumps(transcript))>65000:
             stop_reason='transcript_budget';stop_detail='Research transcript reached bounded input limit';break
     record_stop(stop_reason,stop_detail)
-    payload['research_access']={'status':'executed','stop_reason':stop_reason,'sufficiency':'requires_independent_review','rounds':completed_rounds,'calls':len(transcript),
+    payload['research_access']={'status':'executed','stop_reason':stop_reason,'sufficiency':'requires_independent_review','rounds':completed_rounds,'calls':len(transcript),'planning_repairs':int(repair_used),
             'extensions':extensions,'reading_progress':progress.history,
             'limits':'기본 4회, 자료를 새로 읽으면 최대 8회 조사. 새 목록에서 읽기로 넘어갈 기회는 한 번 허용. 최대 200기업 수집, 페이지 20개. 보충 근거는 이전 실행에서 이어온 자료를 포함해 최대 368,000자예요. 남은 공간을 공통/역할별로 배분하며 실제 몫은 budget 응답에 있어요. 원본과 전문은 별도 보존하며 미수집·미독해·보관만 된 자료를 명시.'}
     return payload

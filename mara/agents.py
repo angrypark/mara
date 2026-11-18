@@ -294,7 +294,10 @@ class Agents:
                 current['output_feedback']={'code':code,'rejected_output_id':oid,'previous_output':result,
                     'instruction':'직전 자기 응답을 원본 입력과 계약에 대조하여 한 번 교정하세요. 전체 JSON을 다시 반환하세요. 무관한 인용으로 치환하거나 자료 공백·반론·위험을 숨기지 마세요. 정성 검증 통과나 매수를 강요하지 않으며 필요하면 보류하세요.'}
                 from .research_questions import QuestionReviewError
-                if isinstance(exc,QuestionReviewError):
+                from .evidence_feedback import FeedbackContractError
+                if isinstance(exc,FeedbackContractError):
+                    current['output_feedback']['evidence_feedback_error']=exc.diagnostic
+                elif isinstance(exc,QuestionReviewError):
                     current['output_feedback']['question_error']=exc.diagnostic
                 elif role=='evaluator' or code=='judgment_report':
                     # Existing local evaluator/narrative diagnostics stay private.

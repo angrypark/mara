@@ -14,6 +14,12 @@ POLICY = {
     'max_rounds': MAX_ROUNDS, 'max_requests_per_round': MAX_REQUESTS,
 }
 
+class FeedbackContractError(ContractError):
+    def __init__(self,message,required=(),pending=()):
+        super().__init__(message)
+        self.diagnostic={'required_response_ids':sorted(required),'pending_request_ids':sorted(pending),
+            'instruction':'자신의 실제 response가 있는 ID는 빠짐없이 한 번 평가하세요. 아직 응답이 없는 자신의 요청은 생략하거나 still_missing만 사용하세요. 대기 중인 요청을 incorporated/not_relevant로 닫거나 다른 역할 요청을 자기 assessment로 쓰지 마세요.'}
+
 
 def validate_output(role, output, payload):
     questions={q['id'] for q in (payload.get('decision_scope') or {}).get('questions',[])}
@@ -22,10 +28,12 @@ def validate_output(role, output, payload):
         raise ContractError('Evidence request requires a frozen decision question')
     facts={f['id'] for f in payload.get('market',{}).get('facts',[])}
     if role!='evidence':
+        own={r['request_id'] for r in payload.get('evidence_feedback',[]) if r['requester']==role}
         expected={r['request_id'] for r in payload.get('evidence_feedback',[]) if r['requester']==role and r.get('response')}
         assessments=output.get('evidence_assessments',[])
-        if len({r['request_id'] for r in assessments})!=len(assessments) or {r['request_id'] for r in assessments}!=expected:
-            raise ContractError('Requester must assess every returned evidence response')
+        received={r['request_id'] for r in assessments}
+        if len(received)!=len(assessments) or not expected<=received<=own or any(r['request_id'] not in expected and r['status']!='still_missing' for r in assessments):
+            raise FeedbackContractError('Requester must assess every returned response; pending acknowledgments stay missing',expected,own-expected)
         if any(not set(r['fact_ids'])<=facts for r in assessments):raise ContractError('Evidence assessment cites undelivered facts')
     if role!='evidence':return
     expected={r['request_id'] for r in payload.get('evidence_assignments',[])}
