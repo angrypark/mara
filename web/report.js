@@ -126,7 +126,78 @@ window.MaraReport=(()=>{
       return card;
     }));
   }
-  function readerDocument(doc,status,r,sources,money){
+  function portfolioLayout(box,doc,r,v,sources,money){
+    const makeSection=(id,index,title)=>{const s=el('section','portfolio-section');s.id=id;const head=el('div','section-title');head.append(el('span','section-index',index),el('h3','',title));s.append(head);return s};
+    const fold=(id,title,...nodes)=>{const d=el('details','reader-fold');d.id=id;d.append(el('summary','',title),...nodes);return d};
+    const metric=(label,value,note)=>{const d=el('div','metric');d.append(el('span','label',label),el('b','',value));if(note)d.append(el('span','hint',note));return d};
+    const grid=box.querySelector('.reader-overview-grid'),allocationOriginal=grid.children[0],reviewOriginal=grid.children[1];
+    grid.remove();
+    const claims=[...box.querySelectorAll('.reader-claim-row')];claims.forEach(c=>c.remove());
+    const appendix=fold('reader-appendix','대안·확인할 질문·재검토 일정과 출처',...box.childNodes);
+    const market=makeSection('portfolio-market','01','현재 시장 상황'),analysis=v.market_analysis||{};
+    market.append(el('p','hint',r.as_of+' 기준 자료 · 실시간 시세가 아니에요.'));
+    const summary=analysis.summary||'이 보고서에는 시장 해석이 별도로 기록되지 않았어요.';
+    const lead=summary.split(/(?<=[.!?])\s+/u).slice(0,2).join(' ');
+    market.append(el('p','eyebrow','시장 해석 · 원문 발췌'),el('p','market-lead',lead.length>320?lead.slice(0,320)+'…':lead));
+    const factIds=[...new Set(analysis.facts||[])];
+    const facts=el('div','market-fact-list');
+    for(const id of factIds.slice(0,3)){
+      const f=sources.find(f=>f.id===id),row=el('div','market-fact-row'),b=el('button','market-fact-title',f?.topic||id);b.type='button';attachEvidence(b,[id]);
+      row.append(b,el('span','hint','fact · '+id+(f?' · 발표 '+f.published_at:'')));facts.append(row);
+      if(f?.text&&!/^[\s]*[\[{]/.test(f.text))row.append(el('p','hint',f.text.length>160?f.text.slice(0,160)+'…':f.text));
+    }
+    if(!factIds.length)facts.append(el('p','hint','시장 해석에 연결된 fact가 없어요.'));
+    market.append(facts,fold('portfolio-market-details','시장 해석 전체와 연결된 fact '+factIds.length+'개',el('p','',summary),
+      section('주요 요인',analysis.drivers),section('포트폴리오에 주는 의미',analysis.portfolio_implications),section('자료의 한계',analysis.uncertainties),sourceLinks(factIds,sources)));
+    const current=makeSection('portfolio-current','02','포트폴리오 요약'),perf=r.performance,nav=r.valuation?.nav,previousNav=v.previous?.valuation?.nav;
+    const change=Number.isFinite(nav)&&Number.isFinite(previousNav)&&previousNav>0?nav/previousNav-1:null;
+    const metrics=el('div','metrics portfolio-metrics');
+    metrics.append(metric('현재 평가액',money(nav),'보고서 기준일의 실제 보유'),
+      metric('기간 손익',money(perf?.pnl),perf?'외부 입출금을 제외한 손익':'비교할 이전 평가가 없어요.'),
+      metric('기간 수익률',pct(perf?.modified_dietz),'입출금 시점을 반영한 Modified Dietz'),
+      metric('평가액 변동률',pct(change),'입출금 포함 · 투자 수익률과 달라요.'));
+    current.append(metrics,el('p','hint',perf?.limitation||(!perf?'최초 평가여서 기간 손익과 수익률을 계산할 수 없어요.':(v.previous?.as_of||'이전 평가')+' → '+r.as_of+' · 실제 보유의 기간 성과예요.')));
+    if(perf)current.append(el('p','hint','기간 시작 '+money(perf.start_nav)+' · 외부 순입출금 '+money(perf.external_net_flows)+' · '+(v.previous?.as_of||'이전 평가')+' → '+r.as_of));
+    const values=r.valuation?.values||{},actualWeights=r.valuation?.weights||{},quotes=new Map((v.prices||[]).map(p=>[p.symbol,p]));
+    const holdings=el('table','portfolio-table');holdings.append(el('caption','','현재 보유 내역 · 금액은 '+(v.base_currency||'기준통화')));
+    const hh=el('tr');['자산','평가액','보유 비중','가격 변동률','가격 비교 기간'].forEach(x=>hh.append(el('th','',x)));const thead=el('thead');thead.append(hh);holdings.append(thead);
+    const hb=el('tbody');for(const [s,value] of Object.entries(values).sort((a,b)=>b[1]-a[1])){
+      const q=quotes.get(s),tr=el('tr');[symbol(s),money(value),nav>0?pct(actualWeights[s]):'비중 없음',s==='CASH'?'—':q?.price_change==null?'비교 없음':pct(q.price_change),q?.previous_observed_at?q.previous_observed_at+' → '+q.observed_at:'비교 자료 없음'].forEach(x=>tr.append(el('td','',x)));hb.append(tr);
+    }holdings.append(hb);const hs=el('div','scroll');hs.append(holdings);current.append(hs,el('p','hint','가격 변동률은 두 시점의 가격만 비교해요. 배당·거래·입출금을 반영한 종목 수익률이 아니에요.'));
+    if(!hb.childElementCount)current.append(el('p','notice','현재 보유 내역이 없어요.'));
+    const plan=makeSection('portfolio-adjustment','03','포트폴리오 조정안');
+    allocationOriginal.querySelector('h3')?.remove();
+    allocationOriginal.querySelector('.scroll')?.remove();
+    plan.append(el('p','notice','최종 판단: '+(action[doc.decision.action]||doc.decision.action)+' · 정기 납입 계획: '+(doc.allocation.monthly_plan?.status==='blocked'?'보류':doc.allocation.monthly_plan?.status==='conditional_plan'?'조건부 계획':'상태 미기록')+' · 실제 주문은 별도 승인이 필요해요.'));
+    const review=doc.reasons.final_review||{};
+    plan.append(el('p','hint','최종 검토: '+(review.qualitative_pass===true?'해당 검토 범위에서 통과':review.qualitative_pass===false?'보류':'미기록')+' · 세부 설명은 주요 근거에서 확인해요.'));
+    const capital=doc.allocation.proposal_capital,weights=doc.allocation.weights||{},monthly=doc.allocation.monthly_plan?.amounts||{},newContribution=r.funding?.source==='future_income';
+    const amounts=el('div','metrics');amounts.append(metric(newContribution?'신규 납입 기준액':'조정 후 기준액',money(capital)),metric('추가 필요 자금',money(r.funding?.additional_funding_needed)),metric('제안 범위 밖 금액',money(r.funding?.amount_outside_proposal)));plan.append(amounts);
+    if(newContribution)plan.append(el('p','hint','이번 안은 새로 납입할 '+money(capital)+'의 배분이에요. 기존 보유는 유지한다고 가정해 납입 후 금액을 함께 표시해요. 기존 보유를 매도하거나 재배분하는 제안은 아니에요.'));
+    else if(r.funding?.amount_outside_proposal>0)plan.append(el('p','notice','전체 보유 중 '+money(r.funding.amount_outside_proposal)+'은 이번 제안 범위 밖이에요. 아래 증감액은 전체 현재 보유와 제안액의 차이이며, 범위 밖 자산의 처리 방안이 정해지기 전에는 매도액으로 사용할 수 없어요.'));
+    const all=[...new Set([...Object.keys(values),...Object.keys(weights)])].sort((a,b)=>(weights[b]||0)-(weights[a]||0));
+    const adjustment=el('table','portfolio-table adjustment-table');adjustment.id='portfolio-adjustment-table';adjustment.append(el('caption','',newContribution?'현재 보유 → 신규 납입 후 · 기존 보유 유지와 가격 불변을 가정해요.':'현재 보유 → 조정 후 계획 · 목표에서 제외한 보유도 포함해요.'));
+    const ah=el('tr');['자산','현재 금액',newContribution?'납입 후 금액(가정)':'조정 후 금액',newContribution?'신규 납입액':'증감액',newContribution?'납입분 비중':'목표 비중','매회 납입 배분'].forEach(x=>ah.append(el('th','',x)));const ath=el('thead');ath.append(ah);adjustment.append(ath);const ab=el('tbody');
+    for(const s of all){
+      const actual=Object.hasOwn(values,s)?values[s]:r.valuation?.values?0:null,planned=capital==null?null:capital*(weights[s]||0),target=newContribution?(actual==null||planned==null?null:actual+planned):planned,delta=actual==null||target==null?null:target-actual,tr=el('tr');tr.dataset.symbol=s;
+      const diff=delta==null?'계산 불가':(delta>0?'+':'')+money(delta);[symbol(s),money(actual),money(target),diff,pct(weights[s]||0),money(Object.hasOwn(monthly,s)?monthly[s]:weights[s]>0?null:0)].forEach(x=>tr.append(el('td','',x)));ab.append(tr);
+    }adjustment.append(ab);const as=el('div','scroll');as.append(adjustment);plan.append(as,el('p','hint','증감액 = 조정 후 금액 − 현재 금액. 수수료·세금·수량 반올림 전의 비교액이며, 미입금 자금은 현재 쓸 수 있는 현금에 포함하지 않아요. 현금 행의 증감은 현금 잔액 변화예요.'),fold('portfolio-allocation-context','납입 주기·자금 범위와 적용 조건',...allocationOriginal.childNodes));
+    const reasons=makeSection('portfolio-reasons','04','주요 근거');
+    reasons.append(el('p','hint','종합안의 핵심 이유를 먼저 읽고, 아래에서 판단별 설명과 fact를 확인해요.'));
+    const keyPoints=el('ol','portfolio-key-points');for(const point of doc.reasons.key_points||[])keyPoints.append(el('li','',point));reasons.append(keyPoints);
+    reasons.append(el('h4','','이 조정안을 제안한 이유'),el('p','',doc.decision.rationale||'종합 설명은 아래 원문을 확인해 주세요.'));
+    const more=fold('portfolio-more-reasons','판단별 설명과 근거 '+claims.length+'개');
+    claims.forEach((claim,i)=>{
+      const card=el('article','portfolio-reason'),heading=claim.querySelector('h4'),state=claim.querySelector('summary p'),impact=[...claim.children].find(n=>n.tagName==='P'&&n.textContent.startsWith('결정에 미친 영향:'));
+      if(heading)card.append(heading);if(state)card.append(state);if(impact){impact.textContent=impact.textContent.replace(/^결정에 미친 영향: /,'');card.append(impact)}
+      claim.querySelector('summary').replaceChildren(document.createTextNode('근거와 반론 보기'));card.append(claim);more.append(card);
+    });
+    if(!claims.length)reasons.append(el('p','notice','구조화된 판단 근거가 없어요. 아래 종합 의견과 원문을 확인해 주세요.'));
+    if(claims.length)reasons.append(more);
+    reviewOriginal.querySelector('h3')?.remove();reasons.append(fold('portfolio-final-review','종합 의견·최종 검토와 남은 문제',...reviewOriginal.childNodes));
+    box.replaceChildren(market,current,plan,reasons,appendix);
+  }
+  function readerDocument(doc,status,r,sources,money,v){
     const box=el('article','final-reader');box.id='final-reader';
     box.append(el('h3','','이번 판단과 적용 범위'));
     if(!doc?.reasons){box.append(el('p','notice','최종 보고서 구성을 마치지 못했어요. 아래에 원래 분석과 확인된 상태를 보존했어요.'));return box}
@@ -222,6 +293,7 @@ window.MaraReport=(()=>{
       else n=n.nextSibling;
     }}
     const refDetails=el('details','reader-fold');refDetails.id='reader-references';refs.before(refDetails);refDetails.append(el('summary','','핵심 출처 '+doc.references.facts.length+'개 · 읽은 범위와 한계'),refs);
+    portfolioLayout(box,doc,r,v,sources,money);
     return box;
   }
   function personas(r,v,sources){
@@ -264,6 +336,8 @@ window.MaraReport=(()=>{
   }
   function render(row){
     const opened=renderedId===row.id?[...$('report-content').querySelectorAll('details[id][open]')].map(n=>n.id):[];
+    // These are rebuilt each render; persistent legacy sections stay in the archive.
+    for(const id of ['reader-supporting','role-report-history'])$(id)?.remove();
     const keepEvidence=renderedId===row.id&&evidencePinned&&factGraph&&JSON.stringify(factGraph)===JSON.stringify(row.view?.evidence_graph);
     const keptIds=evidenceReturnTrigger?.dataset.evidenceIds||evidenceTrigger?.dataset.evidenceIds,keptPaths=evidenceReturnTrigger?.dataset.calculationPaths||evidenceTrigger?.dataset.calculationPaths;if(!keepEvidence)closeEvidence();factGraph=row.view?.evidence_graph;factReport=row.body;factSources=row.view?.sources||[];
     const r=row.body,v=row.view||{},p=r.proposal,a=r.validation.final_numeric,m=a.metrics||{},h=a.historical||{},prior=v.previous;
@@ -278,7 +352,7 @@ window.MaraReport=(()=>{
     if(r.history_scope?.reset_id){const n=el('p','notice','새 판단 이력 · 이전 분석·회고·학습 기억은 이번 판단에서 제외했어요. 원본 기록과 현재 개인 사실은 보존돼요.');$('report-period').append(n)}
     text('report-context',v.context?.summary||v.criteria?.goal||'당시 투자 맥락은 원본 실행 기록에서 확인해요.');
     let structured=$('structured-report');if(!structured){structured=el('div');structured.id='structured-report';$('report-context').after(structured)}structured.replaceChildren();
-    if(v.final_report)structured.append(readerDocument(v.final_report,v.final_report_status,r,sources,money));
+    if(v.final_report)structured.append(readerDocument(v.final_report,v.final_report_status,r,sources,money,v));
     $('report-content').dataset.finalReader=String(Boolean(v.final_report?.reasons));
     const reports=v.judgment_report_history?.length?v.judgment_report_history:v.judgment_reports||[],history=el('details','role-history');history.id='role-report-history';
     history.append(el('summary','','판단 과정 원문과 수정 이력'));
@@ -353,6 +427,12 @@ window.MaraReport=(()=>{
     // The early market opinion remains accessible, but never reads as the
     // final allocation. This also applies to older immutable reports.
     let early=$('early-market-record');if(!early){early=el('details','early-market-record');early.id='early-market-record';early.append(el('summary','','초기 시황 기록 · 최종 제안 전에 작성했어요.'));$('market-report').before(early);early.append($('market-report'))}
+    if(v.final_report?.reasons){
+      const context=$('reader-context-original');
+      for(const n of [$('report-summary'),$('report-overview').querySelector('.flow-strip')])if(n&&context&&!context.contains(n))context.append(n);
+      let archive=$('report-archive');if(!archive){archive=el('details','reader-fold report-archive');archive.id='report-archive';archive.append(el('summary','','분석 상세와 원본 기록'));$('report-overview').after(archive)}
+      for(const id of ['reader-context-original','early-market-record','reader-extra-agents','reader-extra-proposal','reader-extra-evaluation','reader-extra-reflection-report','reader-extra-sources-report','reader-supporting','role-report-history']){const node=$(id);if(node&&!archive.contains(node))archive.append(node)}
+    }
     if(keepEvidence){const next=[...$('report-content').querySelectorAll('[data-evidence-ids]')].find(n=>n.dataset.evidenceIds===keptIds&&n.dataset.calculationPaths===keptPaths);if(next){evidenceTrigger=next;evidenceReturnTrigger=next;next.setAttribute('aria-expanded','true')}else closeEvidence()}
     if(renderedId!==row.id)early.open=false;for(const id of opened){const item=$(id);if(item)item.open=true}renderedId=row.id;
   }

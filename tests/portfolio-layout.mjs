@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import {Window} from '../.local/test-ui/node_modules/happy-dom/lib/index.js';
+const fixture=JSON.parse(execFileSync('python3',['tests/final_report_fixture.py'],{encoding:'utf8',env:{...process.env,PYTHONPATH:'.'}}));
+const w=new Window({url:'http://127.0.0.1:8788',settings:{disableJavaScriptFileLoading:true,disableCSSFileLoading:true}});
+const html=await readFile('web/dashboard.html','utf8'),script=await readFile('web/report.js','utf8');
+const $=id=>w.document.getElementById(id);
+const base=()=>{const r=structuredClone(fixture);r.body.valuation={nav:1000,values:{OLD:600,CASH:400},weights:{OLD:.6,CASH:.4}};
+ r.body.funding={source:'reported_holdings',proposal_capital:1200,additional_funding_needed:200,amount_outside_proposal:0};
+ Object.assign(r.view.final_report.allocation,{proposal_capital:1200,actual_nav:1000,weights:{NEW:.5,CASH:.5},monthly_plan:{status:'blocked',amounts:{NEW:50,CASH:50}}});
+ r.view.previous={as_of:'2026-11-01',valuation:{nav:800},proposal:{weights:{}},perspectives:{}};
+ r.body.performance={start_nav:800,end_nav:1000,external_net_flows:200,pnl:0,modified_dietz:0};return r};
+try{
+ w.document.write(html.replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,''));w.eval(script);
+ const r=base(),before=JSON.stringify(r);w.MaraReport.render(r);assert.equal(JSON.stringify(r),before);
+ assert.deepEqual([...$('final-reader').children].filter(x=>x.tagName==='SECTION').map(x=>x.id),['portfolio-market','portfolio-current','portfolio-adjustment','portfolio-reasons']);
+ const metrics=[...$('portfolio-current').querySelectorAll('.metric')];assert.match(metrics[2].textContent,/0.0%/);assert.match(metrics[3].textContent,/25.0%/);
+ const rows=()=>Object.fromEntries([...$('portfolio-adjustment-table').querySelectorAll('tbody tr')].map(t=>[t.dataset.symbol,[...t.cells].map(c=>c.textContent)]));
+ assert.match(rows().OLD[3],/-600/);assert.match(rows().NEW[3],/\+600/);assert.match(rows().CASH[3],/\+200/);
+ assert.equal($('report-archive').open,false);assert.equal($('portfolio-more-reasons').open,false);
+ for(const point of r.view.final_report.reasons.key_points)assert.ok($('portfolio-reasons').textContent.includes(point));
+ const market=$('portfolio-market').querySelector('[data-evidence-ids]');assert.ok(market);market.click();assert.equal($('evidence-panel').hidden,false);
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+ const contribution=base();contribution.body.funding.source='future_income';contribution.body.funding.amount_outside_proposal=1000;
+ w.MaraReport.render(contribution);assert.match(rows().OLD[2],/600/);assert.doesNotMatch(rows().OLD[3],/-/);assert.match(rows().CASH[2],/1,000/);assert.match(rows().CASH[3],/\+600/);
+ assert.match($('portfolio-adjustment').textContent,/기존 보유는 유지한다고 가정/);assert.match($('portfolio-adjustment-table').textContent,/납입분 비중/);
+ const partial=base();partial.view.final_report.allocation.proposal_capital=500;partial.body.funding.amount_outside_proposal=500;
+ w.MaraReport.render(partial);assert.match($('portfolio-adjustment').textContent,/매도액으로 사용할 수 없어요/);
+ const missing=base();missing.body.performance={pnl:null,modified_dietz:null,limitation:'입출금 미대조'};
+ w.MaraReport.render(missing);assert.match($('portfolio-current').textContent,/입출금 미대조/);assert.match($('portfolio-current').querySelectorAll('.metric')[2].textContent,/계산 불가/);
+ missing.view.previous=null;missing.body.performance=null;w.MaraReport.render(missing);assert.match($('portfolio-current').textContent,/최초 평가/);
+ $('portfolio-more-reasons').open=true;w.MaraReport.render(missing);assert.equal($('portfolio-more-reasons').open,true);
+ const ids=[...w.document.querySelectorAll('[id]')].map(n=>n.id);assert.equal(new Set(ids).size,ids.length);
+ assert.ok($('report-archive').contains($('role-report-history')));assert.equal($('final-reader').closest('details'),null);
+ console.log('PASS four sections, actual returns vs flows, asset union, net differences, new contribution, partial capital, missing data, evidence, rerender and original immutability');
+}finally{await w.happyDOM.close()}
