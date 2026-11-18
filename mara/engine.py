@@ -392,7 +392,9 @@ class Engine:
             'status':'blocked' if blocked else 'conditional_plan',
             'rule':'첫 납입은 같은 달의 정기 납입과 중복하지 않아요. 실제 입금 후 기존 편차와 비용을 재검토할 목표 배분이며 주문 지시가 아니에요.'}
         validate(proposal['decision_status'],schema('decision'))
-        proposal['market_changes'] = evidence['changes']
+        # Evidence was written before the final portfolio existed. Keep that
+        # observation in its original stage, never as final portfolio changes.
+        proposal['market_changes']=[]
         # Record facts actually present in each accepted input, not just collected.
         delivery=[]
         for event in self.s.events('agent_validation'):
@@ -420,6 +422,12 @@ class Engine:
         report['coverage_ledger']=coverage_ledger(report,m)
         report['decision_scope']=decision_scope
         report['research_questions']=ledger(self.s,run_id,decision_scope,delivery,final_review)
+        report['market_observations']={'stage':'evidence','output_id':next((x['output_id'] for x in reversed(delivery) if x['role']=='evidence'),None),
+            'analysis':copy.deepcopy(evidence),'scope':'최종 제안 전에 작성한 시황 기록이에요. 당시 비중 설명을 최종 상태로 해석하지 않아요.'}
+        from .decision import contributions
+        report['contribution_basis']=dict(contributions(p),every_days=p.get('contribution_every_days') if p.get('contribution_schedule')!='monthly' else None)
+        from .final_report import safe_assemble
+        report['final_report']=safe_assemble(report,m['facts'])
         with self.s.store.transaction():
             proposal_id = self.s.append('proposal',proposal,as_of,run_id)
             report['proposal_id'] = proposal_id

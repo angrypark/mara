@@ -20,7 +20,7 @@ def present(session,row):
     started=session.store.db.execute('SELECT * FROM events WHERE owner=? AND run_id=? AND kind=? ORDER BY seq LIMIT 1',
         (session.owner,r['run_id'],'run_started')).fetchone()
     registry=session.decode(started)['body'].get('agent_registry',[]) if started else []
-    analyses={};provenance={};memory=[];role_reports={}
+    analyses={};provenance={};memory=[];role_reports={};report_history=[];latest_outputs={}
     accepted={e['body']['output_id'] for e in session.events('agent_validation')
               if e['run_id']==r['run_id'] and e['seq']<=result['seq'] and e['body']['status']=='accepted'}
     events=session.store.db.execute('SELECT * FROM events WHERE owner=? AND run_id=? AND kind=? AND seq<=? ORDER BY seq',
@@ -29,10 +29,16 @@ def present(session,row):
         event=session.decode(event);body=event['body'];role=body['role']
         if event['id'] in accepted:analyses[role]=body['output']
         source=session.get(body['input_id'])['body']
-        if event['id'] in accepted and body['output'].get('judgment_report'):
-            stage=source['payload'].get('analysis_stage',role)
-            role_reports[(role,stage)]={'role':role,'stage':stage,'source_output_id':event['id'],
-                'report':copy.deepcopy(body['output']['judgment_report'])}
+        stage=source['payload'].get('analysis_stage',role)
+        item={'role':role,'stage':stage,'source_output_id':event['id'],'source_input_id':body['input_id'],
+              'sequence':event['seq'],'contract_accepted':event['id'] in accepted,
+              'feedback':copy.deepcopy(source['payload'].get('output_feedback')),
+              'structured_output':copy.deepcopy(body['output']),
+              'report':copy.deepcopy(body['output'].get('judgment_report'))}
+        report_history.append(item)
+        if event['id'] in accepted:
+            latest_outputs[(role,stage)]=event['id']
+            if item['report']:role_reports[(role,stage)]=item
         provenance.setdefault(role,[]).append({'output_id':event['id'],'input_id':body['input_id'],
             'guide_hash':source['guide_hash'],'provider':source['provider']})
         if role=='memory' and event['id'] in accepted:memory.append(body['output'])
@@ -47,6 +53,20 @@ def present(session,row):
     if evaluations and evaluations[-1]['body']['output'].get('judgment_report'):
         ev=evaluations[-1]['body'];role_reports[('evaluator','evaluator')]={'role':'evaluator','stage':'evaluator',
             'source_output_id':ev['output_id'],'report':copy.deepcopy(ev['output']['judgment_report'])}
+    for item in report_history:
+        item['latest_accepted_for_stage']=latest_outputs.get((item['role'],item['stage']))==item['source_output_id']
+    from .final_report import safe_assemble,verified
+    stored=r.get('final_report');valid=verified(stored,r,facts) if stored else False
+    reader=copy.deepcopy(stored) if valid else safe_assemble(r,facts)
+    reader_status='stored_verified' if valid else 'display_projection' if stored is None else 'invalid_saved_document_projection'
+    if stored is not None and not valid:
+        reader['assembly_status']='incomplete'
+        reader.setdefault('assembly_issues',[]).append({'code':'saved_document_unverified','path':'/final_report'})
+        # The displayed projection is a different document; preserve the saved
+        # original in body and recompute this projection's own digest.
+        from .final_report import digest
+        if 'provenance' in reader:
+            reader['provenance'].pop('document_sha256',None);reader['provenance']['document_sha256']=digest(reader)
     prices=[]
     for symbol,quote in market['prices'].items():
         before=prior_market['prices'].get(symbol) if prior_market and prior_market['base_currency']==market['base_currency'] else None
@@ -60,6 +80,8 @@ def present(session,row):
     result['view']={'user_persona':frozen_persona,'persona_is_current':bool(frozen_persona and latest_profile and latest_profile['id']==r['profile_id']), 'version':1,'kind':'revision' if r.get('revision_of') else 'weekly' if previous else 'initial',
         'base_currency':profile['base_currency'],'context':analyses.get('context'),
         'judgment_reports':list(role_reports.values()),
+        'judgment_report_history':report_history,
+        'final_report':reader,'final_report_status':reader_status,
         'judgment_report_status':{'available':bool(role_reports),'final_action':r['proposal']['action'],
             'eligibility':r['proposal']['eligibility'],
             'rule':'각 문서는 해당 역할·단계의 원문 의견. 리더 종합안도 최종 검증 전 문서이며 공식 행동·보류 여부는 최종 검증을 반영한 상태가 우선해요.'},

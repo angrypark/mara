@@ -1,6 +1,7 @@
 /* Read-only report renderer. Model/source text is always inserted as text, never HTML. */
 'use strict';
 window.MaraReport=(()=>{
+  let renderedId=null;
   const $=id=>document.getElementById(id);
   const el=(tag,cls,value)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(value!=null)n.textContent=value;return n};
   const text=(id,value)=>{$(id).textContent=value??'기록 없음'};
@@ -48,6 +49,65 @@ window.MaraReport=(()=>{
       return card;
     }));
   }
+  function readerDocument(doc,status,r,sources,money){
+    const box=el('article','final-reader');box.id='final-reader';
+    box.append(el('h3','','이번 판단과 적용 범위'));
+    if(!doc?.reasons){box.append(el('p','notice','최종 보고서 구성을 마치지 못했어요. 아래에 원래 분석과 확인된 상태를 보존했어요.'));return box}
+    const decision=doc.decision,allocation=doc.allocation,review=doc.reasons.final_review||{},open=doc.open_issues;
+    const originLink=origin=>{const link=el('a','reader-origin','해당 단계 원문');link.href='#role-output-'+origin?.output_id;link.addEventListener('click',()=>{const history=$('role-report-history');if(history)history.open=true});return link};
+    box.append(el('p','notice','최종 판단: '+(action[decision.action]||decision.action)+' · 실행 권한: '+(decision.decision_status?.execution_status==='not_authorized'?'부여되지 않았어요':decision.decision_status?.execution_status||'기록 없음')),
+      el('p','',allocation.scope),el('p','',`제안 기준액 ${money(allocation.proposal_capital)} · 실제 보유 평가액 ${money(allocation.actual_nav)} · 자금 상태: ${decision.funding?.availability==='conditional_on_deposit'?'앞으로 입금할 자금의 조건부 계획':'기록된 보유 기준'}`));
+    const cadence=allocation.contribution_basis||{};
+    box.append(el('p','hint','납입 주기: '+(cadence.schedule==='calendar_month'?'매월':cadence.every_days?cadence.every_days+'일마다':'당시 설정한 간격마다')+' '+money(cadence.amount_per_payment)+' · 월평균 환산 '+money(cadence.monthly_amount)),el('p','hint',cadence.method));
+    const t=el('table'),head=el('tr');for(const name of ['자산','제안 비중','기준액 배분','매회 납입 배분'])head.append(el('th','',name));t.append(head);
+    for(const row of allocation.rows){const tr=el('tr');for(const value of [symbol(row.symbol),pct(row.weight),money(row.planned_amount),money(row.monthly_amount)])tr.append(el('td','',value));t.append(tr)}
+    const scroll=el('div','scroll');scroll.append(t);box.append(scroll,el('p','notice','정기 납입 계획: '+(allocation.monthly_plan.status==='blocked'?'보류':allocation.monthly_plan.status==='conditional_plan'?'조건부 계획':'상태 미기록')),el('p','hint',allocation.monthly_plan.rule||'정기 납입 계획이 별도로 기록되지 않았어요.'));
+    box.append(el('h3','','선택 이유와 마지막 검토'),el('p','hint','선택 이유와 아래 주장 상태는 리더의 판단이에요. 마지막 검토의 범위와 반론을 함께 읽어요.'),items(doc.reasons.key_points));
+    box.append(el('p','notice','마지막 검토: '+(review.qualitative_pass===true?'해당 검토 범위에서 통과':review.qualitative_pass===false?'보류':'미기록')),el('p','',review.reason));
+    box.append(sourceLinks(review.judgment_report?.evidence_ids||[],sources));
+    if(doc.reasons.final_review_origin.output_id)box.append(originLink(doc.reasons.final_review_origin));
+    for(const [label,values] of [['검토에서 남긴 문제',open.final_review_issues],['뒷받침되지 않은 주장',open.unsupported_claims],['수치 검증의 미해결',open.numeric_blockers],['반대 의견',open.dissent]]){
+      if(values?.length)box.append(section(label,values));
+    }
+    for(const entry of doc.reasons.claims){const c=entry.claim,card=el('article','final-claim');card.dataset.claimId=c.id;
+      card.append(el('h4','',c.statement),el('p','hint','리더 판단: '+({supported:'근거가 뒷받침한다고 판단',conditional:'조건부',unresolved:'미해결'}[c.status]||c.status)+(review.qualitative_pass===false?' · 최종 검토는 보류됐어요.':'')),
+        section('가정',c.assumptions),el('p','','반대 근거: '+c.counterevidence),el('p','','결정에 미친 영향: '+c.decision_impact),sourceLinks(c.fact_ids,sources));
+      if(entry.origin.output_id)card.append(originLink(entry.origin));box.append(card);
+    }
+    box.append(section('판단의 적용 범위와 한계',doc.reasons.scope_limits),section('남은 위험',open.risks));
+    box.append(el('h3','','비교한 대안'));
+    for(const entry of doc.alternatives){const alt=entry.alternative;box.append(el('h4','',alt.name),
+      el('p','hint',({preferred:'리더가 선호한 안',rejected:'채택하지 않은 안',conditional:'조건부 안',diagnostic_only:'제약을 확인하기 위한 비교안'}[alt.decision]||alt.decision)),
+      el('p','',Object.entries(alt.weights||{}).map(([s,w])=>symbol(s)+' '+pct(w)).join(' · ')),el('p','',alt.reason),el('p','','판단을 바꿀 조건: '+alt.change_condition));}
+    box.append(el('h3','','원래 질문과 남은 확인'));
+    for(const q of open.questions){const card=el('article','final-question');card.dataset.questionId=q.id;card.append(el('h4','',q.target+' · '+q.question),
+      el('p','hint','마지막 검토자 판단: '+(q.review?.status==='supported'?'검토 범위에서 근거가 뒷받침함':q.review?.status==='unresolved'?'미해결':'미검토')),
+      el('p','',q.review?.reason||q.acceptance),el('p','','다음 확인: '+(q.review?.next_action||'구체적인 후속 판단이 기록되지 않았어요.')),sourceLinks(q.fact_ids,sources));box.append(card)}
+    box.append(el('h3','','언제 무엇을 다시 확인하나'));
+    for(const check of doc.next_review.monitoring)box.append(el('h4','',check.variable),el('p','',check.condition),el('p','',check.check_at+' · 담당 '+check.owner),el('p','','그때 할 일: '+check.action),el('p','','반례 확인: '+check.counterexample_test));
+    box.append(section('다음 확인 항목',doc.next_review.next_checks),section('실행 전 조건',doc.next_review.implementation));
+    const refs=el('section','final-references');refs.append(el('h3','','핵심 근거와 읽은 범위'));
+    for(const f of doc.references.facts){const i=sources.findIndex(s=>s.id===f.fact_id),item=el('div','final-reference');
+      item.append(el('p','',`${i>=0?'근거 '+(i+1):'연결 미확인'} · ${f.title||f.fact_id}`));
+      if(f.available){const scope=f.read_scope||{};item.append(el('p','hint',`발표 ${f.published_at} · 확인 ${f.known_at} · 유효 ${f.valid_until}`));
+        if(scope.filing)item.append(el('p','hint',scope.filing.form+' · '+scope.filing.accession));
+        if(scope.ranges)item.append(el('p','hint','읽은 본문 위치: '+scope.ranges.map(x=>x.start+'–'+x.end+'자').join(', ')));
+        if(scope.tag)item.append(el('p','hint',`${scope.namespace}:${scope.tag} · ${scope.unit} · ${scope.observations}개 관측`));
+        item.append(el('p','hint',scope.limits||f.uncertainty));
+        try{const url=new URL(f.source);if(url.protocol==='https:'){const link=el('a','',url.href);link.href=url.href;link.rel='noreferrer noopener';link.target='_blank';item.append(link)}}catch(e){}
+      }else item.append(el('p','notice','이 근거를 현재 보고서에서 찾을 수 없어요.'));
+      refs.append(item);
+    }
+    box.append(refs);
+    const calculations=el('details','final-calculations');calculations.id='final-calculations';calculations.append(el('summary','','계산 근거와 원래 위치'));
+    for(const [i,ref] of doc.references.calculations.entries()){const item=el('details');item.id='final-calculation-'+i;item.append(el('summary','',ref.path+(ref.available?'':' · 연결 실패')));
+      try{let value=r;for(const key of ref.path.slice(1).split('/'))value=value[key.replace(/~1/g,'/').replace(/~0/g,'~')];item.append(el('pre','',JSON.stringify(value,null,2)))}catch(e){item.append(el('p','','계산을 찾지 못했어요.'))}calculations.append(item)}
+    box.append(calculations);
+    const integrity=el('details','final-integrity');integrity.id='final-integrity';integrity.append(el('summary','','보고서 구성 검사와 버전'),el('p','',doc.assembly_scope),
+      el('p','',status==='stored_verified'?'실행 당시 저장한 문서와 입력을 대조했어요.':status==='display_projection'?'기존 원본을 현재 표시 규칙으로 구성했어요. 새 분석이 아니에요.':'저장 문서를 확인하지 못해 원래 결과에서 표시본을 만들었어요.'),el('pre','',JSON.stringify(doc.provenance,null,2)));
+    if(doc.assembly_issues.length){box.prepend(el('p','notice','보고서 구성에서 확인할 문제가 남았어요. 원본 판단은 아래에 보존했어요.'));integrity.append(el('pre','',JSON.stringify(doc.assembly_issues,null,2)))}
+    box.append(integrity);return box;
+  }
   function personas(r,v,sources){
     const recorded=(v.agent_registry?.length?v.agent_registry.map(a=>a.id):Object.keys(names)).filter(id=>r.perspectives?.[id]);
     const roles=[...new Set([...recorded,...Object.keys(r.perspectives||{})])];
@@ -83,10 +143,11 @@ window.MaraReport=(()=>{
       const row=el('div','allocation-row');row.append(el('b','allocation-symbol',symbol(s)));const bars=el('div','allocation-bars');
       maps.forEach((w,i)=>{const line=el('div','allocation-line');line.append(el('span','bar-label',label[i]),track(w?.[s]||0,series[i]),el('span','bar-value',w?pct(w[s]||0):'비교 없음'));bars.append(line)});row.append(bars);return row;
     }));
-    const sleeve=r.analysis?.allocation_sleeves;if(sleeve){const box=el('section','reason-group');box.append(el('h3','','투자 부분과 현금 완충'),el('p','hint',sleeve.scope));const t=el('table'),head=el('tr');for(const x of ['자산','전체 납입 비중','투자 부분 내부','월 계획액'])head.append(el('th','',x));t.append(head);for(const x of sleeve.rows){const row=el('tr');for(const value of [symbol(x.symbol),pct(x.whole_fraction),x.invested_fraction==null?'현금 완충':pct(x.invested_fraction),money(x.monthly_amount)])row.append(el('td','',value));t.append(row)}box.append(t,el('p','hint',sleeve.cash_warning));$('allocation-chart').append(box)}
+    const sleeve=r.analysis?.allocation_sleeves;if(sleeve){const box=el('section','reason-group');box.append(el('h3','','투자 부분과 현금 완충'),el('p','hint',sleeve.scope));const t=el('table'),head=el('tr');for(const x of ['자산','전체 납입 비중','투자 부분 내부','월평균 환산액'])head.append(el('th','',x));t.append(head);for(const x of sleeve.rows){const row=el('tr');for(const value of [symbol(x.symbol),pct(x.whole_fraction),x.invested_fraction==null?'현금 완충':pct(x.invested_fraction),money(x.monthly_amount)])row.append(el('td','',value));t.append(row)}box.append(t,el('p','hint',sleeve.cash_warning));$('allocation-chart').append(box)}
     table('weights',symbols.map(s=>[symbol(s),pct(maps[1][s]||0),money((maps[1][s]||0)*capital),maps[0]?pct(maps[0][s]||0):'보유 없음',maps[2]?pct(maps[2][s]||0):'비교 없음']));
   }
   function render(row){
+    const opened=renderedId===row.id?[...$('report-content').querySelectorAll('details[id][open]')].map(n=>n.id):[];
     const r=row.body,v=row.view||{},p=r.proposal,a=r.validation.final_numeric,m=a.metrics||{},h=a.historical||{},prior=v.previous;
     const currency=v.base_currency||'KRW',money=n=>n==null?'계산 불가':number(n,currency==='KRW'?0:2)+' '+currency;
     const capital=r.funding?.proposal_capital??r.valuation.nav,sources=v.sources||[],market=v.market_analysis||{},reflection=r.reflection;
@@ -99,14 +160,23 @@ window.MaraReport=(()=>{
     if(r.history_scope?.reset_id){const n=el('p','notice','새 판단 이력 · 이전 분석·회고·학습 기억은 이번 판단에서 제외했어요. 원본 기록과 현재 개인 사실은 보존돼요.');$('report-period').append(n)}
     text('report-context',v.context?.summary||v.criteria?.goal||'당시 투자 맥락은 원본 실행 기록에서 확인해요.');
     let structured=$('structured-report');if(!structured){structured=el('div');structured.id='structured-report';$('report-context').after(structured)}structured.replaceChildren();
-    const reports=v.judgment_reports||[];
-    if(reports.length){structured.append(el('h3','','역할별 상세 판단 리포트'),el('p','notice',v.judgment_report_status?.rule||'각 역할·단계의 원문 의견이며 공식 최종 상태와 함께 읽어주세요.'));
-      for(const item of reports){const report=item.report,article=el('article','judgment-report');article.dataset.role=item.role;article.dataset.stage=item.stage;
-        article.append(el('h3','',report.title),el('p','hint',report.as_of+' · '+item.role+' / '+item.stage),el('p','notice','공식 최종 상태: '+(action[p.action]||p.action)+' · 이 문서는 해당 단계의 의견이며 주문 지시가 아니에요.'));
-        for(const [key,label] of [['portfolio_context','현재 포트폴리오와 투자 맥락'],['market_context','현재 시황과 투자 영향'],['decision_method','검토 기준과 판단 절차'],['conclusion','이 역할의 최종 의견']]){const section=el('section');section.append(el('h4','',label));for(const paragraph of report[key].split(/\n\s*\n/))section.append(el('p','',paragraph));article.append(section)}
-        article.append(sourceLinks(report.evidence_ids,sources));structured.append(article)}
-    }else structured.append(el('p','hint','이전 형식의 보고서예요. 당시 작성된 요약을 아래에 보존하며 새 상세 본문을 소급해서 만들지 않았어요.'));
-    if(p.investment_case){
+    if(v.final_report)structured.append(readerDocument(v.final_report,v.final_report_status,r,sources,money));
+    $('report-content').dataset.finalReader=String(Boolean(v.final_report?.reasons));
+    const reports=v.judgment_report_history?.length?v.judgment_report_history:v.judgment_reports||[],history=el('details','role-history');history.id='role-report-history';
+    history.append(el('summary','','판단 과정 원문과 수정 이력'));
+    if(reports.length){history.append(el('p','notice',v.judgment_report_status?.rule||'각 역할·단계의 원문 의견이며 공식 최종 상태와 함께 읽어주세요.'));
+      for(const item of reports){const report=item.report&&typeof item.report==='object'?item.report:{},article=el('article','role-output'+(item.report?' judgment-report':''));article.dataset.role=item.role;article.dataset.stage=item.stage;
+        article.id='role-output-'+item.source_output_id;
+        article.append(el('h3','',typeof report.title==='string'?report.title:'구조화 원문 · '+item.role),el('p','hint',(report.as_of||r.as_of)+' · '+item.role+' / '+item.stage),el('p','notice','공식 최종 상태: '+(action[p.action]||p.action)+' · 이 문서는 해당 단계의 의견이며 주문 지시가 아니에요.'));
+        if(item.contract_accepted!==undefined)article.append(el('p','hint',item.latest_accepted_for_stage?'이 단계의 마지막 계약 수용본':item.contract_accepted?'이전 계약 수용본':'계약 미수용 출력'));
+        if(item.feedback){const feedback=el('details');feedback.append(el('summary','','수정 요청 원문'),el('pre','',JSON.stringify(item.feedback,null,2)));article.append(feedback)}
+        if(item.report&&item.contract_accepted!==false){
+          for(const [key,label] of [['portfolio_context','현재 포트폴리오와 투자 맥락'],['market_context','현재 시황과 투자 영향'],['decision_method','검토 기준과 판단 절차'],['conclusion','이 역할의 최종 의견']]){const section=el('section');section.append(el('h4','',label));for(const paragraph of (typeof report[key]==='string'?report[key]:'원문에 이 항목이 없어요.').split(/\n\s*\n/))section.append(el('p','',paragraph));article.append(section)}
+          article.append(sourceLinks(Array.isArray(report.evidence_ids)?report.evidence_ids:[],sources));
+        }
+        const original=el('details');original.append(el('summary','','구조화 출력 원문'),el('pre','',JSON.stringify(item.structured_output??item.report,null,2)));article.append(original);history.append(article)}
+    }else history.append(el('p','hint','이전 형식의 보고서예요. 당시 작성된 요약을 아래에 보존하며 새 상세 본문을 소급해서 만들지 않았어요.'));
+    if(p.investment_case&&!v.final_report?.reasons){
       const c=p.investment_case;structured.append(el('h3','','승인 전에 읽을 핵심 판단'));
       for(const line of c.key_points)structured.append(el('p','',line));
       structured.append(el('h3','','대안별 선택 이유와 변경 조건'));
@@ -153,6 +223,11 @@ window.MaraReport=(()=>{
     list('memory-conflicts',[...memory.flatMap(x=>x.conflicts||[]),...(v.pruning?.unresolved_groups||[]).map(x=>'추가 검토: '+x.topic+' · 적용 조건 '+x.condition)],'미해결 충돌이 별도로 기록되지 않았어요.');
     text('anchor-summary',`정기 전체 점검 변경 기록 ${v.pruning?.changes?.length??0}건. 목표·제약, 현재 보유 이유, 미해결 위험과 다음 확인은 실행 기록에 보존돼요. 원본 기록은 가지치기로 삭제하지 않아요.`);
     sourcesView(sources,v.expired_source_count);text('agent-records',JSON.stringify(v.agent_records||{},null,2));const {view,...original}=row;text('raw',JSON.stringify(original,null,2));
+    structured.append(history);
+    // The early market opinion remains accessible, but never reads as the
+    // final allocation. This also applies to older immutable reports.
+    let early=$('early-market-record');if(!early){early=el('details','early-market-record');early.id='early-market-record';early.append(el('summary','','초기 시황 기록 · 최종 제안 전에 작성했어요.'));$('market-report').before(early);early.append($('market-report'))}
+    if(renderedId!==row.id)early.open=false;for(const id of opened){const item=$(id);if(item)item.open=true}renderedId=row.id;
   }
   return {render};
 })();

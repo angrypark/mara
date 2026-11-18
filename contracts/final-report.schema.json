@@ -1,0 +1,733 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "mara.final-report/1.0"
+    },
+    "assembly_status": {
+      "enum": [
+        "complete",
+        "incomplete"
+      ]
+    },
+    "assembly_scope": {
+      "type": "string"
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "rule_version": {
+          "type": "string"
+        },
+        "input_sha256": {
+          "type": "string"
+        },
+        "document_sha256": {
+          "type": "string"
+        },
+        "as_of": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_version",
+        "input_sha256",
+        "document_sha256",
+        "as_of",
+        "run_id"
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "eligibility": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "decision_status": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "funding": {
+          "type": "object"
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "eligibility",
+        "decision_status",
+        "funding",
+        "currency"
+      ]
+    },
+    "allocation": {
+      "type": "object",
+      "properties": {
+        "weights": {
+          "type": "object"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "symbol": {
+                "type": "string"
+              },
+              "weight": {
+                "type": "number"
+              },
+              "planned_amount": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "monthly_amount": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "actual_weight": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "symbol",
+              "weight",
+              "planned_amount",
+              "monthly_amount",
+              "actual_weight"
+            ]
+          }
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "proposal_capital": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "actual_nav": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "monthly_plan": {
+          "type": "object"
+        },
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "weights",
+        "rows",
+        "currency",
+        "proposal_capital",
+        "actual_nav",
+        "monthly_plan",
+        "scope"
+      ]
+    },
+    "reasons": {
+      "type": "object",
+      "properties": {
+        "key_points": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "key_points_origin": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string"
+            },
+            "stage": {
+              "type": "string"
+            },
+            "output_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "role",
+            "stage",
+            "output_id",
+            "path"
+          ]
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "claim": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "statement": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "assumptions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "counterevidence": {
+                    "type": "string"
+                  },
+                  "decision_impact": {
+                    "type": "string"
+                  },
+                  "fact_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "calculation_paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "statement",
+                  "status",
+                  "assumptions",
+                  "counterevidence",
+                  "decision_impact",
+                  "fact_ids",
+                  "calculation_paths"
+                ]
+              },
+              "origin": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string"
+                  },
+                  "stage": {
+                    "type": "string"
+                  },
+                  "output_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "role",
+                  "stage",
+                  "output_id",
+                  "path"
+                ]
+              },
+              "status_scope": {
+                "type": "string"
+              },
+              "final_review_pass": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "claim",
+              "origin",
+              "status_scope",
+              "final_review_pass"
+            ]
+          }
+        },
+        "final_review": {
+          "type": "object"
+        },
+        "final_review_origin": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string"
+            },
+            "stage": {
+              "type": "string"
+            },
+            "output_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "role",
+            "stage",
+            "output_id",
+            "path"
+          ]
+        },
+        "scope_limits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "key_points",
+        "key_points_origin",
+        "claims",
+        "final_review",
+        "final_review_origin",
+        "scope_limits"
+      ]
+    },
+    "alternatives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "alternative": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "weights": {
+                "type": "object"
+              },
+              "decision": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "change_condition": {
+                "type": "string"
+              },
+              "comparison_path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "weights",
+              "decision",
+              "reason",
+              "change_condition",
+              "comparison_path"
+            ]
+          },
+          "origin": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "output_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "stage",
+              "output_id",
+              "path"
+            ]
+          }
+        },
+        "required": [
+          "alternative",
+          "origin"
+        ]
+      }
+    },
+    "open_issues": {
+      "type": "object",
+      "properties": {
+        "questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string"
+              },
+              "question": {
+                "type": "string"
+              },
+              "state": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "review": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "fact_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "target",
+              "question",
+              "state",
+              "review",
+              "fact_ids"
+            ]
+          }
+        },
+        "final_review_issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unsupported_claims": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dissent": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "numeric_blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "questions",
+        "final_review_issues",
+        "unsupported_claims",
+        "risks",
+        "dissent",
+        "numeric_blockers"
+      ]
+    },
+    "next_review": {
+      "type": "object",
+      "properties": {
+        "monitoring": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "variable": {
+                "type": "string"
+              },
+              "condition": {
+                "type": "string"
+              },
+              "check_at": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string"
+              },
+              "counterexample_test": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "variable",
+              "condition",
+              "check_at",
+              "owner",
+              "action",
+              "counterexample_test"
+            ]
+          }
+        },
+        "next_checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "implementation": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "next_evaluation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "next_rebalance": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "origin": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string"
+            },
+            "stage": {
+              "type": "string"
+            },
+            "output_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "role",
+            "stage",
+            "output_id",
+            "path"
+          ]
+        }
+      },
+      "required": [
+        "monitoring",
+        "next_checks",
+        "implementation",
+        "next_evaluation",
+        "next_rebalance",
+        "origin"
+      ]
+    },
+    "references": {
+      "type": "object",
+      "properties": {
+        "facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fact_id": {
+                "type": "string"
+              },
+              "available": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "fact_id",
+              "available"
+            ],
+            "if": {
+              "properties": {
+                "available": {
+                  "const": true
+                }
+              }
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "fact_id": {
+                  "type": "string"
+                },
+                "available": {
+                  "type": "boolean"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "published_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "known_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "valid_until": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "read_scope": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "fact_id",
+                "available",
+                "title",
+                "source",
+                "published_at",
+                "known_at",
+                "valid_until",
+                "read_scope"
+              ]
+            }
+          }
+        },
+        "calculations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "available": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "path",
+              "available"
+            ]
+          }
+        }
+      },
+      "required": [
+        "facts",
+        "calculations"
+      ]
+    },
+    "assembly_issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "path"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "assembly_status",
+    "assembly_scope",
+    "provenance",
+    "decision",
+    "allocation",
+    "reasons",
+    "alternatives",
+    "open_issues",
+    "next_review",
+    "references",
+    "assembly_issues"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mara.final-report/1.0",
+  "description": "Reader document structure only; no economic or semantic approval."
+}

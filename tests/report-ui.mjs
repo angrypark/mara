@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import {Window} from '../.local/test-ui/node_modules/happy-dom/lib/index.js';
+const fixture=JSON.parse(execFileSync('python3',['tests/final_report_fixture.py'],{encoding:'utf8',env:{...process.env,PYTHONPATH:'.'}}));
+const html=await readFile('web/dashboard.html','utf8'),script=await readFile('web/report.js','utf8');
+const w=new Window({url:'http://127.0.0.1:8790',settings:{disableJavaScriptFileLoading:true,disableCSSFileLoading:true}});
+try{
+ w.document.write(html.replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,''));w.eval(script);w.MaraReport.render(fixture);
+ const $=id=>w.document.getElementById(id),reader=$('final-reader');
+ assert.ok(reader);assert.match(reader.textContent,/최종 판단: 보류/);assert.match(reader.textContent,/정기 납입 계획: 보류/);
+ assert.match(reader.textContent,/투자 지출이 늘면/);assert.match(reader.textContent,/리더 판단:/);assert.match(reader.textContent,/최종 검토는 보류/);
+ assert.ok(reader.querySelectorAll('.final-question').length===fixture.body.decision_scope.questions.length);
+ assert.ok(reader.querySelector('.final-references').textContent.includes('근거 1'));
+ assert.equal($('role-report-history').open,false);assert.equal($('early-market-record').open,false);
+ assert.ok(reader.compareDocumentPosition($('role-report-history'))&w.Node.DOCUMENT_POSITION_FOLLOWING);
+ assert.doesNotMatch(reader.textContent,/EARLY_EMPTY_ALLOCATION_SENTINEL|EARLIER_ROLE_OPINION_SENTINEL/);
+ assert.match($('early-market-record').textContent,/EARLY_EMPTY_ALLOCATION_SENTINEL/);
+ $('role-report-history').open=true;$('final-calculations').open=true;w.MaraReport.render(fixture);
+ assert.equal($('role-report-history').open,true);assert.equal($('final-calculations').open,true);
+ for(const link of $('final-reader').querySelectorAll('.reader-origin'))assert.ok(w.document.querySelector(link.getAttribute('href')));
+ const rejected=structuredClone(fixture);rejected.view.judgment_report_history.push({role:'leader',stage:'proposal_synthesis',source_output_id:'broken-output',contract_accepted:false,report:{title:'Rejected incomplete draft'},structured_output:{judgment_report:{title:'Rejected incomplete draft'}}});
+ w.MaraReport.render(rejected);assert.match($('role-output-broken-output').textContent,/Rejected incomplete draft/);assert.match($('final-reader').textContent,/최종 판단: 보류/);
+ const attack=structuredClone(fixture);attack.view.final_report.reasons.claims[0].claim.statement='<img src=x onerror=alert(1)>';attack.view.final_report.references.facts[0].source='javascript:alert(1)';
+ w.MaraReport.render(attack);assert.equal($('final-reader').querySelectorAll('img,script').length,0);
+ assert.ok([...$('final-reader').querySelectorAll('a')].every(a=>!a.href.startsWith('javascript:')));
+ const fallback=structuredClone(fixture);fallback.view.final_report={assembly_status:'incomplete'};w.MaraReport.render(fallback);
+ assert.match($('final-reader').textContent,/구성을 마치지 못/);
+ console.log('PASS report order, final state, conditions, questions, citations, early/history separation, inert text, incomplete fallback');
+}finally{await w.happyDOM.close()}
