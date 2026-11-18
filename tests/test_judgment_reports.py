@@ -36,7 +36,7 @@ class NarrativeTests(unittest.TestCase):
 class DetailedFlowTests(unittest.TestCase):
  setUp=setup_fixture.SetupTests.setUp
  tearDown=setup_fixture.SetupTests.tearDown
- def test_narratives_reach_review_and_print_with_funding_separation(self):
+ def test_structured_roles_and_leader_report_reach_review_with_funding_separation(self):
   self.value.update(funding_source='future_income',capital_mode='additional',reported_liquid_cash=9000000,contribution_risk_preference='growth',contribution_amount=100000,monthly_income=900000,monthly_expenses=500000)
   r=self.app.generate(self.value,self.snapshot)
   self.assertEqual(r['funding']['proposal_capital'],self.value['capital_amount'])
@@ -48,11 +48,15 @@ class DetailedFlowTests(unittest.TestCase):
    for role in ('validation','leader'):
     for call in [c for c in calls if c['role']==role]:
      self.assertEqual(call['payload']['decision_context']['contribution_mandate']['preference'],'growth')
-     self.assertTrue(all(v.get('judgment_report') for v in call['payload']['perspectives'].values()))
+     self.assertTrue(all(v.get('decision_basis') and v.get('risks') for v in call['payload']['perspectives'].values()))
+     self.assertTrue(all('judgment_report' not in v for v in call['payload']['perspectives'].values()))
    row=s.get(r['event_id']);before=copy.deepcopy(row)
-   shown=present(s,row)['view'];self.assertGreaterEqual(len(shown['judgment_reports']),8)
+   shown=present(s,row)['view'];self.assertEqual({x['role'] for x in shown['judgment_reports']},{'leader','evaluator'})
    stages=[x['stage'] for x in shown['judgment_reports'] if x['role']=='validation']
-   self.assertEqual(stages,['perspective_validation','final_validation'])
+   self.assertEqual(stages,[])
+   validation_history=[x for x in shown['judgment_report_history'] if x['role']=='validation']
+   self.assertEqual([x['stage'] for x in validation_history],['perspective_validation','final_validation'])
+   self.assertTrue(all('qualitative_pass' in x['structured_output'] for x in validation_history))
    self.assertTrue(all(body_length(x['report'])>=1400 for x in shown['judgment_reports']))
    workbench=project(s,r['run_id'])
    for component in workbench['components']:

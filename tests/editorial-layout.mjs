@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import {Window} from '../.local/test-ui/node_modules/happy-dom/lib/index.js';
+const fixture=JSON.parse(execFileSync('python3',['tests/final_report_fixture.py'],{encoding:'utf8',env:{...process.env,PYTHONPATH:'.'}}));
+const w=new Window({url:'http://127.0.0.1:8788',settings:{disableJavaScriptFileLoading:true,disableCSSFileLoading:true}});
+try{
+ const html=await readFile('web/dashboard.html','utf8'),script=await readFile('web/report.js','utf8');
+ w.document.write(html.replace(/<script[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]*>/g,''));w.eval(script);
+ const claim=fixture.view.final_report.reasons.claims[0].claim,fact=fixture.view.sources[0];
+ fixture.view.reader_brief={period:{start:'2026-08-18',end:'2026-11-18'},headline:'Synthetic final market headline',summary:'Complete authored summary. Preserve its last sentence.',themes:[{id:'theme-1',title:'Final source-based theme',what_happened:'Observed movement',portfolio_meaning:'Conditional implication',counterpoint:'Opposing evidence',fact_ids:[fact.id]}],missing_evidence:['Daily coverage gap'],key_reasons:[{headline:'Selected decisive reason',explanation:'Preserve unresolved status',claim_ids:[claim.id]}]};
+ const before=JSON.stringify(fixture);w.MaraReport.render(fixture);assert.equal(JSON.stringify(fixture),before);
+ const $=id=>w.document.getElementById(id);
+ assert.match($('portfolio-market').textContent,/Complete authored summary. Preserve its last sentence./);
+ assert.match($('portfolio-market').textContent,/2026-08-18 → 2026-11-18/);
+ assert.match($('portfolio-reasons').textContent,/Selected decisive reason/);
+ $('portfolio-market').querySelector('.market-theme button').click();assert.equal($('evidence-panel').hidden,false);
+ $('portfolio-reasons').querySelector('.source-chip').click();assert.equal($('portfolio-more-reasons').open,true);assert.equal($('reader-claim-'+claim.id).open,true);
+ assert.match($('portfolio-original-rationale').textContent,new RegExp(fixture.view.final_report.reasons.key_points[0]));
+ w.MaraReport.render(fixture);const ids=[...w.document.querySelectorAll('[id]')].map(x=>x.id);assert.equal(new Set(ids).size,ids.length);
+ const dateText=JSON.stringify({title:'Synthetic source title',date_provenance:{status:'available-by as-of envelope; original publication day unknown'},verified_facts:[{date:'2026-11-14',metric:'Synthetic level',value:100,unit:'index points'},{metric:'<script>literal source text</script>',value:0,unit:'percent'}],read_scope:'Synthetic extracted values'});
+ fact.text=dateText;const node=fixture.view.evidence_graph?.facts.find(x=>x.fact_id===fact.id);if(node)node.original.text=dateText;
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));w.MaraReport.render(fixture);
+ $('portfolio-market').querySelector('.market-theme button').click();assert.match($('evidence-panel').textContent,/원문 발표일 미확인/);assert.match($('evidence-panel').textContent,/Synthetic level/);
+ assert.equal($('evidence-panel').querySelector('h4').textContent,'Synthetic source title');
+ const factTable=$('evidence-panel').querySelector('.fact-values');assert.equal(factTable.querySelectorAll('tbody tr').length,2);
+ assert.match(factTable.textContent,/2026-11-14/);assert.match(factTable.textContent,/index points/);assert.match(factTable.textContent,/<script>literal source text<\/script>/);assert.equal(factTable.querySelector('script'),null);
+ assert.equal(factTable.querySelectorAll('tbody tr')[1].children[1].textContent,'0');
+ console.log('PASS final editorial themes, full summary, exact reason-to-claim links, evidence interaction, original retained and rerender');
+}finally{await w.happyDOM.close()}

@@ -181,8 +181,13 @@ class Agents:
         guide += '\n공통 인용 규칙 v1.1: evidence_ids와 facts에는 input.market.facts에 있는 id만 그대로 사용해요. actual.evidence_id, snapshot_id, 사용자 답변/프로필/이전 실행의 원본 이벤트 ID는 시장 fact ID가 아니므로 넣지 않아요. 개인 맥락은 판단 설명에서 입력 항목으로 구분해 서술해요. 자료 밖 주장은 불확실성으로 남기고 ID를 만들어내거나 단지 인용을 통과하려고 무관한 자료를 붙이지 않아요.'
         payload=copy.deepcopy(payload)
         payload.setdefault('as_of',self.as_of)
-        if self.model.mode=='live':
+        if self.model.mode=='live' and agent(role)['kind'] in ('leader','evaluator'):
             payload['narrative_contract']='mara.judgment-report/1.0'
+        payload['role_output_policy']={'version':'mara.role-output/1.1',
+            'format':'detailed_report' if payload.get('narrative_contract') else 'structured_concise',
+            'rule':'판단의 근거·반론·가정·자료 공백은 해당 구조화 필드에 남겨요. 같은 시황·개인 맥락을 역할마다 장문으로 반복하지 않아요.'}
+        if not payload.get('narrative_contract'):
+            guide += '\n역할별 출력 규칙 v1.1: 이 호출은 구조화 필드로 설명해요. judgment_report나 최소 글자 수를 요구하지 않아요. 각 필드에는 이 역할의 판단, 결정적인 근거와 fact ID, 반대 근거, 결론이 바뀌는 조건을 해당 계약에 맞게 구체적으로 적어요. 다른 역할의 시황·개인 맥락을 반복하거나 필수 위험·공백을 생략하지 않아요. 상세문을 요청하는 이전 가이드보다 이 호출의 출력 계약을 우선해요.'
         if self.research_library:
             from .company_research import research_loop
             before={f['id'] for f in payload.get('market',{}).get('facts',[])}
@@ -230,6 +235,11 @@ class Agents:
         if payload.get('narrative_contract'):
             contract=copy.deepcopy(contract)
             contract['required']=list(dict.fromkeys(contract['required']+['judgment_report']))
+        else:
+            # Keep archived schemas compatible; omit unused prose from this
+            # provider request so the optional field does not invite repetition.
+            contract=copy.deepcopy(contract)
+            contract['properties'].pop('judgment_report',None)
         # Current and previous research summaries plus independent perspectives
         # remain bounded; raw provider responses never enter this budget.
         from .context_budget import LIMITS

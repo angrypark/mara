@@ -13,7 +13,7 @@ class ContextBudgetTests(unittest.TestCase):
     def test_three_weeks_with_full_supplemental_evidence_preserve_reasoning(self):
         sizes=[]
         class Model(DemoModel):
-            mode='live' # Exercise the actual narrative contract with a local callback.
+            mode='live' # Exercise role-specific live output budgets with a local callback.
             def __init__(self):self.repaired=set()
             def complete(self,role,guide,p,contract):
                 sizes.append((role,len(d.dumps(p))))
@@ -29,11 +29,12 @@ class ContextBudgetTests(unittest.TestCase):
                 if key not in self.repaired:
                     self.repaired.add(key)
                     return {'synthetic_invalid_output':'r'*37000}
-                out['judgment_report']={'schema_version':'mara.judgment-report/1.0',
-                    'title':'Synthetic maximum narrative','as_of':p['as_of'],
-                    'evidence_ids':[p['market']['facts'][0]['id']],
-                    **{field:str(i)*3500 for i,field in enumerate(
-                        ('portfolio_context','market_context','decision_method','conclusion'))}}
+                if p.get('narrative_contract'):
+                    out['judgment_report']={'schema_version':'mara.judgment-report/1.0',
+                        'title':'Synthetic maximum narrative','as_of':p['as_of'],
+                        'evidence_ids':[p['market']['facts'][0]['id']],
+                        **{field:str(i)*3500 for i,field in enumerate(
+                            ('portfolio_context','market_context','decision_method','conclusion'))}}
                 if role in ('buffett','marks','bogle','wood','leader'):out['weights']={'FUND':.4,'CASH':.6}
                 if role in ('buffett','marks','bogle','wood'):out['falsifiers']=['critical countercase']
                 if role=='leader':out['action']='adjust'
@@ -42,8 +43,9 @@ class ContextBudgetTests(unittest.TestCase):
                     'validation':('reason','issues'),'leader':('rationale','dissent'),
                     'reflection':('investment_outcome','lessons'),'memory':('summary','conflicts')}
                 first,second=fields[role];out[first]='SYNTHETIC '+('x'*14000)
-                out[second]=['Synthetic boundary '+('y'*max(0,37800-len(d.dumps(out))-100))]
-                assert 37000<len(d.dumps(out))<38000
+                ceiling=38000 if p.get('narrative_contract') else 24000
+                out[second]=['Synthetic boundary '+('y'*max(0,ceiling-200-len(d.dumps(out))-100))]
+                assert ceiling-1000<len(d.dumps(out))<ceiling
                 return out
         with tempfile.TemporaryDirectory() as tmp:
             db=Store(Path(tmp)/'db');s=db.session(db.create_user('synthetic'));engine=Engine(s,Model())

@@ -89,7 +89,8 @@ class CodexTests(unittest.TestCase):
         model=self.model(runner)
         model.complete('context','',{}, {})
         model.complete('leader','',{'narrative_contract':'mara.judgment-report/1.0'}, {})
-        self.assertEqual(deadlines,[300,900])
+        model.complete('marks','',{'market':{'source_text':'x'*260000}}, {})
+        self.assertEqual(deadlines,[300,900,900])
 
     def test_logged_out_and_unsupported_cli_fail_before_analysis(self):
         for update in [{'installed':False},{'compatible':False},{'authenticated':False}]:

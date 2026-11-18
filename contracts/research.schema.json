@@ -120,6 +120,10 @@
               },
               "additionalProperties": false
             }
+          },
+          "elapsed_seconds": {
+            "type": "number",
+            "minimum": 0
           }
         }
       }

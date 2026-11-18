@@ -122,7 +122,10 @@ class CodexModel:
             command.extend(['--enable','skip_host_skill_discovery'])
             if self.model:command.extend(['--model',self.model])
             command.append('-')  # stdin keeps personal context out of process argument listings
-            trace=self.runner(command,prompt,tmp,900 if payload.get('narrative_contract') else 300)
+            # Concise output does not make a large frozen evidence pack small.
+            # Keep the existing long-analysis allowance for large inputs even
+            # when a role no longer writes a separate four-section narrative.
+            trace=self.runner(command,prompt,tmp,900 if payload.get('narrative_contract') or len(prompt)>256000 else 300)
             completed=False
             try:
                 for line in trace.splitlines():

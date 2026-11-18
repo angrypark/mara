@@ -12,6 +12,10 @@ window.MaraReport=(()=>{
   const labels={equity:'주식',bond:'채권',cash:'현금',unknown:'미확인',other:'기타'};
   const sourceId=i=>'report-source-'+i;
   const symbol=s=>s==='CASH'?'기준통화 현금':s;
+  function publication(f){
+    try{if(JSON.parse(f.text).date_provenance?.status?.startsWith('available-by'))return '공개 확인 '+f.published_at+' (원문 발표일 미확인)'}catch(e){}
+    return '발표 '+f.published_at;
+  }
   function items(values,empty='기록된 항목이 없어요.'){
     const ul=el('ul');for(const v of values?.length?values:[empty])ul.append(el('li','',v));return ul;
   }
@@ -56,18 +60,33 @@ window.MaraReport=(()=>{
   function evidenceContent(id){
     const node=factNode(id),f=node?.original||factSources.find(f=>f.id===id),card=el('article','fact-detail');
     card.dataset.factId=id;if(!f){card.append(el('h4','',id),el('p','notice','이 판단의 근거를 당시 자료에서 찾지 못했어요.'));return card}
-    card.append(el('h4','',f.topic||id),el('p','hint','fact '+id),el('p','hint',`발표 ${f.published_at} · 인지 ${f.known_at} · 당시 유효 ${f.valid_until}`));
+    let parsed;try{parsed=JSON.parse(f.text)}catch(e){}
+    card.append(el('h4','',typeof parsed?.title==='string'?parsed.title:f.topic||id),el('p','hint','fact '+id),el('p','hint',`${publication(f)} · 인지 ${f.known_at} · 당시 유효 ${f.valid_until}`));
     if(node)card.append(el('p','hint','버전 '+node.snapshot_id),el('p','hint',node.kind==='valuation'?'분석 가정에 따른 계산 · 관측 사실과 구분해요.':'당시 제공된 자료 · 인용 연결 자체가 주장의 타당성을 보증하지 않아요.'));
     if(node?.current_at_report===false)card.append(el('p','notice','보고서 기준 시점과 맞지 않는 자료예요.'));
     for(const issue of factGraph?.issues||[])if(issue.fact_id===id)card.append(el('p','notice','근거 연결 검사: '+issue.code+' · 이 항목은 확인이 필요해요.'));
-    let parsed;try{parsed=JSON.parse(f.text)}catch(e){}
     let excerpt=f.text;
     if(parsed&&typeof parsed==='object'){
       if(typeof parsed.text==='string')excerpt=parsed.text;
       else if(Array.isArray(parsed.hits))excerpt=parsed.hits.map(h=>h.excerpt||h.text||'').join('\n\n');
+      else if(Array.isArray(parsed.verified_facts))excerpt=JSON.stringify({observed_period:parsed.observation_period,facts:parsed.verified_facts,read_scope:parsed.read_scope},null,2);
       else if(Array.isArray(parsed.observations))excerpt=JSON.stringify({namespace:parsed.namespace,tag:parsed.tag,unit:parsed.unit,observations:parsed.observations},null,2);
     }
-    card.append(el('p','fact-excerpt',excerpt.length>900?excerpt.slice(0,900)+'\n[미리보기 일부 · 전체 내용은 아래에서 확인해요.]':excerpt));
+    if(Array.isArray(parsed?.verified_facts)&&parsed.verified_facts.length){
+      const t=el('table','fact-values'),head=el('thead'),row=el('tr');t.append(el('caption','hint','소수는 최대 네 자리로 표시해요. 정확한 값은 보존한 전체 근거에서 확인할 수 있어요.'));
+      for(const label of ['날짜 / 지표','값','단위']){const th=el('th','',label);th.scope='col';row.append(th)}head.append(row);t.append(head);
+      const body=el('tbody');
+      for(const value of parsed.verified_facts){
+        const r=el('tr'),v=value&&typeof value==='object'?value:{value};
+        const display=v.value!=null&&typeof v.value==='object'?JSON.stringify(v.value):v.value??'기록 없음';
+        const label=el('td','',[v.date,v.metric,v.start&&v.end?v.start+' → '+v.end:null].filter(Boolean).join(' · ')||'관측');
+        const extra=Object.fromEntries(Object.entries(v).filter(([k])=>!['date','metric','start','end','value','unit'].includes(k)));
+        if(Object.keys(extra).length){const detail=el('details');detail.append(el('summary','','계산·추가 조건'),el('pre','',JSON.stringify(extra,null,2)));label.append(detail)}
+        r.append(label,el('td','',typeof display==='number'&&Number.isFinite(display)?number(display,4):String(display)),el('td','',v.unit||'미기재'));body.append(r);
+      }
+      t.append(body);card.append(t);
+      if(typeof parsed.read_scope==='string')card.append(el('p','hint','읽은 범위: '+parsed.read_scope));
+    }else card.append(el('p','fact-excerpt',excerpt.length>900?excerpt.slice(0,900)+'\n[미리보기 일부 · 전체 내용은 아래에서 확인해요.]':excerpt));
     if(node?.series)card.append(chart(node.series));
     if(f.uncertainty)card.append(el('p','notice','자료의 한계: '+f.uncertainty));
     if(node?.parents?.length){card.append(el('p','hint',node.derivation_status==='bound_parent_snapshots'?'계산 생성 때 기록한 원자료 버전':'보고서의 인용 연결 · 계산 생성 때의 자료 버전은 확인되지 않았어요.'));for(const parent of node.parents){
@@ -119,12 +138,56 @@ window.MaraReport=(()=>{
     text('source-note',`이 평가에서 사용 가능한 근거 ${sources.length}개. ${expired||0}개의 만료 근거는 현재 목록에서 제외했으며 원본 실행 기록에는 보존돼요. 출처 수는 독립적인 정보의 수나 신뢰도 점수가 아니에요. 인쇄본에는 출처·시점·한계를 싣고 원문 상세는 화면에서 확인해요.`);
     $('source-list').replaceChildren(...sources.map((s,i)=>{
       const card=el('article','source-card');card.id=sourceId(i);
-      card.append(el('h3','',`${i+1}. ${s.topic||s.id}`),el('p','hint',`발표 ${s.published_at} · 인지 ${s.known_at} · 유효 ${s.valid_until}`));
+      card.append(el('h3','',`${i+1}. ${s.topic||s.id}`),el('p','hint',`${publication(s)} · 인지 ${s.known_at} · 유효 ${s.valid_until}`));
       const detail=el('details');detail.append(el('summary','','근거 내용 · '+s.id),el('p','source-text',s.text));card.append(detail);
       if(s.uncertainty)card.append(el('p','hint','자료의 한계: '+s.uncertainty));
       try{const url=new URL(s.source);if(url.protocol==='https:'){const link=el('a','','출처 보기 · '+url.hostname);link.href=url.href;link.target='_blank';link.rel='noreferrer noopener';card.append(link)}}catch(e){}
       return card;
     }));
+  }
+  function allocationComparison(values,nav,weights,capital,newContribution,outside,money){
+    const figure=el('figure','allocation-visual');figure.id='portfolio-allocation-comparison';
+    figure.append(el('figcaption','','비중 변화 · 현재 보유와 이번 제안'));
+    const validAmount=n=>Number.isFinite(n)&&n>=0;
+    const actualValid=validAmount(nav)&&Object.values(values).every(validAmount)&&Math.abs(Object.values(values).reduce((a,b)=>a+b,0)-nav)<=Math.max(.01,(nav||0)*.000001);
+    const weightSum=Object.values(weights).reduce((a,b)=>a+b,0);
+    const proposalValid=validAmount(capital)&&Object.values(weights).every(validAmount)&&Object.keys(weights).length>0&&Math.abs(weightSum-1)<.000001;
+    const symbols=[...new Set([...Object.keys(values),...Object.keys(weights)])].sort((a,b)=>(values[b]||0)-(values[a]||0)||a.localeCompare(b));
+    const palette=['#3670c7','#bd651d','#168677','#9958b4','#b64c6f','#6a7d28','#577f94','#8d6c4f'];
+    const colors=new Map(symbols.map((s,i)=>[s,s==='CASH'?'#7d8795':palette[symbols.filter(x=>x!=='CASH').indexOf(s)%palette.length]]));
+    const planned=Object.fromEntries(symbols.map(s=>[s,proposalValid?capital*(weights[s]||0):null]));
+    const after=Object.fromEntries(symbols.map(s=>[s,newContribution?actualValid&&proposalValid?(values[s]||0)+planned[s]:null:planned[s]]));
+    const afterTotal=newContribution?actualValid&&proposalValid?nav+capital:null:capital;
+    const partial=!newContribution&&(outside>0||(validAmount(nav)&&validAmount(capital)&&capital<nav));
+    const afterLabel=newContribution?'납입 후 전체 (가정)':partial?'이번 제안 범위':'조정 후 계획';
+    const afterValid=proposalValid&&(!newContribution||actualValid);
+    const row=(key,label,amounts,total,valid)=>{
+      const row=el('div','allocation-series');row.dataset.series=key;
+      const heading=el('div','allocation-series-heading');heading.append(el('b','',label),el('span','',valid?money(total):'계산 불가'));row.append(heading);
+      if(!valid){row.append(el('p','allocation-empty','금액 또는 비중 자료를 확인해야 해요.'));figure.append(row);return}
+      if(total===0){row.append(el('p','allocation-empty',key==='current'?'현재 보유 자산이 없어요.':'배분할 금액이 없어요.'));figure.append(row);return}
+      const bar=el('div','allocation-stack');bar.setAttribute('role','img');
+      bar.setAttribute('aria-label',label+' · '+money(total)+' · '+symbols.filter(s=>amounts[s]>0).map(s=>symbol(s)+' '+pct(amounts[s]/total)+' '+money(amounts[s])).join(', '));
+      for(const s of symbols){if(!(amounts[s]>0))continue;const share=amounts[s]/total,segment=el('span','allocation-segment');segment.dataset.symbol=s;segment.dataset.weight=String(share);segment.style.width=(share*100)+'%';segment.style.backgroundColor=colors.get(s);segment.setAttribute('aria-hidden','true');segment.title=symbol(s)+' · '+pct(share)+' · '+money(amounts[s]);if(share>=.12)segment.textContent=pct(share);bar.append(segment)}
+      row.append(bar);figure.append(row);
+    };
+    row('current','현재 전체',values,nav,actualValid);
+    row('after',afterLabel,after,afterTotal,afterValid);
+    if(newContribution)row('contribution','신규 납입분만',planned,capital,proposalValid);
+    figure.append(el('p','hint',partial?'두 막대의 기준 금액이 달라요. 제안 범위 밖 자산의 배분이 정해지지 않아 전체 조정 후 비중은 계산하지 않았어요.':newContribution?'납입 후 전체는 기존 보유 + 신규 납입액이에요. 가격 불변·기존 보유 유지를 가정해요.':'각 막대는 표시된 기준 금액의 100%예요. 비중 차이는 %p로 표시해요.'));
+    const legend=el('ul','allocation-legend');legend.setAttribute('aria-label','자산별 비중과 금액');
+    for(const s of symbols){
+      const item=el('li','allocation-legend-item');item.dataset.symbol=s;
+      const title=el('div','allocation-legend-title'),swatch=el('span','allocation-swatch');swatch.style.backgroundColor=colors.get(s);swatch.setAttribute('aria-hidden','true');title.append(swatch,el('b','',symbol(s)));item.append(title);
+      const beforeWeight=actualValid&&nav>0?(values[s]||0)/nav:null,afterWeight=afterValid&&afterTotal>0?after[s]/afterTotal:null;
+      item.append(el('div','allocation-legend-weights',(beforeWeight==null?'비중 없음':pct(beforeWeight))+' → '+(afterWeight==null?'계산 불가':pct(afterWeight))));
+      if(!partial&&beforeWeight!=null&&afterWeight!=null){const delta=(afterWeight-beforeWeight)*100;item.append(el('span','allocation-weight-change',(delta>0?'+':'')+delta.toFixed(1)+'%p'))}
+      item.append(el('span','allocation-legend-amount',(partial?'제안액 ':newContribution?'납입 후 ':'조정 후 ')+(afterValid?money(after[s]):'계산 불가')));
+      if(newContribution)item.append(el('span','hint','신규 납입 '+(proposalValid?money(planned[s])+' · '+pct(weights[s]||0):'계산 불가')));
+      if(!(weights[s]>0)&&(values[s]||0)>0)item.append(el('span','hint',newContribution?'기존 보유 유지 · 신규 납입 없음':partial?'이번 제안에 미포함':'목표에서 제외'));
+      legend.append(item);
+    }
+    figure.append(legend);return figure;
   }
   function portfolioLayout(box,doc,r,v,sources,money){
     const makeSection=(id,index,title)=>{const s=el('section','portfolio-section');s.id=id;const head=el('div','section-title');head.append(el('span','section-index',index),el('h3','',title));s.append(head);return s};
@@ -134,20 +197,30 @@ window.MaraReport=(()=>{
     grid.remove();
     const claims=[...box.querySelectorAll('.reader-claim-row')];claims.forEach(c=>c.remove());
     const appendix=fold('reader-appendix','대안·확인할 질문·재검토 일정과 출처',...box.childNodes);
-    const market=makeSection('portfolio-market','01','현재 시장 상황'),analysis=v.market_analysis||{};
+    const market=makeSection('portfolio-market','01','현재 시장 상황'),analysis=v.market_analysis||{},brief=v.reader_brief;
     market.append(el('p','hint',r.as_of+' 기준 자료 · 실시간 시세가 아니에요.'));
     const summary=analysis.summary||'이 보고서에는 시장 해석이 별도로 기록되지 않았어요.';
-    const lead=summary.split(/(?<=[.!?])\s+/u).slice(0,2).join(' ');
-    market.append(el('p','eyebrow','시장 해석 · 원문 발췌'),el('p','market-lead',lead.length>320?lead.slice(0,320)+'…':lead));
+    if(brief){
+      market.append(el('p','eyebrow',brief.period.start+' → '+brief.period.end+' · 최근 3개월'),el('h4','market-headline',brief.headline),el('p','market-lead',brief.summary));
+      const themes=el('div','market-themes');
+      for(const theme of brief.themes){const card=el('article','market-theme'),heading=el('h4'),button=el('button','claim-statement',theme.title);button.type='button';attachEvidence(button,theme.fact_ids);heading.append(button);
+        card.append(heading,el('p','',theme.what_happened),el('p','market-implication','포트폴리오에 주는 의미: '+theme.portfolio_meaning));
+        const detail=fold('market-theme-'+theme.id,'반대 근거와 확인 범위',el('p','',theme.counterpoint),sourceLinks(theme.fact_ids,sources));card.append(detail);themes.append(card)}
+      market.append(themes);
+      if(brief.missing_evidence.length)market.append(fold('market-brief-gaps','아직 확인하지 못한 자료 '+brief.missing_evidence.length+'개',items(brief.missing_evidence)));
+    }else{
+      market.append(el('p','eyebrow','이 실행에는 최종 시황 요약이 없어요.'),el('p','market-lead',summary));
+    }
     const factIds=[...new Set(analysis.facts||[])];
     const facts=el('div','market-fact-list');
     for(const id of factIds.slice(0,3)){
       const f=sources.find(f=>f.id===id),row=el('div','market-fact-row'),b=el('button','market-fact-title',f?.topic||id);b.type='button';attachEvidence(b,[id]);
-      row.append(b,el('span','hint','fact · '+id+(f?' · 발표 '+f.published_at:'')));facts.append(row);
+      row.append(b,el('span','hint','fact · '+id+(f?' · '+publication(f):'')));facts.append(row);
       if(f?.text&&!/^[\s]*[\[{]/.test(f.text))row.append(el('p','hint',f.text.length>160?f.text.slice(0,160)+'…':f.text));
     }
     if(!factIds.length)facts.append(el('p','hint','시장 해석에 연결된 fact가 없어요.'));
-    market.append(facts,fold('portfolio-market-details','시장 해석 전체와 연결된 fact '+factIds.length+'개',el('p','',summary),
+    if(!brief)market.append(facts);
+    market.append(fold('portfolio-market-details','분석 초기에 작성한 시황과 연결된 fact '+factIds.length+'개',el('p','',summary),
       section('주요 요인',analysis.drivers),section('포트폴리오에 주는 의미',analysis.portfolio_implications),section('자료의 한계',analysis.uncertainties),sourceLinks(factIds,sources)));
     const current=makeSection('portfolio-current','02','포트폴리오 요약'),perf=r.performance,nav=r.valuation?.nav,previousNav=v.previous?.valuation?.nav;
     const change=Number.isFinite(nav)&&Number.isFinite(previousNav)&&previousNav>0?nav/previousNav-1:null;
@@ -175,6 +248,7 @@ window.MaraReport=(()=>{
     const amounts=el('div','metrics');amounts.append(metric(newContribution?'신규 납입 기준액':'조정 후 기준액',money(capital)),metric('추가 필요 자금',money(r.funding?.additional_funding_needed)),metric('제안 범위 밖 금액',money(r.funding?.amount_outside_proposal)));plan.append(amounts);
     if(newContribution)plan.append(el('p','hint','이번 안은 새로 납입할 '+money(capital)+'의 배분이에요. 기존 보유는 유지한다고 가정해 납입 후 금액을 함께 표시해요. 기존 보유를 매도하거나 재배분하는 제안은 아니에요.'));
     else if(r.funding?.amount_outside_proposal>0)plan.append(el('p','notice','전체 보유 중 '+money(r.funding.amount_outside_proposal)+'은 이번 제안 범위 밖이에요. 아래 증감액은 전체 현재 보유와 제안액의 차이이며, 범위 밖 자산의 처리 방안이 정해지기 전에는 매도액으로 사용할 수 없어요.'));
+    plan.append(allocationComparison(values,nav,weights,capital,newContribution,r.funding?.amount_outside_proposal,money));
     const all=[...new Set([...Object.keys(values),...Object.keys(weights)])].sort((a,b)=>(weights[b]||0)-(weights[a]||0));
     const adjustment=el('table','portfolio-table adjustment-table');adjustment.id='portfolio-adjustment-table';adjustment.append(el('caption','',newContribution?'현재 보유 → 신규 납입 후 · 기존 보유 유지와 가격 불변을 가정해요.':'현재 보유 → 조정 후 계획 · 목표에서 제외한 보유도 포함해요.'));
     const ah=el('tr');['자산','현재 금액',newContribution?'납입 후 금액(가정)':'조정 후 금액',newContribution?'신규 납입액':'증감액',newContribution?'납입분 비중':'목표 비중','매회 납입 배분'].forEach(x=>ah.append(el('th','',x)));const ath=el('thead');ath.append(ah);adjustment.append(ath);const ab=el('tbody');
@@ -184,8 +258,15 @@ window.MaraReport=(()=>{
     }adjustment.append(ab);const as=el('div','scroll');as.append(adjustment);plan.append(as,el('p','hint','증감액 = 조정 후 금액 − 현재 금액. 수수료·세금·수량 반올림 전의 비교액이며, 미입금 자금은 현재 쓸 수 있는 현금에 포함하지 않아요. 현금 행의 증감은 현금 잔액 변화예요.'),fold('portfolio-allocation-context','납입 주기·자금 범위와 적용 조건',...allocationOriginal.childNodes));
     const reasons=makeSection('portfolio-reasons','04','주요 근거');
     reasons.append(el('p','hint','종합안의 핵심 이유를 먼저 읽고, 아래에서 판단별 설명과 fact를 확인해요.'));
-    const keyPoints=el('ol','portfolio-key-points');for(const point of doc.reasons.key_points||[])keyPoints.append(el('li','',point));reasons.append(keyPoints);
-    reasons.append(el('h4','','이 조정안을 제안한 이유'),el('p','',doc.decision.rationale||'종합 설명은 아래 원문을 확인해 주세요.'));
+    const keyPoints=el('ol','portfolio-key-points');
+    if(brief?.key_reasons.length){for(const reason of brief.key_reasons){const li=el('li'),button=el('button','claim-statement',reason.headline);button.type='button';
+      const selected=doc.reasons.claims.filter(x=>reason.claim_ids.includes(x.claim.id)).map(x=>x.claim);
+      attachEvidence(button,[...new Set(selected.flatMap(x=>x.fact_ids||[]))],[...new Set(selected.flatMap(x=>x.calculation_paths||[]))]);
+      li.append(button,el('p','',reason.explanation));
+      const links=el('div','source-chips');for(const id of reason.claim_ids){const a=el('a','source-chip','판단 '+id);a.href='#reader-claim-'+id;a.addEventListener('click',()=>{const more=$('portfolio-more-reasons'),claim=$('reader-claim-'+id);if(more)more.open=true;if(claim)claim.open=true});links.append(a)}li.append(links);keyPoints.append(li)}
+    }else for(const point of doc.reasons.key_points||[])keyPoints.append(el('li','',point));reasons.append(keyPoints);
+    if(brief)reasons.append(fold('portfolio-original-rationale','종합 의견 원문',items(doc.reasons.key_points),el('p','',doc.decision.rationale)));
+    else reasons.append(el('h4','','이 조정안을 제안한 이유'),el('p','',doc.decision.rationale||'종합 설명은 아래 원문을 확인해 주세요.'));
     const more=fold('portfolio-more-reasons','판단별 설명과 근거 '+claims.length+'개');
     claims.forEach((claim,i)=>{
       const card=el('article','portfolio-reason'),heading=claim.querySelector('h4'),state=claim.querySelector('summary p'),impact=[...claim.children].find(n=>n.tagName==='P'&&n.textContent.startsWith('결정에 미친 영향:'));
@@ -239,7 +320,7 @@ window.MaraReport=(()=>{
     const refs=el('section','final-references');refs.append(el('h3','','핵심 근거와 읽은 범위'));
     for(const f of doc.references.facts){const i=sources.findIndex(s=>s.id===f.fact_id),item=el('div','final-reference');
       item.append(el('p','',`${i>=0?'근거 '+(i+1):'연결 미확인'} · ${f.title||f.fact_id}`));
-      if(f.available){const scope=f.read_scope||{};item.append(el('p','hint',`발표 ${f.published_at} · 확인 ${f.known_at} · 유효 ${f.valid_until}`));
+      if(f.available){const scope=f.read_scope||{};item.append(el('p','hint',`${publication(sources.find(x=>x.id===f.fact_id)||f)} · 확인 ${f.known_at} · 유효 ${f.valid_until}`));
         if(scope.filing)item.append(el('p','hint',scope.filing.form+' · '+scope.filing.accession));
         if(scope.ranges)item.append(el('p','hint','읽은 본문 위치: '+scope.ranges.map(x=>x.start+'–'+x.end+'자').join(', ')));
         if(scope.tag)item.append(el('p','hint',`${scope.namespace}:${scope.tag} · ${scope.unit} · ${scope.observations}개 관측`));
@@ -349,7 +430,7 @@ window.MaraReport=(()=>{
     text('report-period',(prior?prior.as_of+' → ':'')+r.as_of+' · 기준통화 '+currency+(r.revision_reason?' · 수정 이유: '+r.revision_reason:''));
     text('action',action[p.action]||p.action);$('action').dataset.status=p.action;text('rationale',p.rationale);
     let budgetNotice=$('risk-budget-notice');if(!budgetNotice){budgetNotice=el('p','notice');budgetNotice.id='risk-budget-notice';$('report-context').before(budgetNotice)}const budget=r.risk_budget;budgetNotice.hidden=budget?.scope!=='analysis_only';budgetNotice.textContent=budget?.scope==='analysis_only'?`분석 전용 · 이번 제안의 충격 비교 예산 ${pct(budget.effective_fraction)} / 기존 기준 ${pct(budget.reference_fraction)}. 실제 감내손실은 미확인이고 이 보고서로 주문 계획을 만들 수 없어요.`:'';
-    if(r.history_scope?.reset_id){const n=el('p','notice','새 판단 이력 · 이전 분석·회고·학습 기억은 이번 판단에서 제외했어요. 원본 기록과 현재 개인 사실은 보존돼요.');$('report-period').append(n)}
+    if(r.history_scope?.reset_id){const n=el('p','notice','초기화 이전의 분석·회고·학습 기억은 제외했어요. 초기화 이후에 쌓인 판단과 학습은 다시 사용할 수 있어요. 원본 기록과 현재 개인 사실은 보존돼요.');$('report-period').append(n)}
     text('report-context',v.context?.summary||v.criteria?.goal||'당시 투자 맥락은 원본 실행 기록에서 확인해요.');
     let structured=$('structured-report');if(!structured){structured=el('div');structured.id='structured-report';$('report-context').after(structured)}structured.replaceChildren();
     if(v.final_report)structured.append(readerDocument(v.final_report,v.final_report_status,r,sources,money,v));

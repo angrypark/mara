@@ -79,6 +79,8 @@ def present(session,row):
     latest_profile=session.latest('profile')
     from .fact_catalog import present as fact_view
     evidence_graph=fact_view(session,r,facts,result['id'])
+    from .editorial import presented as presented_brief
+    brief=presented_brief(r.get('reader_brief'),r,facts)
     result['view']={'user_persona':frozen_persona,'persona_is_current':bool(frozen_persona and latest_profile and latest_profile['id']==r['profile_id']), 'version':1,'kind':'revision' if r.get('revision_of') else 'weekly' if previous else 'initial',
         'base_currency':profile['base_currency'],'context':analyses.get('context'),
         'judgment_reports':list(role_reports.values()),
@@ -87,7 +89,7 @@ def present(session,row):
         'judgment_report_status':{'available':bool(role_reports),'final_action':r['proposal']['action'],
             'eligibility':r['proposal']['eligibility'],
             'rule':'각 문서는 해당 역할·단계의 원문 의견. 리더 종합안도 최종 검증 전 문서이며 공식 행동·보류 여부는 최종 검증을 반영한 상태가 우선해요.'},
-        'market_analysis':analyses.get('evidence'),'sources':facts,'prices':prices,
+        'market_analysis':analyses.get('evidence'),'reader_brief':brief,'sources':facts,'prices':prices,
         'expired_source_count':expired_count,'agent_records':provenance,'agent_registry':registry,
         'memory':memory,'pruning':session.get(r['pruning_audit_id'])['body'],
         'quality_evaluation':evaluations[-1]['body'] if evaluations else None,

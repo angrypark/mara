@@ -400,6 +400,7 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         completed_rounds=round_no+1;round_progress=[]
         prior_review=(payload.get('improvement') or payload.get('external_review') or {}).get('feedback',{})
         analysis=payload.get('analysis',{});comparison=analysis.get('comparison',{})
+        from .planner_evidence import overview
         request={'role':role,'as_of':as_of,'question':payload.get('question'),
             'execution_boundary':'외부 브라우저·쉘 도구를 직접 실행하지 않아요. 이 계약의 calls 배열에 조사 요청을 반환하는 것은 허용돼요. Mara가 허용 도구를 실행하고 다음 입력에 결과를 전달해요.',
             'planning_feedback':copy.deepcopy(planning_feedback),
@@ -417,6 +418,7 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
                 'rule':'기준통화 환산 가격. USD 가치 계산에는 company 도구의 원래 USD quote를 사용.'},
             'existing_evidence':[{'id':f['id'],'topic':f['topic'],'source':f['source'],
                 'characters':len(dumps(f)),'read_with':'evidence_read'} for f in payload['market']['facts']],
+            'evidence_overview':overview(s,payload,run_id,role),
             'research_results':transcript,'round':round_no+1,'max_rounds':8,'collected_this_call':collected,
             'research_budget':{'base_rounds':4,'hard_max_rounds':8,'extensions':extensions,
                 'recent_progress':progress.history[-2:],'rule':'After four rounds, continue only with new delivered source ranges/observations tied to the original questions. One discovery-to-read bridge is allowed. Repeated failures, pages, mere fact IDs and unactivated results do not establish progress or analytical sufficiency.'}}

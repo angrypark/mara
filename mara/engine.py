@@ -426,6 +426,14 @@ class Engine:
             'analysis':copy.deepcopy(evidence),'scope':'최종 제안 전에 작성한 시황 기록이에요. 당시 비중 설명을 최종 상태로 해석하지 않아요.'}
         from .decision import contributions
         report['contribution_basis']=dict(contributions(p),every_days=p.get('contribution_every_days') if p.get('contribution_schedule')!='monthly' else None)
+        # Write the reader's summary only after late research and final review.
+        # An editorial failure cannot turn a blocked decision into an approval.
+        from .editorial import create as create_brief
+        try:report['reader_brief']=create_brief(self.s,self.model,report,m['facts'])
+        except Exception as exc:
+            self.s.append('report_editor_failed',{'error_type':type(exc).__name__,
+                'scope':'Final decision preserved; reader brief unavailable'},as_of,run_id)
+            report['reader_brief']=None
         from .final_report import safe_assemble
         report['final_report']=safe_assemble(report,m['facts'])
         with self.s.store.transaction():

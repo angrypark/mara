@@ -22,10 +22,11 @@ from .contracts import validate,schema
 from .registry import resource
 from .decision import POLICY
 from . import commentary_sources as commentary
-from . import fund_history,policy_sources,fx_history
+from . import fund_history,policy_sources,fx_history,market_history
 
 VERSION='mara.research/1.0.0'
 TOOLS=[
+ {'id':'market_history','label':'최근 3개월 시장 흐름','roles':['evidence','marks','bogle','validation','leader'],'provides':'FRED S&P 500 가격지수·미 국채 10년물 금리·원/달러 일별 관측. 정확한 기간·단위·결측·고저점과 계산식'},
  {'id':'fx_history','label':'원화·달러 월말 환율 이력','roles':['evidence','marks','bogle','validation','leader'],'provides':'FRED/연준 H.10 일별 원/달러의 월말 마지막 유효 관측. 원화 배분 비교와 실제 계좌 환율을 구분'},
  {'id':'release_notes','label':'검증된 공식 발표 보충','roles':['evidence','marks','validation'],'provides':'원문을 직접 대조한 발표 수치·결측 사유와 읽은 범위. 유효 기간 이후 자동 제외'},
  {'id':'fed_statement','label':'FOMC 정책 성명 본문','roles':['evidence','marks','validation','leader'],'provides':'공식 목록의 최신 성명 날짜·정책 본문·반대 의견. RSS 제목과 구분'},
@@ -69,7 +70,7 @@ class PublicArchive:
             if digest(target.read_bytes())!=sha:raise ValueError('Archive hash mismatch')
         return {'sha256':sha,'source':url,'retrieved_at':self.clock().isoformat(),'bytes':len(raw)}
 
-    def get(self,url):
+    def get(self,url,timeout=None):
         u=urllib.parse.urlsplit(url)
         if u.scheme!='https' or u.hostname not in ALLOWED or u.port not in (None,443) or u.username or u.password:
             raise ValueError('Unapproved public source')
@@ -91,7 +92,7 @@ class PublicArchive:
             # the explicit application identity on all requests.
             headers={} if u.hostname=='fred.stlouisfed.org' else {'User-Agent':'MaraResearch/1.0 personal investment research'}
             req=urllib.request.Request(url,headers=headers)
-            with urllib.request.build_opener(NoRedirect).open(req,timeout=30 if u.hostname=='fred.stlouisfed.org' else 10) as response:raw=response.read(8_000_001)
+            with urllib.request.build_opener(NoRedirect).open(req,timeout=timeout or (30 if u.hostname=='fred.stlouisfed.org' else 10)) as response:raw=response.read(8_000_001)
         if len(raw)>8_000_000:raise ValueError('Research response too large')
         meta=self.preserve(raw,url)
         # Cache is replaceable; original content-addressed responses are not.
@@ -151,6 +152,8 @@ class Research:
             if tool=='sec_filings':published=max(x['filed'] for x in value['filings'])
             if tool=='fed':published=max(x['published_at'] for x in value['items'])
             if tool=='treasury':published=value['observations'][0]['date']
+            # A FRED observation date does not establish its publication date.
+            if tool=='market_history':published=self.as_of
             d.day(published)
             if published>self.as_of:raise ValueError('Future research publication')
             self.facts.append({'id':fact_id,'topic':target+' · '+next(x['label'] for x in TOOLS if x['id']==tool),
@@ -185,6 +188,16 @@ class Research:
         if self.record('fx_history','DEXKOUS',summary,url,14):
             history['raw_refs']=copy.deepcopy(self.calls[-1]['raw_refs']);market['fx_history']=history
 
+    def market_history(self):
+        for series in market_history.SERIES:
+            url=market_history.url(series,self.as_of)
+            started=time.monotonic()
+            def collect(u=url,s=series):
+                raw,meta=self.archive.get(u,timeout=8);self.records.append(meta);self.urls[u]=meta
+                return market_history.parse(raw,s,self.as_of)
+            self.record('market_history',series,collect,url,7)
+            self.calls[-1]['elapsed_seconds']=round(time.monotonic()-started,3)
+
     def enrich(self,market,symbols,broker=None,progress=lambda msg:None):
         self.as_of=market['as_of']
         if self.as_of!=self.now.astimezone().date().isoformat() and self.as_of!=self.now.date().isoformat():
@@ -195,6 +208,7 @@ class Research:
         funds=[s for s in src.FUNDS if s in all_symbols or s in ('ITOT','IVV')]
         # Comparison research only; this does not add a tradable asset or user candidate.
         progress('공식 거시 지표와 정책 발표를 수집하고 있어요.')
+        self.market_history()
         treasury_url=f'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{self.as_of[:4]}/all?type=daily_treasury_yield_curve&field_tdr_date_value={self.as_of[:4]}&page&_format=csv'
         self.record('treasury','US',lambda:src.treasury(self.fetch(treasury_url),self.as_of),treasury_url)
         for series in ('CUSR0000SA0','LNS14000000'):
