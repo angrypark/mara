@@ -2,6 +2,23 @@ import unittest
 from mara.model_wire import packed,unpacked,serialized,MARKER,VALUE_MARKER,VERSION
 
 class ModelWireTests(unittest.TestCase):
+    def test_canonical_json_source_text_is_exact_and_v2_remains_readable(self):
+        import json
+        from mara.model_wire import JSON_MARKER
+        rows=[{'period':'2026-01-01','text':'source narrative '*100,'value':i,'other':None} for i in range(20)]
+        canonical=serialized({'observations':rows})
+        original={'facts':[{'text':canonical},{'text':canonical}],
+            'spaced':json.dumps({'observations':rows},ensure_ascii=False,sort_keys=True),
+            'noncanonical':json.dumps({'observations':rows},indent=2),
+            'reserved_json':serialized({VALUE_MARKER:'untrusted source '+'x'*300})}
+        wire=packed(original)
+        self.assertEqual(unpacked(wire),original)
+        self.assertIn(JSON_MARKER,serialized(wire))
+        self.assertLess(len(serialized(wire)),len(serialized(original))/2)
+        self.assertEqual(unpacked({'version':'mara.model-wire/2.0','root':{VALUE_MARKER:0},'values':['old text']}),'old text')
+        with self.assertRaises(ValueError):packed({JSON_MARKER:'untrusted'})
+        self.assertEqual(unpacked({'version':'mara.model-wire/2.0','root':{JSON_MARKER:[]},'values':[]}),{JSON_MARKER:[]})
+
     def test_role_wire_preserves_source_and_output_repair_inputs(self):
         import tempfile
         from pathlib import Path

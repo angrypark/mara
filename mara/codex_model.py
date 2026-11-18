@@ -85,8 +85,8 @@ def run_process(command,prompt,directory,timeout):
 
 class CodexModel:
     mode='live'
-    input_wire_version='mara.model-wire/2.0'
-    evaluator_wire_version='mara.model-wire/2.0'
+    input_wire_version='mara.model-wire/3.0'
+    evaluator_wire_version='mara.model-wire/3.0'
     def __init__(self,model='',runner=run_process):
         if not isinstance(model,str) or (model and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:\-]{0,119}',model)):
             raise CodexError('Codex 모델 ID 형식을 확인해주세요.')

@@ -5,14 +5,18 @@ from collections import Counter
 
 MARKER='$mara_input_ref'
 VALUE_MARKER='$mara_value'
-VERSION='mara.model-wire/2.0'
+JSON_MARKER='$mara_json_text'
+VERSION='mara.model-wire/3.0'
 
 def supported(model,role):
     return (getattr(model,'input_wire_version',None)==VERSION or
         role=='evaluator' and getattr(model,'evaluator_wire_version',None)==VERSION)
 
-INSTRUCTION=('Input serialization mara.model-wire/2.0: root is the original JSON document. '
+INSTRUCTION=('Input serialization mara.model-wire/3.0: root is the original JSON document. '
     'An object with only $mara_value and an integer means the EXACT value at that index in values, recursively. '
+    'An object with only $mara_json_text contains {style,value}: serialize resolved value as JSON text '
+    '(Unicode, sorted keys). style compact uses comma and colon without spaces; style spaced uses comma-space and colon-space. '
+    'This restores the EXACT original JSON string, e.g. fact.text. '
     'Resolve these references before reading role_guide, contract and input. '
     'No original text, number, list order or evidence is removed. '
     'Citations use paths in the decoded input, never paths into this serialization envelope. ')
@@ -21,10 +25,22 @@ def serialized(value):
     return json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(',',':'),allow_nan=False)
 
 def packed(value):
+    def encode(item):
+        if isinstance(item,dict):
+            if {MARKER,VALUE_MARKER,JSON_MARKER}&set(item):raise ValueError('Reserved input reference key')
+            return {k:encode(v) for k,v in item.items()}
+        if isinstance(item,list):return [encode(v) for v in item]
+        if isinstance(item,str) and len(item)>=256 and item[:1] in ('{','['):
+            try:
+                parsed=json.loads(item)
+                for style,separators in (('compact',(',',':')),('spaced',(', ',': '))):
+                    if json.dumps(parsed,ensure_ascii=False,sort_keys=True,separators=separators,allow_nan=False)==item:
+                        return {JSON_MARKER:{'style':style,'value':encode(parsed)}}
+            except (ValueError,TypeError):pass  # Noncanonical or reserved-key source stays literal text.
+        return item
+    value=encode(value)
     counts=Counter()
     def count(item):
-        if isinstance(item,dict) and ({MARKER,VALUE_MARKER}&set(item)):
-            raise ValueError('Reserved input reference key')
         raw=serialized(item)
         if len(raw)>=64:
             counts[raw]+=1
@@ -52,7 +68,7 @@ def packed(value):
     return {'version':VERSION,'root':root,'values':values}
 
 def unpacked(value):
-    if isinstance(value,dict) and value.get('version')==VERSION:
+    if isinstance(value,dict) and value.get('version') in (VERSION,'mara.model-wire/2.0'):
         if set(value)!={'version','root','values'} or not isinstance(value['values'],list):
             raise ValueError('Invalid shared input envelope')
         restored={}
@@ -68,6 +84,13 @@ def unpacked(value):
                 index=item[VALUE_MARKER]
                 if set(item)!={VALUE_MARKER}:raise ValueError('Invalid shared input reference')
                 return resolve(index,trail)
+            if isinstance(item,dict) and JSON_MARKER in item and value['version']==VERSION:
+                if set(item)!={JSON_MARKER}:raise ValueError('Invalid JSON text reference')
+                text=restore(item[JSON_MARKER],trail)
+                if not isinstance(text,dict) or set(text)!={'style','value'} or text['style'] not in ('compact','spaced'):
+                    raise ValueError('Invalid JSON text representation')
+                return json.dumps(text['value'],ensure_ascii=False,sort_keys=True,allow_nan=False,
+                    separators=(',',':') if text['style']=='compact' else (', ',': '))
             if isinstance(item,dict):return {k:restore(v,trail) for k,v in item.items()}
             if isinstance(item,list):return [restore(v,trail) for v in item]
             return item
