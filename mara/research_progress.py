@@ -29,7 +29,7 @@ class Progress:
         raw=result.get('raw_ref',{}).get('sha256','');version=result.get('extraction_version','')
         if tool=='evidence_read' and result.get('text'):
             kind=(source_fact or {}).get('research_tool')
-            if kind in {'company_valuation','valuation'}:return dict(record,kind='calculation_read_or_assumption_model',delivered=True)
+            if kind in {'company_valuation','company_normalize_earnings','valuation'}:return dict(record,kind='calculation_read_or_assumption_model',delivered=True)
             source_types={'sec_financials','treasury','bls','fed_statement','fed','fund_profile','fund_holdings','fund_history',
                 'fx_history','release_notes','institutional_reports','financial_news','candles','orderbook',
                 'company_filing_read','company_filing_search','company_xbrl_read'}
@@ -67,7 +67,7 @@ class Progress:
             count=self.unique(key,rows,self.discoveries)
             record.update(kind='new_discovery' if count else 'repeated_discovery',new_units=count,discovery_bridge=count>0)
             return record
-        elif tool in {'analysis_read','valuation'}:
+        elif tool in {'analysis_read','valuation','normalize_earnings'}:
             return dict(record,kind='calculation_read_or_assumption_model',delivered=bool(answer.get('fact_id')) or tool=='analysis_read')
         record['eligible_for_extension']=record['new_units']>0
         record['delivered']=bool(answer.get('fact_id')) or tool=='evidence_read'

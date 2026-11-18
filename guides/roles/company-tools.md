@@ -67,3 +67,9 @@ valuation은 기존 입력에 선택적으로 earnings_cases 객체를 받아요
 결과의 scenarios는 경우별 이익과 성장·할인 등을 함께 바꾼 계산이에요. normalization_sensitivity는 base의 나머지 가정을 고정하고 이익만 바꾼 결과예요. earnings_cases를 생략하면 정상화 이익은 고정되며 그 민감도를 검증한 것이 아니에요. 설명을 적었다고 재투자·희석의 미래 경로를 별도로 계산한 것은 아니에요. 0·음수 하방은 이 양수 이익 모형으로 계산할 수 없고 양수로 치환하지 않아요.
 
 도구가 확인하는 것은 입력 출처·기업·시점과 산식이에요. 가정의 경제적 타당성은 별도 판단이 필요해요. 출처 ID 존재, 계산 성공, 세 시나리오 작성만으로 원래 질문을 해결했다고 하지 않아요.
+
+## v1.3 · 정상화 산술과 가격 조건
+
+normalize_earnings는 quote_fact_id, symbol, period_start/end, share_basis, cases(bear/base/bull)를 받아요. 각 case는 shares={fact_id,path}, components=[{label,observation:{fact_id,path},multiplier,reason}], explanation/reinvestment/dilution/falsifier를 지정해요. path는 JSON 관측 행 자체의 위치예요. thesis_workspace의 observation_locators 또는 실제 xbrl_read /observations/N, sec_financials /metrics/KEY/SERIES/observations/N에서 읽어요. 같은 연간 기간의 USD 성분과 shares 분모만 계산하며 표준 단위로 이미 제공된 값을 다시 백만 배 하지 않아요. 자동 정상화·기본 계수·기본 성장률은 없어요. 양수/음수 결과 모두 보존해요.
+
+valuation arguments에 normalization_fact_id를 추가하면 원본 관측을 다시 읽어 산술을 재현하고 세 earnings_cases 및 주식 기준과 대조해요. source_ids에는 정상화의 모든 원 관측과 quote를 포함해요. 기존 호출도 가능하지만 정상화 연결은 not_bound로 표시돼요. 가격이 요구하는 이익과 안전마진을 충족할 이익은 각 시나리오 가정을 고정한 역산이에요. 새 사실이나 매수 신호가 아니에요.

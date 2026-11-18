@@ -22,6 +22,7 @@ METRICS={
  'net_income':('USD',['NetIncomeLoss','ProfitLoss']),
  'operating_cashflow':('USD',['NetCashProvidedByUsedInOperatingActivities']),
  'capital_expenditure':('USD',['PaymentsToAcquirePropertyPlantAndEquipment']),
+ 'productive_asset_purchases':('USD',['PaymentsToAcquireProductiveAssets']),
  'cash':('USD',['CashAndCashEquivalentsAtCarryingValue']),
  'assets':('USD',['Assets']),
  'liabilities':('USD',['Liabilities']),
@@ -34,7 +35,7 @@ METRICS={
  'operating_income':('USD',['OperatingIncomeLoss']),
  'research_development':('USD',['ResearchAndDevelopmentExpense']),
 }
-DURATIONS={'revenue','net_income','operating_cashflow','capital_expenditure','diluted_eps','diluted_shares','stock_compensation','depreciation_amortization','operating_income','research_development'}
+DURATIONS={'revenue','net_income','operating_cashflow','capital_expenditure','productive_asset_purchases','diluted_eps','diluted_shares','stock_compensation','depreciation_amortization','operating_income','research_development'}
 
 
 class EvidenceError(ValueError):

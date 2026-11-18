@@ -280,11 +280,282 @@
                 "type": "object",
                 "properties": {
                   "assumptions": {
-                    "type": "object"
+                    "type": "object",
+                    "properties": {
+                      "owner_earnings_per_share": {
+                        "type": "number"
+                      },
+                      "currency": {
+                        "const": "USD"
+                      },
+                      "earnings_period": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      },
+                      "share_basis": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      },
+                      "normalization": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      },
+                      "price": {
+                        "type": "number"
+                      },
+                      "price_as_of": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      },
+                      "source_ids": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 30,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        }
+                      },
+                      "scenarios": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "enum": [
+                                "bear",
+                                "base",
+                                "bull"
+                              ]
+                            },
+                            "growth": {
+                              "type": "number",
+                              "minimum": -0.5,
+                              "maximum": 0.5
+                            },
+                            "discount": {
+                              "type": "number",
+                              "minimum": 0.01,
+                              "maximum": 0.5
+                            },
+                            "terminal_growth": {
+                              "type": "number",
+                              "minimum": -0.05,
+                              "maximum": 0.1
+                            },
+                            "years": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 20
+                            },
+                            "reason": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 2000
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "growth",
+                            "discount",
+                            "terminal_growth",
+                            "years",
+                            "reason"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "margin_of_safety": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 0.9
+                      },
+                      "earnings_cases": {
+                        "type": "object",
+                        "properties": {
+                          "bear": {
+                            "type": "object",
+                            "properties": {
+                              "owner_earnings_per_share": {
+                                "type": "number"
+                              },
+                              "source_ids": {
+                                "type": "array",
+                                "minItems": 1,
+                                "maxItems": 30,
+                                "uniqueItems": true,
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 2000
+                                }
+                              },
+                              "normalization": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "reinvestment": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "dilution": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "falsifier": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              }
+                            },
+                            "required": [
+                              "owner_earnings_per_share",
+                              "source_ids",
+                              "normalization",
+                              "reinvestment",
+                              "dilution",
+                              "falsifier"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "base": {
+                            "type": "object",
+                            "properties": {
+                              "owner_earnings_per_share": {
+                                "type": "number"
+                              },
+                              "source_ids": {
+                                "type": "array",
+                                "minItems": 1,
+                                "maxItems": 30,
+                                "uniqueItems": true,
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 2000
+                                }
+                              },
+                              "normalization": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "reinvestment": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "dilution": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "falsifier": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              }
+                            },
+                            "required": [
+                              "owner_earnings_per_share",
+                              "source_ids",
+                              "normalization",
+                              "reinvestment",
+                              "dilution",
+                              "falsifier"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "bull": {
+                            "type": "object",
+                            "properties": {
+                              "owner_earnings_per_share": {
+                                "type": "number"
+                              },
+                              "source_ids": {
+                                "type": "array",
+                                "minItems": 1,
+                                "maxItems": 30,
+                                "uniqueItems": true,
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 2000
+                                }
+                              },
+                              "normalization": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "reinvestment": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "dilution": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "falsifier": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              }
+                            },
+                            "required": [
+                              "owner_earnings_per_share",
+                              "source_ids",
+                              "normalization",
+                              "reinvestment",
+                              "dilution",
+                              "falsifier"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "bear",
+                          "base",
+                          "bull"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "owner_earnings_per_share",
+                      "currency",
+                      "earnings_period",
+                      "share_basis",
+                      "normalization",
+                      "price",
+                      "price_as_of",
+                      "source_ids",
+                      "scenarios",
+                      "margin_of_safety"
+                    ],
+                    "additionalProperties": false
                   },
                   "symbol": {
                     "type": "string",
                     "pattern": "^[A-Z0-9][A-Z0-9.\\-]{0,14}$"
+                  },
+                  "normalization_fact_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
                   }
                 },
                 "required": [
@@ -667,6 +938,397 @@
                   "namespace",
                   "tag",
                   "unit"
+                ],
+                "additionalProperties": false
+              },
+              "question_ids": {
+                "type": "array",
+                "maxItems": 20,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              },
+              "discovery_reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "tool",
+              "arguments"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "const": "normalize_earnings"
+              },
+              "arguments": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "$id": "urn:mara:earnings-bridge:1.0",
+                "type": "object",
+                "properties": {
+                  "symbol": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9][A-Z0-9.\\-]{0,14}$"
+                  },
+                  "quote_fact_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
+                  },
+                  "period_start": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
+                  },
+                  "period_end": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
+                  },
+                  "share_basis": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
+                  },
+                  "cases": {
+                    "type": "object",
+                    "properties": {
+                      "bear": {
+                        "type": "object",
+                        "properties": {
+                          "shares": {
+                            "type": "object",
+                            "properties": {
+                              "fact_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 1500
+                              },
+                              "path": {
+                                "type": "string",
+                                "pattern": "^/"
+                              }
+                            },
+                            "required": [
+                              "fact_id",
+                              "path"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "components": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 12,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 1500
+                                },
+                                "observation": {
+                                  "type": "object",
+                                  "properties": {
+                                    "fact_id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 1500
+                                    },
+                                    "path": {
+                                      "type": "string",
+                                      "pattern": "^/"
+                                    }
+                                  },
+                                  "required": [
+                                    "fact_id",
+                                    "path"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "multiplier": {
+                                  "type": "number",
+                                  "minimum": -10,
+                                  "maximum": 10
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 1500
+                                }
+                              },
+                              "required": [
+                                "label",
+                                "observation",
+                                "multiplier",
+                                "reason"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "explanation": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "reinvestment": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "dilution": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "falsifier": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          }
+                        },
+                        "required": [
+                          "shares",
+                          "components",
+                          "explanation",
+                          "reinvestment",
+                          "dilution",
+                          "falsifier"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "base": {
+                        "type": "object",
+                        "properties": {
+                          "shares": {
+                            "type": "object",
+                            "properties": {
+                              "fact_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 1500
+                              },
+                              "path": {
+                                "type": "string",
+                                "pattern": "^/"
+                              }
+                            },
+                            "required": [
+                              "fact_id",
+                              "path"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "components": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 12,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 1500
+                                },
+                                "observation": {
+                                  "type": "object",
+                                  "properties": {
+                                    "fact_id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 1500
+                                    },
+                                    "path": {
+                                      "type": "string",
+                                      "pattern": "^/"
+                                    }
+                                  },
+                                  "required": [
+                                    "fact_id",
+                                    "path"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "multiplier": {
+                                  "type": "number",
+                                  "minimum": -10,
+                                  "maximum": 10
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 1500
+                                }
+                              },
+                              "required": [
+                                "label",
+                                "observation",
+                                "multiplier",
+                                "reason"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "explanation": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "reinvestment": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "dilution": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "falsifier": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          }
+                        },
+                        "required": [
+                          "shares",
+                          "components",
+                          "explanation",
+                          "reinvestment",
+                          "dilution",
+                          "falsifier"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "bull": {
+                        "type": "object",
+                        "properties": {
+                          "shares": {
+                            "type": "object",
+                            "properties": {
+                              "fact_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 1500
+                              },
+                              "path": {
+                                "type": "string",
+                                "pattern": "^/"
+                              }
+                            },
+                            "required": [
+                              "fact_id",
+                              "path"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "components": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 12,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "label": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 1500
+                                },
+                                "observation": {
+                                  "type": "object",
+                                  "properties": {
+                                    "fact_id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 1500
+                                    },
+                                    "path": {
+                                      "type": "string",
+                                      "pattern": "^/"
+                                    }
+                                  },
+                                  "required": [
+                                    "fact_id",
+                                    "path"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "multiplier": {
+                                  "type": "number",
+                                  "minimum": -10,
+                                  "maximum": 10
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 1500
+                                }
+                              },
+                              "required": [
+                                "label",
+                                "observation",
+                                "multiplier",
+                                "reason"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "explanation": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "reinvestment": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "dilution": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          },
+                          "falsifier": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1500
+                          }
+                        },
+                        "required": [
+                          "shares",
+                          "components",
+                          "explanation",
+                          "reinvestment",
+                          "dilution",
+                          "falsifier"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "bear",
+                      "base",
+                      "bull"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "symbol",
+                  "quote_fact_id",
+                  "period_start",
+                  "period_end",
+                  "share_basis",
+                  "cases"
                 ],
                 "additionalProperties": false
               },

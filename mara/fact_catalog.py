@@ -117,7 +117,10 @@ def snapshots(facts,as_of):
         except (ValueError,TypeError):value=None
         assumptions=value.get('assumptions') if isinstance(value,dict) else None
         refs=assumptions.get('source_ids') if isinstance(assumptions,dict) else None
-        parent_map[fid]=list(dict.fromkeys(refs)) if fact.get('research_tool')=='company_valuation' and isinstance(refs,list) and all(isinstance(x,str) for x in refs) else []
+        if isinstance(value,dict) and fact.get('research_tool')=='company_normalize_earnings':refs=value.get('source_ids')
+        if isinstance(value,dict) and fact.get('research_tool') in ('company_valuation','company_normalize_earnings') and value.get('normalization_binding',{}).get('fact_id'):
+            refs=list(refs or [])+[value['normalization_binding']['fact_id']]
+        parent_map[fid]=list(dict.fromkeys(refs)) if fact.get('research_tool') in ('company_valuation','company_normalize_earnings') and isinstance(refs,list) and all(isinstance(x,str) for x in refs) else []
         derivation=value.get('derivation') if isinstance(value,dict) else None
         bindings[fid]=derivation if isinstance(derivation,dict) else None
     def identify(fid,trail=()):
@@ -133,7 +136,7 @@ def snapshots(facts,as_of):
     nodes=[]
     for fid,fact in lookup.items():
         tool=fact.get('research_tool','');kind={'company_filing_search':'filing_excerpt','company_filing_read':'filing_excerpt',
-            'company_xbrl_read':'xbrl_observations','company_valuation':'valuation'}.get(tool,'text')
+            'company_xbrl_read':'xbrl_observations','company_valuation':'valuation','company_normalize_earnings':'valuation'}.get(tool,'text')
         try:parsed=json.loads(fact['text'])
         except (ValueError,TypeError):parsed=None
         source_ids=parent_map[fid]

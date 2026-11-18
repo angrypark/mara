@@ -213,8 +213,14 @@ class Agents:
                     return build(payload['profile'],payload['actual'],payload['market'],payload['valuation'],capital,weights)['selected_comparison']
                 if 'perspective_comparisons' in payload['analysis']:
                     payload['analysis']['perspective_comparisons']={r:comparison(v['weights']) for r,v in payload['perspectives'].items()}
+                if 'alternative_comparisons' in payload['analysis']:
+                    payload['analysis']['alternative_comparisons']={k:comparison(v['weights']) for k,v in payload['analysis']['alternative_comparisons'].items()}
                 if 'selected_comparison' in payload['analysis']:
                     payload['analysis']['selected_comparison']=comparison(payload['analysis']['selected_weights'])
+        if role in ('evidence','buffett','marks','bogle','wood','validation','leader'):
+            from .thesis_workspace import build as thesis_workspace
+            payload['thesis_workspace']=thesis_workspace(payload,role)
+            payload['thesis_workspace']['instructions']=resource('guides/skills/thesis-workspace.md').read_text()
         original=copy.deepcopy(payload)
         current=copy.deepcopy(original)
         current['citation_scope']={'market_fact_ids':[f['id'] for f in original.get('market',{}).get('facts',[])],

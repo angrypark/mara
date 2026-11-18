@@ -48,7 +48,7 @@ def owner_value(a,known_ids,as_of):
         if number<=0:raise src.EvidenceError('valuation_model_nonpositive_earnings')
         return number
     earn=positive_earnings(a['owner_earnings_per_share']);price=src.finite(a['price'],.000001);mos=src.finite(a['margin_of_safety'],0,.9)
-    if len(a['scenarios'])!=3 or {s.get('name') for s in a['scenarios']}!={'bear','base','bull'}:raise ValueError('Three distinct scenarios required')
+    if not isinstance(a['scenarios'],list) or len(a['scenarios'])!=3 or any(not isinstance(s,dict) for s in a['scenarios']) or {s.get('name') for s in a['scenarios']}!={'bear','base','bull'}:raise ValueError('Three distinct scenarios required')
     cases=a.get('earnings_cases');case_earnings={}
     if 'earnings_cases' in a:
         from .valuation_evidence import references
@@ -71,7 +71,11 @@ def owner_value(a,known_ids,as_of):
         if type(n)!=int or not 1<=n<=20 or t>=r:raise ValueError('Discount must exceed terminal growth; horizon 1..20')
         e=case_earnings[s['name']] if cases else earn
         parsed_scenarios[s['name']]={'growth':g,'discount':r,'terminal_growth':t,'years':n}
-        values.append(dict(s,owner_earnings_per_share=e,**calculate(e,g,r,t,n)))
+        row=calculate(e,g,r,t,n)
+        row['price_implied_annual_earnings_per_share']=price/(row['value_per_share']/e)
+        row['earnings_to_meet_margin_of_safety']=price/((row['value_per_share']/e)*(1-mos))
+        row['normalized_earnings_to_price_implied_ratio']=e/row['price_implied_annual_earnings_per_share']
+        values.append(dict(s,owner_earnings_per_share=e,**row))
     base=parsed_scenarios['base']
     sensitivity=[dict(name=name,owner_earnings_per_share=e,
         **calculate(e,base['growth'],base['discount'],base['terminal_growth'],base['years'])) for name,e in sorted(case_earnings.items())]
@@ -277,7 +281,7 @@ class ResearchTools:
             if existing[fact['id']]!=fact:raise src.EvidenceError('evidence_id_collision')
             market['facts'].append(copy.deepcopy(existing[fact['id']]))
             return True
-        prerequisites={'company_company','sec_financials','sec_filings','company_filing_search','company_filing_read','company_valuation','company_xbrl_read'}
+        prerequisites={'company_company','sec_financials','sec_filings','company_filing_search','company_filing_read','company_valuation','company_normalize_earnings','company_xbrl_read'}
         from .research_budget import allocate
         allocation,self.activation_budget=allocate(self.s,self.run_id,self.as_of,rows,role,fact,fact.get('research_tool') in prerequisites)
         if allocation is None:return False
@@ -335,6 +339,9 @@ class ResearchTools:
         elif tool in ('xbrl_search','xbrl_read'):
             from .xbrl_read import run
             result=run(self.lib,tool,args,self.as_of)
+        elif tool=='normalize_earnings':
+            from .earnings_bridge import normalize
+            result=normalize(args,market,self.as_of)
         elif tool=='valuation':
             from .valuation_evidence import validate_sources
             a=args['assumptions'];binding=validate_sources(a,market,symbol(args['symbol']),self.as_of)
@@ -342,21 +349,31 @@ class ResearchTools:
             result['symbol']=symbol(args['symbol'])
             result['identity_basis']='validated company dossier and matching USD quote/source_ids'
             result['source_validation']=binding
+            result['normalization_binding']={'status':'not_bound','reason':'No structured observation-to-earnings bridge supplied'}
+            if args.get('normalization_fact_id'):
+                from .earnings_bridge import bind_valuation
+                result['normalization_binding']=bind_valuation(args['normalization_fact_id'],a,market,symbol(args['symbol']),self.as_of)
         else:raise ValueError('Unknown research tool')
+        if tool=='normalize_earnings':
+            from .fact_catalog import derivation_binding
+            result['derivation']={'schema_version':'mara.valuation-derivation/1.0','operation':'normalize_earnings/1',
+                'implementation_sha256':hashlib.sha256(Path(__file__).with_name('earnings_bridge.py').read_bytes()).hexdigest(),
+                'parents':derivation_binding(self.s,self.run_id,self.as_of,role,market['facts'],result['source_ids']),
+                'scope':'원관측 버전과 산술 연결. 경제적 가정의 타당성은 별도 검토해요.'}
         if tool=='valuation':
             from .fact_catalog import derivation_binding
             result['derivation']={'schema_version':'mara.valuation-derivation/1.0','operation':'owner_value/1',
                 'implementation_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-                'parents':derivation_binding(self.s,self.run_id,self.as_of,role,market['facts'],args['assumptions']['source_ids']),
+                'parents':derivation_binding(self.s,self.run_id,self.as_of,role,market['facts'],args['assumptions']['source_ids']+([args['normalization_fact_id']] if args.get('normalization_fact_id') else [])),
                 'scope':'계산을 만들 때 사용한 원자료 버전이에요. 가정의 경제적 타당성을 인증하지 않아요.'}
         # Receipts and discovery results are not financial evidence.
         fact=None
-        if tool in ('compare','company','filing_search','filing_read','valuation','xbrl_read') and result.get('status')!='no_observations':
+        if tool in ('compare','company','filing_search','filing_read','valuation','normalize_earnings','xbrl_read') and result.get('status')!='no_observations':
             ident='company-'+hashlib.sha256(dumps(result).encode()).hexdigest()[:24]
             fact={'id':ident,'topic':tool+' · '+args.get('symbol',','.join(args.get('symbols',[])[:5])),
                 'text':dumps(result),'source':'https://www.sec.gov/search-filings/edgar-application-programming-interfaces',
                 'published_at':self.as_of,'known_at':self.as_of,'valid_until':self.as_of,
-                'uncertainty':'분석자 가정 계산' if tool=='valuation' else 'SEC 표준 재무/발행사 진술. 상세 기간·공시일은 본문에 포함.',
+                'uncertainty':'분석자 가정 계산' if tool in ('valuation','normalize_earnings') else 'SEC 표준 재무/발행사 진술. 상세 기간·공시일은 본문에 포함.',
                 'research_tool':'company_'+tool}
             if tool in ('filing_search','filing_read'):fact['raw_refs']=[result['raw_ref']]
             if tool=='xbrl_read':
@@ -401,7 +418,8 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         prior_review=(payload.get('improvement') or payload.get('external_review') or {}).get('feedback',{})
         analysis=payload.get('analysis',{});comparison=analysis.get('comparison',{})
         from .planner_evidence import overview
-        request={'role':role,'as_of':as_of,'question':payload.get('question'),
+        from .thesis_workspace import build as thesis_workspace
+        request={'thesis_workspace':thesis_workspace(payload,role),'role':role,'as_of':as_of,'question':payload.get('question'),
             'execution_boundary':'외부 브라우저·쉘 도구를 직접 실행하지 않아요. 이 계약의 calls 배열에 조사 요청을 반환하는 것은 허용돼요. Mara가 허용 도구를 실행하고 다음 입력에 결과를 전달해요.',
             'planning_feedback':copy.deepcopy(planning_feedback),
             'research_capabilities':'mara.research-tools/1.2','decision_questions':questions,'objective':payload.get('profile',{}).get('goal'),'available_symbols':list(payload['market'].get('assets',{})),

@@ -1,0 +1,363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mara:earnings-bridge:1.0",
+  "type": "object",
+  "properties": {
+    "symbol": {
+      "type": "string",
+      "pattern": "^[A-Z0-9][A-Z0-9.\\-]{0,14}$"
+    },
+    "quote_fact_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1500
+    },
+    "period_start": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1500
+    },
+    "period_end": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1500
+    },
+    "share_basis": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1500
+    },
+    "cases": {
+      "type": "object",
+      "properties": {
+        "bear": {
+          "type": "object",
+          "properties": {
+            "shares": {
+              "type": "object",
+              "properties": {
+                "fact_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1500
+                },
+                "path": {
+                  "type": "string",
+                  "pattern": "^/"
+                }
+              },
+              "required": [
+                "fact_id",
+                "path"
+              ],
+              "additionalProperties": false
+            },
+            "components": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 12,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
+                  },
+                  "observation": {
+                    "type": "object",
+                    "properties": {
+                      "fact_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1500
+                      },
+                      "path": {
+                        "type": "string",
+                        "pattern": "^/"
+                      }
+                    },
+                    "required": [
+                      "fact_id",
+                      "path"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "multiplier": {
+                    "type": "number",
+                    "minimum": -10,
+                    "maximum": 10
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
+                  }
+                },
+                "required": [
+                  "label",
+                  "observation",
+                  "multiplier",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "explanation": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            },
+            "reinvestment": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            },
+            "dilution": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            },
+            "falsifier": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            }
+          },
+          "required": [
+            "shares",
+            "components",
+            "explanation",
+            "reinvestment",
+            "dilution",
+            "falsifier"
+          ],
+          "additionalProperties": false
+        },
+        "base": {
+          "type": "object",
+          "properties": {
+            "shares": {
+              "type": "object",
+              "properties": {
+                "fact_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1500
+                },
+                "path": {
+                  "type": "string",
+                  "pattern": "^/"
+                }
+              },
+              "required": [
+                "fact_id",
+                "path"
+              ],
+              "additionalProperties": false
+            },
+            "components": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 12,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
+                  },
+                  "observation": {
+                    "type": "object",
+                    "properties": {
+                      "fact_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1500
+                      },
+                      "path": {
+                        "type": "string",
+                        "pattern": "^/"
+                      }
+                    },
+                    "required": [
+                      "fact_id",
+                      "path"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "multiplier": {
+                    "type": "number",
+                    "minimum": -10,
+                    "maximum": 10
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
+                  }
+                },
+                "required": [
+                  "label",
+                  "observation",
+                  "multiplier",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "explanation": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            },
+            "reinvestment": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            },
+            "dilution": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            },
+            "falsifier": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            }
+          },
+          "required": [
+            "shares",
+            "components",
+            "explanation",
+            "reinvestment",
+            "dilution",
+            "falsifier"
+          ],
+          "additionalProperties": false
+        },
+        "bull": {
+          "type": "object",
+          "properties": {
+            "shares": {
+              "type": "object",
+              "properties": {
+                "fact_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1500
+                },
+                "path": {
+                  "type": "string",
+                  "pattern": "^/"
+                }
+              },
+              "required": [
+                "fact_id",
+                "path"
+              ],
+              "additionalProperties": false
+            },
+            "components": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 12,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
+                  },
+                  "observation": {
+                    "type": "object",
+                    "properties": {
+                      "fact_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1500
+                      },
+                      "path": {
+                        "type": "string",
+                        "pattern": "^/"
+                      }
+                    },
+                    "required": [
+                      "fact_id",
+                      "path"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "multiplier": {
+                    "type": "number",
+                    "minimum": -10,
+                    "maximum": 10
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1500
+                  }
+                },
+                "required": [
+                  "label",
+                  "observation",
+                  "multiplier",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "explanation": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            },
+            "reinvestment": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            },
+            "dilution": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            },
+            "falsifier": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1500
+            }
+          },
+          "required": [
+            "shares",
+            "components",
+            "explanation",
+            "reinvestment",
+            "dilution",
+            "falsifier"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "bear",
+        "base",
+        "bull"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "symbol",
+    "quote_fact_id",
+    "period_start",
+    "period_end",
+    "share_basis",
+    "cases"
+  ],
+  "additionalProperties": false
+}

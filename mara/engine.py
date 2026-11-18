@@ -252,11 +252,14 @@ class Engine:
             if stability['body'].get('evaluator_spec_hash')==evaluator_fingerprint(self.s,self.model,as_of):
                 stability_receipt=dict(stability['body'],source_event_id=stability['id'])
         comparison_perspectives={}
+        comparison_alternatives={}
         def build_analysis(*args):
             result=base_analysis(*args)
             if comparison_perspectives:
                 result['perspective_comparisons']={role:base_analysis(p,h,m,val,capital,view['weights'])['selected_comparison']
                     for role,view in comparison_perspectives.items()}
+            if comparison_alternatives:
+                result['alternative_comparisons']={key:base_analysis(p,h,m,val,capital,weights)['selected_comparison'] for key,weights in comparison_alternatives.items()}
             if stability_receipt:result['comparison']['evaluator_stability']=copy.deepcopy(stability_receipt)
             return result
         analysis=build_analysis(p,h,m,val,capital)
@@ -345,7 +348,9 @@ class Engine:
         proposal, proposal_id = call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation})
         from .report_references import errors as reference_errors
         for reference_attempt in (1,2,3):
-            allocation_changed=common['analysis']['selected_weights']!=proposal['weights']
+            alternatives={str(i):item['weights'] for i,item in enumerate(proposal.get('investment_case',{}).get('alternatives',[]))}
+            allocation_changed=common['analysis']['selected_weights']!=proposal['weights'] or comparison_alternatives!=alternatives
+            comparison_alternatives.clear();comparison_alternatives.update(alternatives)
             common['analysis']=build_analysis(p,h,m,val,capital,proposal['weights'])
             errors=reference_errors(proposal,common['analysis'],funding,val)
             self.s.append('proposal_reference_validation',{'output_id':proposal_id,'attempt':reference_attempt,
