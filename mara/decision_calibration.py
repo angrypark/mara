@@ -20,6 +20,9 @@ class CalibrationError(ContractError):
 
 def enabled(model):return getattr(model,'decision_policy_version',None)==VERSION
 
+def followups(payload):
+ return payload.get('evidence_feedback',[])+(payload.get('research_feedback_history') or {}).get('requests',[])
+
 def attach(payload,role):
  payload['decision_policy']=copy.deepcopy(POLICY)
  payload['decision_policy']['knowledge_event_ids']=[x['event_id'] for x in payload.get('knowledge',{}).get('items',[])]
@@ -33,11 +36,21 @@ def contract_for(contract,role,payload):
  if role in ANALYSTS|{'evidence'}:required.append('knowledge_feedback')
  if role=='reflection' and payload.get('research_feedback_history',{}).get('requests'):required.append('research_learning')
  if role=='memory' and payload.get('learning_proposals'):required.append('learning_applications')
+ if role in ('leader','validation') and payload.get('memory_feedback',{}).get('conflicts'):
+  required.append('memory_reviews')
+  result['properties']['memory_reviews'].update(minItems=len(payload['memory_feedback']['conflicts']),maxItems=len(payload['memory_feedback']['conflicts']))
+  result['properties']['memory_reviews']['items']['properties']['conflict_id']['enum']=[r['id'] for r in payload['memory_feedback']['conflicts']]
+ if role=='reflection' and payload.get('research_feedback_history',{}).get('requests'):
+  result['properties']['research_learning']['items']['properties']['request_ids']['items']['enum']=sorted({r['request_id'] for r in payload['research_feedback_history']['requests']})
  # New suppliers must distinguish unresolved operational/analytical causes.
  if role=='evidence' and 'evidence_responses' in result['properties']:
   result['properties']['evidence_responses']['items']['required'].append('unresolved_cause')
  if 'evidence_requests' in result['properties']:
-  result['properties']['evidence_requests']['items']['required']+=['gap_class','decision_priority','research_target','resolution_condition','stop_condition','related_fact_ids']
+  request=result['properties']['evidence_requests']['items']
+  request['required']+=['gap_class','decision_priority','research_target','resolution_condition','stop_condition','related_fact_ids']
+  known=sorted({r['request_id'] for r in followups(payload)})
+  if known:request['properties']['followup_of']['enum']=known
+  else:request['properties'].pop('followup_of',None)
  result['required']=list(dict.fromkeys(required))
  return result
 
@@ -69,8 +82,12 @@ def validate_output(role,out,payload):
   if not set(request['related_fact_ids'])<=facts:_fail('request_sources','Request cites undelivered facts')
   if request['gap_class']=='future_judgment' and request['gap_type']!='analysis':_fail('future_request','Future assumptions are analysis, not missing public facts')
   if request.get('followup_of'):
-   prior=[r for r in payload.get('evidence_feedback',[]) if r['request_id']==request['followup_of'] and r.get('response')]
-   if not prior or not request.get('retry_reason','').strip():_fail('retry_basis','A followup needs a delivered prior response and a specific new research/calculation route')
+   prior=[r for r in followups(payload) if r['request_id']==request['followup_of']]
+   if not prior or not request.get('retry_reason','').strip():_fail('retry_basis','A followup needs a known current or historical request and a specific new research/calculation route; unanswered history remains unanswered')
+ if role in ('leader','validation') and payload.get('memory_feedback'):
+  expected={r['id'] for r in payload['memory_feedback']['conflicts']};rows=out.get('memory_reviews',[]);ids=[r['conflict_id'] for r in rows]
+  if len(ids)!=len(set(ids)) or set(ids)!=expected:_fail('memory_feedback','Assess each supplied memory conflict exactly once; incorporation is not factual resolution')
+  if any(not set(r['fact_ids'])<=facts for r in rows):_fail('memory_review_sources','Memory review cites undelivered facts')
  if role in ANALYSTS|{'evidence'}:validate_knowledge(out['knowledge_feedback'],payload)
  if role=='validation' and payload.get('final_proposal'):
   hard=[g for g in out.get('decision_gaps',[]) if g['affects_selected'] and g['kind']!='future_judgment' and g['status']=='unresolved']

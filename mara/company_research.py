@@ -425,6 +425,7 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         request={'thesis_workspace':thesis_workspace(payload,role),'role':role,'as_of':as_of,'question':payload.get('question'),
             'knowledge':copy.deepcopy(payload.get('knowledge',{})),
             'research_feedback_history':copy.deepcopy(payload.get('research_feedback_history')),
+            'memory_feedback':copy.deepcopy(payload.get('memory_feedback')),
             'knowledge_policy':'전달된 지식마다 knowledge_feedback에 적용/검토/미적용/재검증과 구체적인 도구 선택 영향을 기록해요. 이력과 회고는 절차 근거이며 현재 시장의 독립 증거가 아니에요. 낡은 사실은 재검증 전 적용하지 않아요.',
             'evidence_assignments':copy.deepcopy(payload.get('evidence_assignments',[])),
             'shared_research_policy':'같은 research_group은 기간·단위·기준이 일치하는 조사 대상이에요. 검색/원문 독해를 공유하고 각 request_id의 수용 조건은 별도로 답하세요. 그룹이 다르면 합치지 않아요. 배정 실패는 부정 근거가 아니에요.',

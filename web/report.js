@@ -334,6 +334,7 @@ window.MaraReport=(()=>{
       const trace=el('div'),requestStates={pending:'배정 대기',deferred_capacity:'조사 대상 한도로 이연',round_budget:'조사 횟수 한도',research_unavailable:'조사 도구 미연결',frozen_snapshot:'당시 자료로만 검토',duplicate:'중복 요청',reassessed:'요청자 재평가',scenario_review:'시나리오 검토',repeat_target_stopped:'근거 없는 반복 조사 중단',returned_for_reassessment:'응답 후 재평가 대기'};
       for(const q of calibration.requests||[])trace.append(el('h4','',q.requester+' → '+(q.recipient||'evidence')+' · '+q.need),el('p','','요청: '+(q.requested_at||'과거 기록')+' · 상태: '+(requestStates[q.status]||q.status)),el('p','','필요한 이유: '+q.decision_impact),el('p','','수용 조건: '+q.acceptance),el('p','','처리 사유: '+(q.response?.reason||q.scheduling_reason||q.status)),el('p','','요청자 재판단: '+(q.assessment?.reason||'응답 후 평가 기록 없음')));
       const learning=calibration.learning||{};
+      for(const conflict of learning.memory_feedback?.conflicts||[]){trace.append(el('h4','','기억 정리에서 남긴 이견'),el('p','',conflict.text));for(const [role,reviews] of Object.entries(learning.memory_reviews||{})){const review=reviews.find(x=>x.conflict_id===conflict.id);trace.append(el('p','',({leader:'리더',final_validation:'최종 검증'}[role]||role)+': '+(review?review.reason+' · 다음 확인: '+review.next_action:'평가 기록 없음')))}}
       trace.append(el('p','','회고 상태: '+(learning.status||'미기록')+' · 지식 변경 '+(learning.applications?.length||0)+'건 · 사용 평가 '+(learning.knowledge_usage?.length||0)+'건'),el('p','hint','기록 전달과 모델이 보고한 사용을 뜻해요. 투자성과 개선을 확인한 수치는 아니에요.'));
       box.append(fold('request-learning-trace','자료 요청과 회고 기록',trace));
     }

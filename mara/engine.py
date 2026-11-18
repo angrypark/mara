@@ -278,6 +278,10 @@ class Engine:
         learning_cycle={'status':'skipped_frozen_revision' if frozen else 'no_predecessor' if not previous else 'pending',
             'history_event_id':history_id,'source_completed_id':previous['id'] if previous else None,
             'reflection_output_id':None,'memory_outputs':[],'applications':[]}
+        frozen_learning=frozen['body'].get('research_learning',{}) if frozen else {}
+        memory_sources=frozen_learning.get('memory_outputs',[]) or [
+            {'output_id':oid} for oid in dict.fromkeys(r['memory_output_id'] for r in frozen_learning.get('memory_feedback',{}).get('conflicts',[]))]
+        memory_feedback=learning.memory_feedback(self.s,memory_sources)
         exchanges=[];feedback_seen=set();output_receipts=[];feedback_round=0
         def call(role, extra=None):
             payload = dict(common,knowledge=k.retrieve(as_of,role))
@@ -288,6 +292,7 @@ class Engine:
                 payload['knowledge']=copy.deepcopy(recorded[-1].get('knowledge',{})) if recorded else {}
             payload['market']=compact_market(m,role)
             if research_history:payload['research_feedback_history']=learning.for_role(research_history,role)
+            if role in ('leader','validation') and memory_feedback['conflicts']:payload['memory_feedback']=copy.deepcopy(memory_feedback)
             if payload.get('current_reflection'):payload['current_reflection']=learning.reflection_for_role(payload['current_reflection'],role)
             payload['decision_context']=semantics(p,m)
             if prior:
@@ -355,7 +360,8 @@ class Engine:
                         'roles':['*'],'refs':['accessible immutable event id'], 'valid_until':'YYYY-MM-DD or null','priority':'0..10'}})
                 plans.append((plan,pid))
                 learning_cycle['memory_outputs'].append({'output_id':pid,'input_id':self.s.get(pid)['body']['input_id'],
-                    'learning_applications':plan.get('learning_applications',[])})
+                    'learning_applications':plan.get('learning_applications',[]),'conflicts':plan.get('conflicts',[])})
+            memory_feedback=learning.memory_feedback(self.s,learning_cycle['memory_outputs'])
             with self.s.store.transaction():
                 for plan,pid in plans:
                     for i,op in enumerate(plan['operations']):
@@ -530,6 +536,9 @@ class Engine:
                 'proposal_output_id':proposal_id,'final_validation_output_id':next(x[2] for x in reversed(output_receipts) if x[1]=='final_validation'),
                 'linked_gaps':[g for g in proposal.get('decision_gaps',[]) if g['question_id']==row['question_id']]}
         learning_cycle['knowledge_usage']=learning.usage_receipts(self.s,run_id)
+        learning_cycle['memory_feedback']=copy.deepcopy(memory_feedback)
+        learning_cycle['memory_reviews']={'leader':copy.deepcopy(proposal.get('memory_reviews',[])),
+            'final_validation':copy.deepcopy(final_review.get('memory_reviews',[]))}
         learning_cycle['scope']='Stored/delivered/model-reported use are separately traceable; decision quality and investment outcomes are not inferred from receipts.'
         report['research_learning']=learning_cycle
         report['decision_scope']=decision_scope

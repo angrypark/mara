@@ -54,6 +54,28 @@ class CalibrationTests(unittest.TestCase):
   op['category']='lesson';learning.validate_memory(out,p)
   op['refs']=['invented']
   with self.assertRaisesRegex(ContractError,'allowed_refs'):learning.validate_memory(out,p)
+ def test_multiple_memory_batches_have_a_satisfiable_exact_review_contract(self):
+  p={'decision_policy':policy.POLICY,'decision_scope':{'questions':[]},'market':market(),'knowledge':{'items':[]},'memory_feedback':{'conflicts':[{'id':'conflict-'+str(i)} for i in range(121)]}}
+  out=DemoModel().complete('validation','',p,{});out.update(decision_gaps=[],knowledge_feedback=[],memory_reviews=[dict(conflict_id=r['id'],status='still_open',reason='Keep condition',decision_impact='Reassess before commitment',next_action='Review source',fact_ids=[]) for r in p['memory_feedback']['conflicts']])
+  policy.validate_output('validation',out,p)
+  out['memory_reviews'].pop()
+  with self.assertRaises(ContractError):policy.validate_output('validation',out,p)
+ def test_historical_answered_and_unanswered_followups_keep_original_request_links(self):
+  p={'decision_policy':policy.POLICY,'decision_scope':{'questions':[{'id':'candidate-FUND'}]},'market':market(),'knowledge':{'items':[]},'research_feedback_history':{'requests':[{'request_id':'old-pending','status':'round_budget'},{'request_id':'old-returned','response':{'status':'evidence_supplied'}}]}}
+  out=DemoModel().complete('validation','',p,{});out.update(decision_gaps=[],knowledge_feedback=[])
+  for source in ('old-pending','old-returned'):
+   out['evidence_requests']=[calibrated_request(followup_of=source,retry_reason='Read the previously unavailable dated source')];policy.validate_output('validation',out,p)
+  out['evidence_requests'][0]['followup_of']='invented'
+  with self.assertRaises(ContractError):policy.validate_output('validation',out,p)
+ def test_pruning_never_erases_different_delivery_scope_or_validity(self):
+  for field,value in [('roles',['wood']),('category','hypothesis'),('priority',9),('valid_until','2026-12-01')]:
+   with self.subTest(field=field),tempfile.TemporaryDirectory() as t:
+    db=Store(Path(t)/'db');s=db.session(db.create_user('test'));k=Knowledge(s);ref=s.append('fixture',{},'2026-11-15')
+    op=dict(action='add',reason='Fixture',text='Same lesson',topic='process',condition='same',perspective='process',category='lesson',roles=['buffett'],refs=[ref],valid_until=None,priority=1)
+    k.apply(op,'2026-11-15');k.apply(dict(op,**{field:value}),'2026-11-15');k.prune('2026-11-15')
+    self.assertEqual(len(k.active('2026-11-15')),2)
+    if field=='roles':self.assertEqual(len(k.retrieve('2026-11-15','wood')['items']),1)
+    db.close()
  def test_knowledge_revision_applies_scope_metadata_and_preserves_versions(self):
   with tempfile.TemporaryDirectory() as t:
    db=Store(Path(t)/'db');s=db.session(db.create_user('test'));k=Knowledge(s);ref=s.append('test',{},'2026-11-15')
@@ -97,11 +119,15 @@ class LearningFlowTests(unittest.TestCase):
      rows=p['research_feedback_history']['requests'];assert rows and rows[0]['assessment_history']
      out['research_learning']=[dict(id='lesson-1',category='acceptance_condition',request_ids=[rows[0]['request_id']],observation='Supplier receipt was not analytical resolution',proposed_change='Keep acceptance condition until requester assesses source',target='research_plan',condition='Returned source',validation='Next role reads exact receipt and reports use',status='propose')]
     if role=='memory':
+     out['conflicts']=['Keep unresolved evidence separate from adverse investment evidence']
      out['operations']=[dict(action='add',reason='Traceable process lesson',text='Assess the original source against the acceptance condition',topic='request-process',condition='Returned evidence',perspective='process',category='lesson',roles=['buffett'],refs=[p['reflection_id']],valid_until=None,priority=9)]
      out['learning_applications']=[dict(review_id='lesson-1',disposition='apply',operation_indices=[0],reason='Bounded process instruction',validation='Read next delivered input')]
+    if role in ('leader','validation') and p.get('memory_feedback'):
+     out['memory_reviews']=[dict(conflict_id=c['id'],status='still_open',reason='Preserve the unresolved condition',decision_impact='Do not treat an uncompleted investigation as negative evidence',next_action='Review the original source',fact_ids=[]) for c in p['memory_feedback']['conflicts']]
+    if role in ('buffett','marks','bogle','wood'):assert 'memory_feedback' not in p
     if role=='buffett' and p.get('knowledge',{}).get('items'):
      out['knowledge_feedback']=[dict(knowledge_event_id=i['event_id'],status='applied',effect='Keep unresolved acceptance condition',fact_ids=[]) for i in p['knowledge']['items']]
-     assert set(p['current_reflection']['perspective_review'])=={'buffett'}
+     if p.get('current_reflection'):assert set(p['current_reflection']['perspective_review'])=={'buffett'}
      assert all(r['requester']=='buffett' for r in p['research_feedback_history']['requests'])
     return out
   with tempfile.TemporaryDirectory() as t:
@@ -110,5 +136,7 @@ class LearningFlowTests(unittest.TestCase):
    e.set_profile(profile(),m['as_of']);e.set_holdings(dict(as_of=m['as_of'],base_currency='USD',cash=100,positions={},rationale='Synthetic',last_rebalanced=m['as_of']))
    first=e.run(m['as_of'],db.publish_market(m),evaluate_after=False)
    m['as_of']='2026-11-16';e.research_library._today=m['as_of'];second=e.run(m['as_of'],db.publish_market(m),force=True,evaluate_after=False)
-   trace=second['research_learning'];self.assertEqual(trace['status'],'reviewed');self.assertEqual(trace['source_completed_id'],first['event_id']);self.assertTrue(trace['applications']);self.assertTrue(trace['knowledge_usage'])
-   applied=trace['applications'][0]['knowledge_event_id'];self.assertTrue(any(r['knowledge_event_id']==applied and r['status']=='applied' for r in trace['knowledge_usage']));self.assertTrue(second['evidence_feedback']['exchanges'][0]['final_decision']);db.close()
+   trace=second['research_learning'];self.assertEqual(trace['status'],'reviewed');self.assertEqual(trace['source_completed_id'],first['event_id']);self.assertTrue(trace['applications']);self.assertTrue(trace['knowledge_usage']);self.assertEqual(len(trace['memory_feedback']['conflicts']),1);self.assertEqual(len(trace['memory_reviews']['final_validation']),1)
+   applied=trace['applications'][0]['knowledge_event_id'];self.assertTrue(any(r['knowledge_event_id']==applied and r['status']=='applied' for r in trace['knowledge_usage']));self.assertTrue(second['evidence_feedback']['exchanges'][0]['final_decision'])
+   third=e.run(m['as_of'],force=True,revision_reason='Frozen feedback test',improvement={'parent_completed_id':second['event_id']},evaluate_after=False)
+   self.assertEqual(third['research_learning']['status'],'skipped_frozen_revision');self.assertEqual(third['research_learning']['memory_feedback']['conflicts'],trace['memory_feedback']['conflicts']);self.assertEqual(len(third['research_learning']['memory_reviews']['final_validation']),1);db.close()

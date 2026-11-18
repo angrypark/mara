@@ -99,7 +99,8 @@ class Knowledge:
             if k['status'] != 'active': continue
             if k['valid_until'] and k['valid_until'] < as_of and k['category'] not in PROTECTED:
                 changes.append(self.apply({'action':'deactivate','key':k['key'],'reason':'Validity expired'},as_of,run_id)); continue
-            fingerprint = (k['topic'], k['condition'], k['perspective'], ' '.join(k['text'].lower().split()))
+            fingerprint = (k['topic'], k['condition'], k['perspective'], ' '.join(k['text'].lower().split()),
+                k['category'],tuple(sorted(k['roles'])),k['priority'],k['valid_until'])
             if fingerprint in groups and k['category'] not in PROTECTED:
                 primary = groups[fingerprint]
                 changes.append(self.apply({'action':'merge','key':primary,'refs':k['refs'],'reason':'Exact duplicate; no confidence increase'},as_of,run_id))

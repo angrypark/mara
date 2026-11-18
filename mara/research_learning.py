@@ -7,6 +7,16 @@ from .decision_calibration import CalibrationError
 VERSION='mara.research-learning/1.0'
 INSTRUCTION='이전 요청 원장은 당시 과정의 근거이며 현재 시장의 독립 증거가 아니에요. 자료 접근/미추출/배정/계산 실패와 미래 가정의 불확실성을 구분하세요. 반복 공백·중복·우선순위·수용조건·계산/분석의 구체 사례를 request_ids에 연결해 research_learning을 작성하세요. 변화를 만들 이유가 없으면 no_change와 이유를 기록하세요. 역할의 결론이나 매수/보류 자체를 점수화하거나 반복을 독립 근거로 세지 마세요. 개선은 적용 조건과 검증 방법을 가져야 하고 도구/가이드 코드 변경은 자동 실행하지 않아요.'
 
+def memory_feedback(session,outputs):
+ rows=[]
+ for receipt in outputs:
+  event=session.get(receipt['output_id']);body=event['body'];inp=session.get(body['input_id'])
+  for i,conflict in enumerate(body['output'].get('conflicts',[])):
+   rows.append({'id':'memory-'+event['id']+'-'+str(i),'memory_output_id':event['id'],
+    'reflection_output_id':inp['body']['payload'].get('reflection_id'),
+    'recorded_at':event['recorded'],'as_of':event['effective'],'text':conflict})
+ return {'conflicts':rows,'instruction':'기억 정리 역할이 남긴 이견·미해결 조건이에요. 시장 사실이나 독립 확인으로 승격하지 않아요. 리더와 검증은 각 ID를 memory_reviews로 반영/미해결/비관련 평가하고 결정 영향과 다음 확인을 남겨요. incorporated는 고려·반영이며 사실 해결이 아니에요. 선택의 사실·계산 공백은 decision_gaps에도 유지해요.'}
+
 
 def history(session,completed):
  body=completed['body'];rows=copy.deepcopy(body.get('evidence_feedback',{}).get('exchanges',[]))
