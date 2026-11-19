@@ -4,6 +4,7 @@ from .registry import agent
 
 
 REASONS={
+    'provider_submission':'제공자의 완료 신호 또는 응답 형식·크기 확인을 통과하지 못했어요.',
     'judgment_report':'상세 판단 리포트의 필수 내용·본문 분량·기준일·근거 연결을 충족하지 못했어요.',
     'proposal_reference':'주장 또는 대안이 실제 계산 결과와 연결되지 않아요. 리더의 계산 연결 검증 내역을 확인해주세요.',
     'allocation_reconciliation':'리더가 재계산 후에도 비중을 계속 변경해 선택 비중과 보고서 계산이 안정화되지 않았어요.',
@@ -34,6 +35,8 @@ def evidence_reference_errors(output,payload):
 
 
 def issue_code(exc):
+    from .codex_model import ProviderSubmissionError
+    if isinstance(exc,ProviderSubmissionError):return 'provider_submission'
     if str(exc).startswith('Judgment report:'):return 'judgment_report'
     # Match only errors produced by local validation, never arbitrary exception text.
     return {'Invented evidence ID':'market_evidence_reference',

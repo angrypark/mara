@@ -457,9 +457,13 @@ def research_loop(s,model,role,guide,payload,run_id,as_of,library):
         guard(s,run_id,as_of)
         plan_input_id=s.append('research_plan_input',{'role':role,'guide':guide+'\n'+toolguide,'contract':contract,'payload':request,
             'provider':model.identity},as_of,run_id)
-        plan=model.complete(role,guide+'\n'+toolguide,request,contract)
-        plan_output_id=s.append('research_plan_output',{'role':role,'input_id':plan_input_id,'output':plan},as_of,run_id)
+        from .codex_model import ProviderSubmissionError
+        provider_error=None
+        try:plan=model.complete(role,guide+'\n'+toolguide,request,contract)
+        except ProviderSubmissionError as exc:provider_error=exc;plan=exc.output
+        plan_output_id=s.append('research_plan_output',dict(role=role,input_id=plan_input_id,output=plan,**({'provider_failure':provider_error.diagnostic,'raw_provider_response':provider_error.raw_response} if provider_error else {})),as_of,run_id)
         try:
+            if provider_error:raise provider_error
             validate(plan,contract)
             if enabled(model):validate_knowledge(plan.get('knowledge_feedback',[]),payload)
             if any(not set(c.get('question_ids',[]))<=question_ids for c in plan['calls']):raise ValueError('Unknown decision question')

@@ -24,6 +24,18 @@ class CodexError(RuntimeError):
     """Only application-authored messages; never include CLI stderr or user data."""
 
 
+class ProviderSubmissionError(CodexError,ValueError):
+    """Unaccepted provider response, preserved privately for normal submission CI."""
+    def __init__(self,reason,raw_response='',detail=None):
+        self.raw_response=raw_response
+        self.output=raw_response
+        try:self.output=json.loads(json.loads(raw_response)['result_json'])
+        except (ValueError,KeyError,TypeError):pass
+        self.diagnostic={'stage':'provider_submission','reason':reason,'detail':detail or {},
+            'acceptance':'A fresh provider completion attestation and all original submission checks are required; a valid draft alone is not acceptance.'}
+        super().__init__('Codex 제출 확인 실패: '+reason)
+
+
 def executable():
     path=shutil.which('codex')
     if path:return path
@@ -129,21 +141,32 @@ class CodexModel:
             # Keep the existing long-analysis allowance for large inputs even
             # when a role no longer writes a separate four-section narrative.
             trace=self.runner(command,prompt,tmp,900 if payload.get('narrative_contract') or len(prompt)>256000 else 300)
-            completed=False
-            try:
-                for line in trace.splitlines():
-                    event=json.loads(line)
-                    if event.get('type')=='turn.completed':completed=True
-                    if event.get('type') in {'turn.failed','error'}:raise ValueError()
-                    item=event.get('item',{})
-                    if item.get('type')=='error':raise CodexError('Codex 실행 진단에서 문제가 발생했어요. CLI 버전과 실행 설정을 확인해주세요.')
-                    if item and item.get('type') not in {'agent_message','reasoning','todo_list'}:
-                        raise CodexError('분석 범위 밖의 Codex 도구 호출이 감지돼 결과를 사용하지 않았어요.')
-                if not completed or not answer.exists() or answer.stat().st_size>(524288 if payload.get('narrative_contract') else 131072):raise ValueError()
-                raw=json.loads(answer.read_text())['result_json']
-                result=json.loads(raw)
-                from .output_budget import characters
-                if not isinstance(result,dict) or len(dumps(result))>characters(role,payload):raise ValueError()
-                return result
-            except (ValueError,KeyError,TypeError,OSError):
-                raise CodexError('Codex 분석 결과가 필요한 JSON 형식에 맞지 않아요. 다시 시도해주세요.') from None
+            response=answer.read_text() if answer.exists() and answer.stat().st_size<=524288 else ''
+            completed=False;types=[]
+            for line_no,line in enumerate(trace.splitlines(),1):
+                try:event=json.loads(line)
+                except ValueError:raise ProviderSubmissionError('trace_json',response,{'line':line_no}) from None
+                if not isinstance(event,dict):raise ProviderSubmissionError('trace_shape',response,{'line':line_no})
+                types.append(event.get('type'))
+                if event.get('type')=='turn.completed':completed=True
+                if event.get('type') in {'turn.failed','error'}:
+                    raise CodexError('Codex 실행이 실패했다고 보고했어요. 사용 한도·인증·제공자 상태를 확인해야 하며 제출 교정으로 재시도하지 않아요.')
+                item=event.get('item',{})
+                if not isinstance(item,dict):raise ProviderSubmissionError('trace_item_shape',response,{'line':line_no})
+                if item.get('type')=='error':raise CodexError('Codex 실행 진단에서 문제가 발생했어요. CLI 버전과 실행 설정을 확인해주세요.')
+                if item and item.get('type') not in {'agent_message','reasoning','todo_list'}:
+                    raise CodexError('분석 범위 밖의 Codex 도구 호출이 감지돼 결과를 사용하지 않았어요.')
+            if not completed:raise ProviderSubmissionError('completion_unverified',response,{'event_types':types})
+            if not answer.exists():raise ProviderSubmissionError('response_missing')
+            if answer.stat().st_size>(524288 if payload.get('narrative_contract') else 131072):
+                raise ProviderSubmissionError('response_file_limit',response,{'bytes':answer.stat().st_size})
+            try:raw=json.loads(response)['result_json']
+            except (ValueError,KeyError,TypeError):raise ProviderSubmissionError('response_envelope',response) from None
+            try:result=json.loads(raw)
+            except (ValueError,TypeError) as exc:
+                raise ProviderSubmissionError('response_json',response,{'line':getattr(exc,'lineno',None),'column':getattr(exc,'colno',None)}) from None
+            if not isinstance(result,dict):raise ProviderSubmissionError('response_object',response)
+            from .output_budget import characters
+            size=len(dumps(result));limit=characters(role,payload)
+            if size>limit:raise ProviderSubmissionError('output_budget',response,{'characters':size,'limit':limit})
+            return result

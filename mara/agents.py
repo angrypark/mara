@@ -290,25 +290,44 @@ class Agents:
         contract=contract_for(contract,role,current)
         from .submission import bind
         contract=bind(contract,role,current)
-        for attempt in (1,2):
+        return self._submit(role,guide,current,contract,skills,original,context_limit,shared_input)
+
+    def submit_prepared(self,input_event,feedback):
+        """Continue an interrupted submission with its exact original inputs."""
+        body=input_event['body'];role=body['role'];original=copy.deepcopy(body['payload'])
+        current=copy.deepcopy(original);current['output_feedback']=copy.deepcopy(feedback)
+        from .model_wire import supported
+        return self._submit(role,body['guide'],current,copy.deepcopy(body['contract']),body.get('skills',[]),
+            original,original['input_budget']['max_characters'],supported(self.model,role),attempts=(2,))
+
+    def _submit(self,role,guide,current,contract,skills,original,context_limit,shared_input,attempts=(1,2)):
+        from .model_wire import packed,serialized
+        for attempt in attempts:
             original_size=len(dumps(current))
             within_source_bound=original_size<=context_limit*(4 if shared_input else 1)
             measured_size=len(serialized(packed({'role_guide':guide,'contract':contract,'input':current}))) if shared_input and within_source_bound else original_size
             if len(guide)>22000 or not within_source_bound or measured_size>context_limit:
-                if attempt==2:raise AgentOutputError(role,code,oid,attempts=1)
-                raise ValueError('Role context budget exceeded; curate evidence')
+                from .submission_recovery import RecoveryIncomplete
+                exc=RecoveryIncomplete('submission_context_budget')
+                exc.diagnostic.update(role=role,characters=measured_size,limit=context_limit,source_output_id=current.get('output_feedback',{}).get('rejected_output_id'))
+                self.s.append('submission_input_validation',dict(exc.diagnostic,status='rejected'),self.as_of,self.run_id)
+                raise exc
             from .submission_recovery import guard
             guard(self.s,self.run_id,self.as_of)
             iid = self.s.append('agent_input', {'role':role, 'guide':guide,
                 'skills':skills,
                 'guide_hash':hashlib.sha256(guide.encode()).hexdigest(),'provider':self.model.identity,
                 'payload':current,'contract':contract},self.as_of,self.run_id)
-            # Provider failures are never retried by this output-validation repair.
-            result = self.model.complete(role,guide,current,contract)
-            if self.model.mode=='demo' and current.get('adopted_dialogue_change'):
+            from .codex_model import ProviderSubmissionError
+            provider_error=None
+            try:result = self.model.complete(role,guide,current,contract)
+            except ProviderSubmissionError as exc:provider_error=exc;result=exc.output
+            if provider_error is None and self.model.mode=='demo' and current.get('adopted_dialogue_change'):
                 result['change_response']={'status':'rejected','reason':'합성 모델은 투자 판단을 변경하지 않아요. 변경 전달·후속 검증 경로만 확인해요.'}
-            oid = self.s.append('agent_output', {'role':role,'input_id':iid,'output':result},self.as_of,self.run_id)
-            try:validate_output(role,result,original)
+            oid = self.s.append('agent_output', dict(role=role,input_id=iid,output=result,**({'provider_failure':provider_error.diagnostic,'raw_provider_response':provider_error.raw_response} if provider_error else {})),self.as_of,self.run_id)
+            try:
+                if provider_error:raise provider_error
+                validate_output(role,result,original)
             except (ValueError,TypeError,KeyError) as exc:
                 code=issue_code(exc)
                 from .decision_calibration import failure_subtype

@@ -189,3 +189,29 @@ class ProviderSettingsTests(unittest.TestCase):
             self.assertEqual(app.model_path.stat().st_mode&0o777,0o600)
 
 if __name__=='__main__':unittest.main()
+
+class ProviderBoundaryTests(unittest.TestCase):
+    model=CodexTests.model
+    reply=staticmethod(CodexTests.reply)
+    def test_provider_completion_and_json_errors_are_distinct_and_keep_original(self):
+        from mara.codex_model import ProviderSubmissionError
+        cases=[('trace_item_shape',json.dumps({'type':'item.completed','item':None}),{'result_json':json.dumps(RESULT)}),
+            ('trace_item_shape',json.dumps({'type':'item.completed','item':[]}),{'result_json':json.dumps(RESULT)}),
+            ('trace_json','not-json',{'result_json':json.dumps(RESULT)}),
+            ('completion_unverified',json.dumps({'type':'thread.started'}),{'result_json':json.dumps(RESULT)}),
+            ('response_json',json.dumps({'type':'turn.completed'}),{'result_json':'{"summary":'}),
+            ('output_budget',json.dumps({'type':'turn.completed'}),{'result_json':json.dumps(dict(RESULT,summary='x'*25000))})]
+        for reason,trace,raw in cases:
+            def runner(command,prompt,directory,timeout):
+                Path(command[command.index('-o')+1]).write_text(json.dumps(raw));return trace
+            with self.subTest(reason=reason),self.assertRaises(ProviderSubmissionError) as cm:
+                self.model(runner).complete('context','guide',{},CONTRACTS['context'])
+            self.assertEqual(cm.exception.diagnostic['reason'],reason)
+            self.assertEqual(json.loads(cm.exception.raw_response),raw)
+    def test_turn_failed_or_error_is_not_a_retryable_submission(self):
+        from mara.codex_model import ProviderSubmissionError
+        for kind in ('turn.failed','error'):
+            def runner(command,prompt,directory,timeout):
+                self.reply(command);return json.dumps({'type':kind,'message':'quota or authentication failure'})
+            with self.assertRaises(CodexError) as cm:self.model(runner).complete('context','guide',{},CONTRACTS['context'])
+            self.assertNotIsInstance(cm.exception,ProviderSubmissionError)

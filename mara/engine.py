@@ -104,7 +104,31 @@ class Engine:
         finally:
             self.s.unlock(run_id)
 
-    def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None, improvement=None, profile_id=None, actual_id=None, external_review_id=None, learning_review_id=None):
+    def resume(self,failed_id,response_input_id,raw_response,resource_manifest=None):
+        """One explicit, verified continuation of an interrupted initial perspective."""
+        from .continuation import prepare,begin
+        failed=self.s.get(failed_id);run_id=failed['run_id'];self.s.lock(run_id)
+        plan=None
+        try:
+            plan=prepare(self.s,self.model,failed_id,response_input_id,raw_response,resource_manifest)
+            begin(self.s,plan);b=plan['start']['body']
+            result=self._run(b['as_of'],b['market_id'],True,run_id,b.get('revision_reason'),None,None,b['profile_id'],b['actual_id'],None,b.get('learning_review_id'),resume=plan)
+            self.s.append('continuation_completed',{'continuation_id':plan['receipt_id'],'source_failed_id':failed_id,'completed_id':result['event_id']},b['as_of'],run_id)
+            return result
+        except Exception as exc:
+            if plan and plan.get('receipt_id'):
+                failure={'error_type':type(exc).__name__,'continuation_id':plan['receipt_id'],'source_failed_id':failed_id,'retry':'Continuation failed; preserve original and inspect the supported boundary'}
+                from .codex_model import CodexError
+                from .submission_recovery import RecoveryIncomplete
+                if isinstance(exc,CodexError):failure['message']=str(exc)
+                if isinstance(exc,AgentOutputError):failure.update(output_validation=exc.details,message=exc.message)
+                if isinstance(exc,RecoveryIncomplete):failure.update(recovery=exc.diagnostic,message=exc.message)
+                fid=self.s.append('failed',failure,failed['effective'],run_id)
+                self.s.append('continuation_failed',{'continuation_id':plan['receipt_id'],'source_failed_id':failed_id,'failed_id':fid,'error_type':type(exc).__name__},failed['effective'],run_id)
+            raise
+        finally:self.s.unlock(run_id)
+
+    def _run(self, as_of, market_id, force, run_id, revision_reason=None, amendment=None, improvement=None, profile_id=None, actual_id=None, external_review_id=None, learning_review_id=None, resume=None):
         boundary=history.scope(self.s)
         if boundary['reset_id'] and self.s.get(boundary['reset_id'])['effective']>as_of:raise ValueError('Cannot create a decision before the active history reset')
         previous = history.latest(self.s,'completed',boundary=boundary)
@@ -189,7 +213,7 @@ class Engine:
             p=history.profile_input(p,boundary);p['clarification_answers']=saved_answers
             pe=self.s.get(self.set_profile(p,as_of))
         if previous and previous['body']['mode'] != self.model.mode: raise ValueError('Demo and live histories must use separate users')
-        p=history.profile_input(p,boundary)
+        p=copy.deepcopy(resume['pending']['body']['payload']['profile']) if resume else history.profile_input(p,boundary)
         if p.get('contested_fields'):raise ValueError('Withdrawn or disputed personal facts require resolution before calculation: '+', '.join(p['contested_fields']))
         d.profile(p); d.holdings(h); d.market(m)
         if self.model.mode == 'live' and (m.get('synthetic') or not m['facts']):
@@ -209,20 +233,31 @@ class Engine:
         if self.model.mode=='live' and not m['facts']:
             raise ValueError('Live analysis requires currently valid evidence')
         from .persona import ensure as ensure_persona,snapshot as persona_snapshot
-        user_persona=persona_snapshot(ensure_persona(self.s,pe))
-        start_id = self.s.append('run_started',{'market_id':me['id'],'profile_id':pe['id'],
+        user_persona=copy.deepcopy(resume['user_persona']) if resume else persona_snapshot(ensure_persona(self.s,pe))
+        from .continuation import resource_fingerprint
+        start_id = resume['start']['id'] if resume else self.s.append('run_started',{'market_id':me['id'],'profile_id':pe['id'],
              'persona_id':user_persona['id'],'persona_hash':user_persona['hash'],
              'actual_id':he['id'],'previous_id':previous['id'] if previous else None,
              'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason,'learning_review_id':learning_review_id,
-             'history_scope':boundary,'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement,'external_review':external_review},as_of,run_id)
+             'history_scope':boundary,'runtime_resources':resource_fingerprint(),'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement,'external_review':external_review},as_of,run_id)
         from .research_questions import freeze,ledger
         decision_scope=copy.deepcopy(frozen['body']['decision_scope']) if frozen and frozen['body'].get('decision_scope') else freeze(p,m)
-        self.s.append('decision_scope',decision_scope,as_of,run_id)
+        if resume:
+            decision_scope=copy.deepcopy(resume['decision_scope'])
+            known={f['id']:f for f in m['facts']}
+            for fact in resume['facts']:
+                if fact['id'] in known and known[fact['id']]!=fact:raise ValueError('Continuation fact collision')
+                if fact['id'] not in known:m['facts'].append(copy.deepcopy(fact));known[fact['id']]=fact
+        else:self.s.append('decision_scope',decision_scope,as_of,run_id)
         k = Knowledge(self.s,after_seq=boundary['after_seq'])
         a = Agents(self.s,self.model,as_of,run_id,self.research_library)
         from .submission_recovery import Coordinator,RecoveryIncomplete,historical_facts
         recovery=Coordinator(self.s,self.model,as_of,run_id,a.guide('leader'))
         revision_instructions={};perspective_cache={};research_revision_pending=False;role_fact_deliveries={}
+        resume_cache=copy.deepcopy(resume['cache']) if resume else {};resume_pending=resume['pending'] if resume else None
+        if resume:
+            for oid in resume['prefix_output_ids']:
+                out=self.s.get(oid);inp=self.s.get(out['body']['input_id']);recovery.latest[(out['body']['role'],inp['body']['payload']['analysis_stage'])]=oid
         rebalance_due = d.day(as_of) >= d.day(h['last_rebalanced']) + timedelta(days=p['rebalance_every_days'])
         anchors = {'goal':p['goal'],'constraints':p['constraints'],'actual_rationale':h['rationale'],
             'previous_rationale':previous['body']['proposal']['rationale'] if previous else None,
@@ -296,8 +331,8 @@ class Engine:
                     'final_validation':'after leader; assess each statement against its original stage'}}
         from . import evidence_feedback as feedback
         from . import research_learning as learning
-        research_history=learning.history(self.s,previous,as_of,self.s.get(start_id)['seq']) if previous else None
-        history_id=self.s.append('research_feedback_history',research_history,as_of,run_id) if research_history else None
+        research_history=copy.deepcopy(resume['research_history']) if resume else learning.history(self.s,previous,as_of,self.s.get(start_id)['seq']) if previous else None
+        history_id=resume['learning_cycle']['history_event_id'] if resume else self.s.append('research_feedback_history',research_history,as_of,run_id) if research_history else None
         learning_cycle={'status':'skipped_frozen_revision' if frozen else 'no_predecessor' if not previous else 'pending',
             'history_event_id':history_id,'source_completed_id':previous['id'] if previous else None,
             'reflection_output_id':None,'memory_outputs':[],'applications':[]}
@@ -358,6 +393,10 @@ class Engine:
                 perspective_cache.clear();research_revision_pending=True
             return changed
         def call(role, extra=None):
+            nonlocal resume_pending
+            if role in resume_cache:
+                result=resume_cache.pop(role);stage=self.s.get(self.s.get(result[1])['body']['input_id'])['body']['payload']['analysis_stage']
+                output_receipts.append((role,stage,result[1],result[0]));return result
             payload = dict(common,knowledge=k.retrieve(as_of,role))
             if improvement and role not in ('leader','validation'):
                 payload['improvement']=improvement_for_role(improvement,role,frozen['body'])
@@ -406,7 +445,10 @@ class Engine:
             recovered_sources=[]
             while True:
                 try:
-                    result=a.call(role,payload)
+                    if resume_pending and role==resume_pending['body']['role']:
+                        original_input=resume_pending;resume_pending=None
+                        result=a.submit_prepared(original_input,resume['feedback'])
+                    else:result=a.call(role,payload)
                     break
                 except AgentOutputError as exc:
                     sync_facts()
@@ -459,7 +501,12 @@ class Engine:
                         exchange['status']='reassessed'
             sync_facts()
             return result
-        if previous and not frozen:
+        if resume:
+            learning_cycle=copy.deepcopy(resume['learning_cycle']);reflection=copy.deepcopy(resume['reflection'])
+            reflection_id=learning_cycle['reflection_output_id'];audit=resume['pruning_audit_id']
+            if reflection:common['current_reflection']=reflection
+            memory_feedback=learning.memory_feedback(self.s,learning_cycle['memory_outputs'])
+        elif previous and not frozen:
             reflection, reflection_id = call('reflection')
             learning_cycle.update(status='reviewed',reflection_output_id=reflection_id,
                 reflection_input_id=self.s.get(reflection_id)['body']['input_id'])
@@ -701,6 +748,7 @@ class Engine:
             'final_validation':copy.deepcopy(final_review.get('memory_reviews',[]))}
         learning_cycle['scope']='Stored/delivered/model-reported use are separately traceable; decision quality and investment outcomes are not inferred from receipts.'
         report['research_learning']=learning_cycle
+        if resume:report['execution_continuation']={'version':resume['version'],'receipt_id':resume['receipt_id'],'source_failed_id':resume['failure']['id'],'original_run_id':run_id,'pending_input_id':resume['pending']['id'],'reused_output_ids':resume['prefix_output_ids'],'knowledge_effects_reapplied':False,'raw_response_accepted':False}
         report['submission_recovery']={'version':'mara.submission-recovery/1.0','events':[dict(e['body'],event_id=e['id'],recorded_at=e['recorded']) for e in self.s.events('submission_recovery') if e['run_id']==run_id],
             'latest_accepted':[{'role':r,'stage':stage,'output_id':oid} for (r,stage),oid in recovery.latest.items()],
             'scope':'Only the current accepted author versions and final validation produce this report. Original rejected and superseded outputs remain audit evidence.'}

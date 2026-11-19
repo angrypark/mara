@@ -45,7 +45,11 @@ def run_state(events,session=None):
     failures=[e for e in events if e['kind']=='failed']
     recoveries=[e for e in events if e['kind']=='recovery']
     if recoveries and (not failures or recoveries[-1]['seq']>failures[-1]['seq']):
-        return 'running' if recoveries[-1]['body'].get('status')=='resuming' else 'interrupted'
+        body=recoveries[-1]['body']
+        if body.get('continuation_id'):
+            from .continuation import alive
+            if not alive(body):return 'interrupted'
+        return 'running' if body.get('status')=='resuming' else 'interrupted'
     if failures:
         if failures[-1]['body'].get('error_type')=='ContextNeedsInput':return 'needs_input'
         # Onboarding already validated and classified this legacy R1 failure.
@@ -135,6 +139,9 @@ def project(s,run_id):
             strict=bool(inp and inp['body'].get('contract',{}).get('$schema'))
             if not strict and meta['kind'] in ('evidence','perspective','leader'):contract_name='legacy-'+contract_name
             try:
+                if out and out['body'].get('provider_failure'):
+                    from .codex_model import ProviderSubmissionError
+                    raise ProviderSubmissionError(out['body']['provider_failure']['reason'])
                 validate(value,schema(contract_name))
                 # Validate against the original input paired with this output, even
                 # while a later repair request is in flight.
@@ -235,6 +242,7 @@ def project(s,run_id):
                 status='running' if state=='running' else 'failed'
                 if result_event:
                     try:
+                        if result_event['body'].get('provider_failure'):raise ContractError('Provider submission not accepted')
                         value=copy.deepcopy(result_event['body']['output']);validate_output(role,value,latest['body']['payload'])
                         status='blocked' if value.get('qualitative_pass') is False else 'completed';summary=value['reason']
                         checks=latest['body']['payload']

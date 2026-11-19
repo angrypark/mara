@@ -71,7 +71,13 @@ def process_failures(session,completed,as_of,before_seq):
    'diagnostic_source_id':e['id'] if stored_detail else correction['id'] if detail and correction else None,'recorded_at':e['recorded'],'as_of':e['effective'],
    'run_state':'failed' if e['run_id']!=completed['run_id'] else 'completed',
    'correction_status':'accepted' if correction and correction['id'] in accepted else 'rejected' if correction and correction['id'] in rejected_inputs else 'not_completed' if correction else 'not_recorded'})
- for e in {e['id']:e for e in failed+list(recovered.values())}.values():
+ continued=[]
+ for receipt in session.events('continuation_completed',as_of):
+  if receipt['run_id']!=completed['run_id'] or receipt['seq']>=before_seq or receipt['body'].get('completed_id')!=completed['id']:continue
+  original=session.get(receipt['body']['source_failed_id']);started=session.get(receipt['body']['continuation_id'])
+  if original['kind']=='failed' and original['run_id']==completed['run_id'] and started['kind']=='continuation_started' and original['seq']<started['seq']<completed['seq']<receipt['seq']:
+   continued.append(original);carry_links[original['id']]={'receipt_id':receipt['id'],'completed_id':completed['id'],'source_status':'failed','continuation_status':'completed','scope':'Same-run verified continuation; original failure preserved, not investment evidence'}
+ for e in {e['id']:e for e in failed+list(recovered.values())+continued}.values():
   rows.append({'failure_id':e['id'],'case_id':e['id'],'kind':'execution_failure','role':'runtime','stage':'runtime',
    'code':e['body']['error_type'],'subtype':None,'recorded_at':e['recorded'],'as_of':e['effective'],'run_state':'failed','correction_status':'not_completed'})
  for row in rows:
@@ -142,7 +148,10 @@ def history(session,completed,as_of=None,before_seq=None):
   if e['run_id']==completed['run_id'] and e['seq']<=completed['seq']:
    result=e['body'].get('result',{})
    failures.append({'event_id':e['id'],'role':e['body']['role'],'tool':e['body'].get('call',{}).get('tool'),'status':result.get('status'),'reason':result.get('reason')})
- diagnostics=process_failures(session,completed,as_of or completed['effective'],before_seq or completed['seq']+1)
+ if before_seq is None:
+  linked=[e['seq'] for e in session.events('continuation_completed') if e['run_id']==completed['run_id'] and e['body'].get('completed_id')==completed['id']]
+  before_seq=max([completed['seq']]+linked)+1
+ diagnostics=process_failures(session,completed,as_of or completed['effective'],before_seq)
  return {'schema_version':VERSION,'source_completed_id':completed['id'],'as_of':completed['effective'],'process_failures':diagnostics,
   'submission_recovery':recovery_history(session,completed,as_of or completed['effective'],before_seq or completed['seq']+1),
   'final_action':body['proposal']['action'],'requests':rows,'tool_failures':failures,

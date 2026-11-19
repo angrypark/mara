@@ -63,9 +63,14 @@ def create(session,model,report,facts):
         guard(session,run_id,as_of)
         iid=session.append('report_editor_input',dict(receipt,payload=payload,guide=guide,contract=contract,
             attempt=attempt,attempt_input_sha256=digest(payload)),as_of,run_id)
-        output=model.complete('editor',guide,payload,contract)
-        oid=session.append('report_editor_output',{'input_id':iid,'output':output},as_of,run_id)
-        try:check(output,payload)
+        from .codex_model import ProviderSubmissionError
+        provider_error=None
+        try:output=model.complete('editor',guide,payload,contract)
+        except ProviderSubmissionError as exc:provider_error=exc;output=exc.output
+        oid=session.append('report_editor_output',dict(input_id=iid,output=output,**({'provider_failure':provider_error.diagnostic,'raw_provider_response':provider_error.raw_response} if provider_error else {})),as_of,run_id)
+        try:
+            if provider_error:raise provider_error
+            check(output,payload)
         except (ValueError,KeyError,TypeError) as exc:
             session.append('report_editor_validation',{'input_id':iid,'output_id':oid,'status':'rejected','error':str(exc)},as_of,run_id)
             if attempt==2:raise ValueError('Reader brief failed reference validation') from None

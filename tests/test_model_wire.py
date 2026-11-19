@@ -44,7 +44,7 @@ class ModelWireTests(unittest.TestCase):
                 inputs=s.events('agent_input');self.assertEqual(len(inputs),2)
                 self.assertEqual(inputs[-1]['body']['payload']['analysis'],payload['analysis'])
                 model.input_wire_version=None
-                with self.assertRaisesRegex(ValueError,'context budget'):Agents(s,model,'2026-11-18','other').call(role,payload)
+                with self.assertRaisesRegex(ValueError,'submission_context_budget'):Agents(s,model,'2026-11-18','other').call(role,payload)
                 db.close()
 
     def test_lossless_nested_values_escaped_paths_and_distinct_types(self):
@@ -104,11 +104,11 @@ class ModelWireTests(unittest.TestCase):
             self.assertEqual(saved['report'],payload['report'])
             self.assertEqual(saved['input_budget']['serialization'],VERSION)
             model=Model();model.evaluator_wire_version=None
-            with self.assertRaisesRegex(ValueError,'context budget'):
+            with self.assertRaisesRegex(ValueError,'submission_context_budget'):
                 Agents(session,model,'2026-11-18',None).call('evaluator',payload)
             self.assertEqual(len(session.events('agent_input')),1)
             too_large={'report':{'analysis':{},'rows':[text]*6},'market':{'facts':[]}}
-            with self.assertRaisesRegex(ValueError,'context budget'):
+            with self.assertRaisesRegex(ValueError,'submission_context_budget'):
                 Agents(session,Model(),'2026-11-18',None).call('evaluator',too_large)
             self.assertEqual(len(session.events('agent_input')),1)
             store.close()
