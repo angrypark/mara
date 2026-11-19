@@ -118,7 +118,7 @@ class CodexModel:
         if not info['installed'] or not info['compatible']:raise CodexError('지원하는 Codex CLI가 필요해요. 설치 또는 업데이트해주세요.')
         if not info['authenticated']:raise CodexError('Codex 로그인이 필요해요. 터미널에서 codex login을 실행해주세요.')
         self.binary=executable();self.model=model;self.runner=runner
-        from .model_routing import load_policy,POLICY_PATH,fingerprint
+        from .model_routing import load_policy,POLICY_PATH,RULES_VERSION,fingerprint
         self.routing_policy=None if legacy else load_policy(policy_path or POLICY_PATH)
         self.effort=effort
         if effort is not None and effort not in ('low','medium','high','xhigh','max','ultra'):
@@ -129,7 +129,7 @@ class CodexModel:
             'mode':self.mode,'ephemeral':True,'sandbox':'read-only','adapter':'1.2','input_wire':self.input_wire_version}
         if self.routing_policy:
             self.identity.update(routing_policy=self.routing_policy['version'],routing_sha256=fingerprint(self.routing_policy),
-                                 model_override=model or None,effort_override=effort)
+                                 routing_rules=RULES_VERSION,model_override=model or None,effort_override=effort)
         elif effort:self.identity['effort']=effort
 
     def _routing_record(self,value):

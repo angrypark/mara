@@ -4,7 +4,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from mara.codex_model import CodexModel,CodexError
+from mara.contracts import output_schema,schema
 from mara.model_routing import load_policy,select,POLICY_PATH
+from mara.registry import personas
+from mara.submission_recovery import contract as recovery_contract
 
 READY={'installed':True,'compatible':True,'authenticated':True,'version':'0.169.0'}
 
@@ -19,7 +22,7 @@ class RoutingTests(unittest.TestCase):
             d=select(self.policy,role,{'analysis_stage':'final_validation'},{'properties':{'calls':{}}})
             self.assertEqual((d['model'],d['effort']),('gpt-6.2-sol','medium'))
         d=select(self.policy,'validation',{'analysis_stage':'perspective_validation'},{});
-        self.assertEqual((d['model'],d['effort']),('gpt-6.2-sol','high'))
+        self.assertEqual((d['model'],d['effort']),('gpt-6.2-astra','high'))
         d=select(self.policy,'validation',{'analysis_stage':'final_validation'},{});
         self.assertEqual((d['model'],d['effort']),('gpt-6.2-astra','high'))
         self.assertEqual(select(self.policy,'editor',{}, {})['effort'],'low')
@@ -48,12 +51,34 @@ class RoutingTests(unittest.TestCase):
                 return '{"type":"turn.completed"}'
             with patch('mara.codex_model.status',return_value=READY),patch('mara.codex_model.executable',return_value='/codex'):
                 m=CodexModel(runner=runner,routing_log=log)
-            m.complete('editor','',{},{});m.complete('validation','',{'analysis_stage':'final_validation'}, {})
-            self.assertEqual([c[c.index('--model')+1] for c in calls],['gpt-6.2-sol','gpt-6.2-astra'])
-            self.assertIn('model_reasoning_effort="low"',calls[0]);self.assertIn('model_reasoning_effort="high"',calls[1])
+            sol, astra = 'gpt-6.2-sol', 'gpt-6.2-astra'
+            cases = [
+                (role, {'analysis_stage': role}, output_schema(role), astra, 'medium')
+                for role in ('context', 'evidence', *personas(), 'reflection')
+            ]
+            cases += [
+                ('leader', {'analysis_stage':'proposal_synthesis'}, output_schema('leader'), astra, 'high'),
+                ('leader', {'analysis_stage':'submission_review'}, recovery_contract([]), astra, 'high'),
+                ('editor', {}, {}, sol, 'low'),
+                ('memory', {}, output_schema('memory'), sol, 'medium'),
+                ('context', {}, schema('persona-reply'), sol, 'medium'),
+                ('context', {}, {'$id':'urn:mara:persona-extraction:1.0'}, sol, 'low'),
+                ('leader', {}, {'properties':{'calls':{}}}, sol, 'medium'),
+            ]
+            for role, payload, contract, _, _ in cases:
+                m.complete(role, '', payload, contract)
             requested=[json.loads(l) for l in log.read_text().splitlines() if json.loads(l)['state']=='requested']
-            self.assertEqual(len(requested),2);self.assertEqual(log.stat().st_mode&0o777,0o600)
-            self.assertEqual(requested[1]['model'],calls[1][calls[1].index('--model')+1])
+            self.assertEqual(len(requested), len(cases))
+            self.assertEqual(len(calls), len(cases))
+            self.assertEqual(log.stat().st_mode&0o777,0o600)
+            for (role, payload, _, model, effort), command, receipt in zip(cases, calls, requested):
+                with self.subTest(role=role, payload=payload):
+                    self.assertEqual(command[command.index('--model')+1], model)
+                    self.assertIn(f'model_reasoning_effort="{effort}"', command)
+                    self.assertEqual((receipt['model'], receipt['effort']), (model, effort))
+                    self.assertEqual(receipt['routing_rules'], m.identity['routing_rules'])
+            previous_identity = {k:v for k,v in m.identity.items() if k != 'routing_rules'}
+            self.assertNotEqual(m.identity, previous_identity)
 
     def test_failure_does_not_add_a_provider_attempt_and_legacy_identity_is_pinned(self):
         calls=[]
