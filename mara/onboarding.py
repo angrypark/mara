@@ -167,7 +167,7 @@ class PortfolioSetup:
                 if c.get('provider')=='codex':
                     info=codex_status()
                     return {'provider':'codex','configured':info['installed'] and info['compatible'] and info['authenticated'],
-                            'model':c.get('model') or '', 'codex':info}
+                            'model':c.get('model') or '', 'effort':c.get('effort'), 'codex':info}
                 return {'provider':'openai','configured':bool(c.get('api_key') and c.get('model')),'model':c.get('model')}
             except (OSError,ValueError): pass
         return {'provider':'openai','configured':bool(os.environ.get('MARA_API_KEY') and os.environ.get('MARA_MODEL')),'model':os.environ.get('MARA_MODEL')}
@@ -175,13 +175,16 @@ class PortfolioSetup:
     def analysis_model(self):
         if self.model_factory:return self.model_factory()
         config=json.loads(self.model_path.read_text()) if self.model_path.exists() else None
-        if config and config.get('provider')=='codex':return CodexModel(config.get('model',''))
+        if config and config.get('provider')=='codex':return CodexModel(config.get('model',''),**({'effort':config['effort']} if config.get('effort') else {}))
         return HTTPModel(config)
 
     def save_model(self,value):
-        if not isinstance(value,dict) or set(value)-{'provider','model','api_key'}: raise InputError('모델 설정을 확인해주세요.')
+        if not isinstance(value,dict) or set(value)-{'provider','model','api_key','effort'}: raise InputError('모델 설정을 확인해주세요.')
+        effort=value.get('effort')
+        if effort is not None and effort not in ('low','medium','high','xhigh','max','ultra'):raise InputError('지원하지 않는 reasoning effort예요.')
         provider=value.get('provider','openai')
         if provider not in {'openai','codex'}:raise InputError('분석 실행 방식을 선택해주세요.')
+        if provider!='codex' and effort is not None:raise InputError('effort 선택은 현재 검증된 Codex 실행 경로에서 지원해요.')
         model=value.get('model',''); key=value.get('api_key','')
         if not isinstance(model,str) or (model and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:\-]{0,119}',model)) or (provider=='openai' and not model): raise InputError('사용할 모델 ID를 입력해주세요.')
         if not isinstance(key,str) or len(key)>1000 or '\n' in key: raise InputError('API 키 형식을 확인해주세요.')
@@ -193,7 +196,7 @@ class PortfolioSetup:
                 if not info['authenticated']:raise InputError('Codex 로그인이 필요해요. 터미널에서 codex login을 실행해주세요.')
                 old=json.loads(self.model_path.read_text()) if self.model_path.exists() else {}
                 # Retain an existing API credential locally when switching providers; never pass it to Codex.
-                save_private(self.model_path,dict(old,provider='codex',model=model))
+                save_private(self.model_path,dict(old,provider='codex',model=model,effort=effort))
                 return self.model_state()
             if not key and self.model_path.exists(): key=json.loads(self.model_path.read_text()).get('api_key','')
             if not key.strip(): raise InputError('OpenAI API 키를 입력해주세요.')

@@ -129,3 +129,13 @@ Mara의 ‘나의 페르소나’에서 상황·목표·관심사를 이야기�
 보류 이후의 관측값·정상화·가치·대안 연결은 [논증 준비 환경](docs/thesis-workspace.md)을 참고해요. 계산 경로 검증과 투자 논증의 충분성을 구분해요.
 
 자료 공백을 같은 실행에서 다시 조사하고 요청자가 검토하는 흐름은 [추가 근거 요청과 재판단](docs/evidence-feedback.md)을 참고해요.
+
+## 모델·추론 강도 선택
+
+Codex 호출은 workspace의 `.agents/model-policy.json`을 인스턴스 생성 시 고정해요. 독립 checkout에서는 `resources/model-routing.json`을 사용하며, 정책 누락을 무설정 CLI 호출로 바꾸지 않아요. 보고서 정리는 Sol/low, 일반 분석·조사 계획은 Sol/medium, 중간 독립 검증은 Sol/high, 최종 종합·검증은 Astra/high예요. 같은 역할도 조사 계획 계약이면 일반 계획 설정을 사용해요.
+
+`CodexModel(model=..., effort=...)` 및 모델 설정 API의 `model`/`effort`는 독립 override예요. 실제 `--model`과 `-c model_reasoning_effort=...`를 보내고 `.local/model-routing.jsonl`에 선택 사유·승격·요청/반환을 기록해요. 반환은 금융 제출 검증 통과가 아니에요. API provider는 기존 명시 모델을 유지하며 검증되지 않은 Codex 모델 ID를 API로 보내지 않아요.
+
+판단 오류(`hard_gap`, `future_fact`, `final_integrity`, `selected_integrity`, `symmetric_choices`)의 기존 두 번째 제출에서만 effort를 최대 high로 높일 수 있어요. ID·형식·자료 부족·전송·사용량·한도 오류에 추가 모델 호출을 붙이지 않아요. 근거·수치 검증과 재시도/조사 예산은 그대로예요. 판단 품질이나 비용 절감률은 별도 검증 대상이에요.
+
+provider identity에 정책 hash가 들어가므로 이전 조건의 미완료 실행을 새 정책으로 조용히 재개할 수 없어요. `legacy=True`는 감사된 이전 실행의 명시적 보존용이며 일반 새 실행에서 사용하지 않아요. 과거 `CLI default`의 실제 모델/effort가 기록되지 않았다면 역추정하지 않아요. 실행 중 정책 파일을 바꿔도 이미 생성된 provider는 바뀌지 않아요.

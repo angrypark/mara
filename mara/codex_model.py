@@ -111,17 +111,40 @@ class CodexModel:
     mode='live'
     input_wire_version='mara.model-wire/3.0'
     evaluator_wire_version='mara.model-wire/3.0'
-    def __init__(self,model='',runner=run_process):
+    def __init__(self,model='',runner=run_process,*,effort=None,policy_path=None,legacy=False,routing_log=None):
         if not isinstance(model,str) or (model and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:\-]{0,119}',model)):
             raise CodexError('Codex 모델 ID 형식을 확인해주세요.')
         info=status()
         if not info['installed'] or not info['compatible']:raise CodexError('지원하는 Codex CLI가 필요해요. 설치 또는 업데이트해주세요.')
         if not info['authenticated']:raise CodexError('Codex 로그인이 필요해요. 터미널에서 codex login을 실행해주세요.')
         self.binary=executable();self.model=model;self.runner=runner
+        from .model_routing import load_policy,POLICY_PATH,fingerprint
+        self.routing_policy=None if legacy else load_policy(policy_path or POLICY_PATH)
+        self.effort=effort
+        if effort is not None and effort not in ('low','medium','high','xhigh','max','ultra'):
+            raise CodexError('지원하지 않는 reasoning effort예요.')
+        self.routing_log=Path(routing_log) if routing_log else (Path(__file__).resolve().parents[1]/'.local/model-routing.jsonl' if runner is run_process else None)
+        self.last_selection=None
         self.identity={'provider':'codex-cli','model':model or 'CLI default','cli_version':info['version'],
             'mode':self.mode,'ephemeral':True,'sandbox':'read-only','adapter':'1.2','input_wire':self.input_wire_version}
+        if self.routing_policy:
+            self.identity.update(routing_policy=self.routing_policy['version'],routing_sha256=fingerprint(self.routing_policy),
+                                 model_override=model or None,effort_override=effort)
+        elif effort:self.identity['effort']=effort
+
+    def _routing_record(self,value):
+        if self.routing_log is None:return
+        self.routing_log.parent.mkdir(parents=True,exist_ok=True)
+        fd=os.open(str(self.routing_log),os.O_WRONLY|os.O_CREAT|os.O_APPEND,0o600)
+        try:os.write(fd,(json.dumps(value,ensure_ascii=False)+'\n').encode())
+        finally:os.close(fd)
 
     def complete(self,role,guide,payload,contract):
+        from .model_routing import select
+        import uuid
+        selection=select(self.routing_policy,role,payload,contract,self.model,self.effort) if self.routing_policy else {
+            'model':self.model or None,'effort':self.effort,'reason':'explicit_legacy_provider','escalated':False}
+        self.last_selection=dict(selection)
         prompt=build_prompt(self,role,guide,payload,contract)
         if len(prompt)>1048576:
             raise CodexError(INPUT_LIMIT_MESSAGE)
@@ -135,12 +158,21 @@ class CodexModel:
                 '-c','suppress_unstable_features_warning=true']
             for feature in DISABLED_FEATURES:command.extend(['--disable',feature])
             command.extend(['--enable','skip_host_skill_discovery'])
-            if self.model:command.extend(['--model',self.model])
+            if selection['model']:command.extend(['--model',selection['model']])
+            if selection['effort']:command.extend(['-c','model_reasoning_effort='+json.dumps(selection['effort'])])
             command.append('-')  # stdin keeps personal context out of process argument listings
             # Concise output does not make a large frozen evidence pack small.
             # Keep the existing long-analysis allowance for large inputs even
             # when a role no longer writes a separate four-section narrative.
-            trace=self.runner(command,prompt,tmp,900 if payload.get('narrative_contract') or len(prompt)>256000 else 300)
+            routing_id=uuid.uuid4().hex
+            self._routing_record(dict(selection,call_id=routing_id,role=role,phase=payload.get('analysis_stage'),
+                state='requested',at=time.time(),prompt_characters=len(prompt)))
+            try:trace=self.runner(command,prompt,tmp,900 if payload.get('narrative_contract') or len(prompt)>256000 else 300)
+            except Exception as exc:
+                self._routing_record(dict(call_id=routing_id,state='provider_error',error_type=type(exc).__name__,at=time.time()))
+                raise
+            self._routing_record(dict(call_id=routing_id,state='provider_returned',at=time.time(),
+                attestation='CLI returned; output validation below remains mandatory'))
             response=answer.read_text() if answer.exists() and answer.stat().st_size<=524288 else ''
             completed=False;types=[]
             for line_no,line in enumerate(trace.splitlines(),1):
