@@ -88,7 +88,7 @@ def allocate(session,run_id,as_of,rows,role,fact,eligible):
     # existing shared/released balance; no new reserve or budget is issued.
     recovery_active=False
     if role=='evidence':
-        returned={e['body']['dispatch_id'] for e in session.events('recovery_research_return') if e['run_id']==run_id}
+        returned={e['body']['dispatch_id'] for kind in ('recovery_research_return','recovery_research_cancelled') for e in session.events(kind) if e['run_id']==run_id}
         for dispatch in session.events('recovery_research_dispatch'):
             if dispatch['run_id']!=run_id or dispatch['id'] in returned:continue
             try:

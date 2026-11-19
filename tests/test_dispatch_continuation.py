@@ -15,8 +15,12 @@ class DispatchContinuationTests(unittest.TestCase):
  def interrupted(self,legacy=False):
   original=dict(self.m['facts'][0],id='archive-source',raw_refs=[{'source':'https://example.com/original','sha256':'a'*64,'bytes':100,'cache_hit':False,'retrieved_at':'2026-11-14T01:00:00+00:00'}])
   before=copy.deepcopy(self.m);before['facts'].append(original)
+  before['facts'] += [dict(self.m['facts'][0],id='conflict-'+str(i),text='Original observation '+str(i)) for i in (1,2)]
   prior=self.e.run('2026-11-14',self.db.publish_market(before))
-  current=copy.deepcopy(before);current['facts'][-1]['raw_refs'][0].update(cache_hit=True,retrieved_at='2026-11-14T02:00:00+00:00')
+  self.prior_id=prior['event_id']
+  current=copy.deepcopy(before);next(f for f in current['facts'] if f['id']=='archive-source')['raw_refs'][0].update(cache_hit=True,retrieved_at='2026-11-14T02:00:00+00:00')
+  for f in current['facts']:
+   if f['id'].startswith('conflict-'):f['text']='Updated observation '+f['id']
   self.current_id=self.db.publish_market(current);calls=[]
   captured={}
   class Model(DemoModel):
@@ -35,7 +39,7 @@ class DispatchContinuationTests(unittest.TestCase):
     return out
   self.e.model=Model();self.calls=calls
   # Reproduce the original full-dict collision after the first return.
-  with patch('mara.submission_recovery.same_observation',side_effect=lambda a,b:a==b):
+  with patch('mara.submission_recovery.same_observation',side_effect=lambda a,b:a==b),patch('mara.submission_recovery.routing_issues',return_value=[]):
    def run():return self.e.run('2026-11-14',self.current_id,force=True,revision_reason='Same-source review',learning_review_id=prior['event_id'])
    if legacy:
     with self.assertRaises(CodexError):run()

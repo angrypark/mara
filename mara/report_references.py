@@ -4,6 +4,14 @@ import math
 
 def errors(proposal,analysis,funding,valuation):
     root={'proposal':proposal,'analysis':analysis,'funding':funding,'valuation':valuation};failures=[]
+    def inspect_transient(value,path):
+        if isinstance(value,dict):
+            for key,item in value.items():inspect_transient(item,path+'/'+str(key).replace('~','~0').replace('/','~1'))
+        elif isinstance(value,list):
+            for index,item in enumerate(value):inspect_transient(item,path+'/'+str(index))
+        elif isinstance(value,str) and '/reference_feedback/' in value:
+            failures.append({'path':path,'reason':'Temporary correction input is not a durable final-report calculation link. It may exist in the original author input; cite the corresponding /analysis/, /funding/ or /valuation/ value instead. This is a report-link issue, not evidence fabrication.'})
+    inspect_transient(proposal,'/proposal')
     def resolve(path):
         if not isinstance(path,str) or (not path.startswith(('/analysis/','/funding/','/valuation/')) and path!='/proposal/investment_case/monitoring'):
             raise ValueError('Use body-relative /analysis/..., /funding/..., /valuation/... or /proposal/investment_case/monitoring; never /input/ or /report/')

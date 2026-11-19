@@ -255,16 +255,22 @@ class Engine:
         else:self.s.append('decision_scope',decision_scope,as_of,run_id)
         k = Knowledge(self.s,after_seq=boundary['after_seq'])
         a = Agents(self.s,self.model,as_of,run_id,self.research_library)
-        from .submission_recovery import Coordinator,RecoveryIncomplete,historical_facts,same_observation,reference_scope
+        from .submission_recovery import Coordinator,RecoveryIncomplete,historical_facts,same_observation,reference_scope,historical_catalog as build_historical_catalog
         recovery=Coordinator(self.s,self.model,as_of,run_id,a.guide('leader'))
         revision_instructions={};perspective_cache={};research_revision_pending=False;role_fact_deliveries={}
         resume_cache=copy.deepcopy(resume['cache']) if resume else {};resume_pending=resume['pending'] if resume and resume['kind']=='initial_submission' else None
         resume_routing=copy.deepcopy(resume.get('dispatch')) if resume else None
         resume_deliveries=copy.deepcopy(resume_routing['receipts']) if resume_routing else {}
+        resume_final=copy.deepcopy(resume.get('final_dispatch')) if resume else None
+        replaced_requests={}
         if resume:
             for oid in resume['prefix_output_ids']:
                 out=self.s.get(oid);inp=self.s.get(out['body']['input_id']);recovery.latest[(out['body']['role'],inp['body']['payload']['analysis_stage'])]=oid
             if resume_routing:recovery.restore_review(resume_routing['packet'],resume_routing['leader_output_id'])
+            if resume_final:
+                perspective_cache=copy.deepcopy(resume_final['perspectives'])
+                role_fact_deliveries={r:set(ids) for r,ids in resume_final['role_fact_deliveries'].items()}
+                for review in resume_final['reviews']:recovery.restore_review(review['packet'],review['output_id'])
         rebalance_due = d.day(as_of) >= d.day(h['last_rebalanced']) + timedelta(days=p['rebalance_every_days'])
         anchors = {'goal':p['goal'],'constraints':p['constraints'],'actual_rationale':h['rationale'],
             'previous_rationale':previous['body']['proposal']['rationale'] if previous else None,
@@ -354,8 +360,7 @@ class Engine:
                 if fact['id'] not in ids:m['facts'].append(copy.deepcopy(fact));ids.add(fact['id'])
         def historical_catalog():
             if not previous:return []
-            from .fact_catalog import authoritative_facts
-            return [{'completed_id':previous['id'],'facts':[{'id':f['id'],'topic':f.get('topic'),'known_at':f['known_at'],'valid_until':f['valid_until']} for f in authoritative_facts(self.s,previous)]}]
+            return build_historical_catalog(self.s,previous,m['facts'],as_of)
         def fulfill(requests,items,submitting_role=None):
             nonlocal research_revision_pending
             changed=False
@@ -369,7 +374,7 @@ class Engine:
                 existing=resume_deliveries.pop(request['id'],None)
                 if existing:
                     if instruction!=existing['expected_instruction']:raise RecoveryIncomplete('continued_request_changed')
-                else:recovery.event('author_requested',target_role=author,request=instruction)
+                else:recovery.event('author_requested',target_role=author,request=instruction,leader_output_id=recovery.last_leader_id,replaces_request_event_id=replaced_requests.pop(request['id'],None))
                 recovery.event('diagnostic_context_added',request_id=request['id'],target_role=author,source_output_id=source['id'],
                     leader_output_id=recovery.last_leader_id,reference_scope=reference_scope(self.s,source['id']),
                     scope='Process evidence only; author must assess the diagnosis against its original input. Not a confirmed error, market observation or performance result.')
@@ -582,6 +587,19 @@ class Engine:
         common.update(context_analysis=context,evidence_analysis=evidence)
         initial_perspectives=None
         while True:
+            if resume_final:
+                restored=resume_final;resume_final=None
+                for event in restored['author_requests']:
+                    q=event['body']['request'];replaced_requests[q['id']]=event['id']
+                    recovery.event('author_request_withdrawn',target_role=q['target_role'],request_id=q['id'],source_request_event_id=event['id'],leader_output_id=restored['leader_output_id'],reason='Historical/current observation collision discovered before author submission; pending routing must be corrected')
+                for event in restored['pending_dispatches']:
+                    body={'dispatch_id':event['id'],'leader_output_id':restored['leader_output_id'],'request_id':event['body']['request_id'],'status':'cancelled_before_delivery','reason':'Routing references a different historical observation; no research result or author correction was produced'}
+                    cid=self.s.append('recovery_research_cancelled',body,as_of,run_id)
+                    recovery.event('research_cancelled',target_role=event['body']['target_role'],cancellation_id=cid,**body)
+                routes=recovery.repair_routes(restored['packet'],restored['leader_output_id'],historical_catalog())
+                fulfill(routes,restored['packet']['work_items']);research_revision_pending=False
+                recovery.event('invalidated',source_validation_id=restored['validation_output_id'],stages=['selected_calculations','perspective_validation','proposal_synthesis','final_validation','reader_report'],reason='Repaired final-stage routing requires author revisions and fresh downstream validation')
+                continue
             output_receipts.clear()
             comparison_perspectives.clear();comparison_alternatives.clear()
             common['analysis']=build_analysis(p,h,m,val,capital)

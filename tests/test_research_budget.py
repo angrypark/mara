@@ -147,6 +147,17 @@ class ResearchBudgetTests(unittest.TestCase):
         oid=self.s.append('recovery_leader_output',{'output':{'requests':[{'id':request_id,'needs_research':True,'historical_sources':[]}]}},DAY,run)
         self.s.append('recovery_leader_validation',{'output_id':oid,'status':'accepted' if valid else 'rejected'},DAY,run)
         return self.s.append('recovery_research_dispatch',{'leader_output_id':oid,'request_id':request_id,'target_role':'bogle'},DAY,run)
+    def test_cancelled_recovery_dispatch_closes_supplier_without_refunding_budget(self):
+        r=self.runner('cancel');m={'facts':[]}
+        self.assertTrue(r.activate('evidence',fact('base',80000),m));self.close('cancel','evidence')
+        dispatch=self.recovery_dispatch('cancel')
+        self.assertTrue(r.activate('evidence',fact('before-cancel',2000),m))
+        count=len(self.s.events('research_evidence'));plan=copy.deepcopy(self.s.latest('research_budget_plan')['body'])
+        self.s.append('recovery_research_cancelled',{'dispatch_id':dispatch,'status':'cancelled_before_delivery'},DAY,'cancel')
+        self.assertFalse(r.activate('evidence',fact('after-cancel',1000),m))
+        self.assertFalse(r.activation_budget['recovery_supplier']);self.assertEqual(r.activation_budget['blocked_reason'],'research_role_already_closed')
+        self.assertEqual(r.activation_budget['run_used'],82000)
+        self.assertEqual(len(self.s.events('research_evidence')),count);self.assertEqual(self.s.latest('research_budget_plan')['body'],plan)
     def test_verified_recovery_supplier_uses_same_residual_budget_then_closes(self):
         r=self.runner('run');m={'facts':[]}
         self.assertTrue(r.activate('evidence',fact('base',80000),m));self.close('run','evidence')
