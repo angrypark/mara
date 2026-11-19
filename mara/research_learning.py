@@ -74,9 +74,13 @@ def process_failures(session,completed,as_of,before_seq):
  continued=[]
  for receipt in session.events('continuation_completed',as_of):
   if receipt['run_id']!=completed['run_id'] or receipt['seq']>=before_seq or receipt['body'].get('completed_id')!=completed['id']:continue
-  original=session.get(receipt['body']['source_failed_id']);started=session.get(receipt['body']['continuation_id'])
-  if original['kind']=='failed' and original['run_id']==completed['run_id'] and started['kind']=='continuation_started' and original['seq']<started['seq']<completed['seq']<receipt['seq']:
-   continued.append(original);carry_links[original['id']]={'receipt_id':receipt['id'],'completed_id':completed['id'],'source_status':'failed','continuation_status':'completed','scope':'Same-run verified continuation; original failure preserved, not investment evidence'}
+  started=session.get(receipt['body']['continuation_id'])
+  source_ids=receipt['body'].get('source_failed_ids',[receipt['body']['source_failed_id']])
+  if source_ids!=started['body'].get('source_failed_ids',[started['body']['source_failed_id']]):continue
+  for source_id in source_ids:
+   original=session.get(source_id)
+   if original['kind']=='failed' and original['run_id']==completed['run_id'] and started['kind']=='continuation_started' and original['seq']<started['seq']<completed['seq']<receipt['seq']:
+    continued.append(original);carry_links[original['id']]={'receipt_id':receipt['id'],'completed_id':completed['id'],'source_status':'failed','continuation_status':'completed','scope':'Same-run verified continuation; original failure preserved, not investment evidence'}
  for e in {e['id']:e for e in failed+list(recovered.values())+continued}.values():
   rows.append({'failure_id':e['id'],'case_id':e['id'],'kind':'execution_failure','role':'runtime','stage':'runtime',
    'code':e['body']['error_type'],'subtype':None,'recorded_at':e['recorded'],'as_of':e['effective'],'run_state':'failed','correction_status':'not_completed'})

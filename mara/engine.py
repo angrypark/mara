@@ -104,16 +104,20 @@ class Engine:
         finally:
             self.s.unlock(run_id)
 
-    def resume(self,failed_id,response_input_id,raw_response,resource_manifest=None):
+    def resume_dispatch(self,failed_id,resource_manifest=None):
+        """Continue a verified first historical delivery; no accepted role regeneration."""
+        return self.resume(failed_id,None,None,resource_manifest,pending_dispatch=True)
+
+    def resume(self,failed_id,response_input_id,raw_response,resource_manifest=None,*,pending_dispatch=False):
         """One explicit, verified continuation of an interrupted initial perspective."""
         from .continuation import prepare,begin
         failed=self.s.get(failed_id);run_id=failed['run_id'];self.s.lock(run_id)
         plan=None
         try:
-            plan=prepare(self.s,self.model,failed_id,response_input_id,raw_response,resource_manifest)
+            plan=prepare(self.s,self.model,failed_id,response_input_id,raw_response,resource_manifest,pending_dispatch)
             begin(self.s,plan);b=plan['start']['body']
             result=self._run(b['as_of'],b['market_id'],True,run_id,b.get('revision_reason'),None,None,b['profile_id'],b['actual_id'],None,b.get('learning_review_id'),resume=plan)
-            self.s.append('continuation_completed',{'continuation_id':plan['receipt_id'],'source_failed_id':failed_id,'completed_id':result['event_id']},b['as_of'],run_id)
+            self.s.append('continuation_completed',{'continuation_id':plan['receipt_id'],'source_failed_id':failed_id,'source_failed_ids':plan['source_failed_ids'],'completed_id':result['event_id']},b['as_of'],run_id)
             return result
         except Exception as exc:
             if plan and plan.get('receipt_id'):
@@ -251,13 +255,16 @@ class Engine:
         else:self.s.append('decision_scope',decision_scope,as_of,run_id)
         k = Knowledge(self.s,after_seq=boundary['after_seq'])
         a = Agents(self.s,self.model,as_of,run_id,self.research_library)
-        from .submission_recovery import Coordinator,RecoveryIncomplete,historical_facts
+        from .submission_recovery import Coordinator,RecoveryIncomplete,historical_facts,same_observation,reference_scope
         recovery=Coordinator(self.s,self.model,as_of,run_id,a.guide('leader'))
         revision_instructions={};perspective_cache={};research_revision_pending=False;role_fact_deliveries={}
-        resume_cache=copy.deepcopy(resume['cache']) if resume else {};resume_pending=resume['pending'] if resume else None
+        resume_cache=copy.deepcopy(resume['cache']) if resume else {};resume_pending=resume['pending'] if resume and resume['kind']=='initial_submission' else None
+        resume_routing=copy.deepcopy(resume.get('dispatch')) if resume else None
+        resume_deliveries=copy.deepcopy(resume_routing['receipts']) if resume_routing else {}
         if resume:
             for oid in resume['prefix_output_ids']:
                 out=self.s.get(oid);inp=self.s.get(out['body']['input_id']);recovery.latest[(out['body']['role'],inp['body']['payload']['analysis_stage'])]=oid
+            if resume_routing:recovery.restore_review(resume_routing['packet'],resume_routing['leader_output_id'])
         rebalance_due = d.day(as_of) >= d.day(h['last_rebalanced']) + timedelta(days=p['rebalance_every_days'])
         anchors = {'goal':p['goal'],'constraints':p['constraints'],'actual_rationale':h['rationale'],
             'previous_rationale':previous['body']['proposal']['rationale'] if previous else None,
@@ -359,16 +366,28 @@ class Engine:
                 # The author receives only its own source and diagnosis, not peers.
                 source=self.s.get(request['source_output_id'])
                 if source['owner']!=self.s.owner or source['run_id']!=run_id or source['body']['role']!=author:raise RecoveryIncomplete('revision_source_scope')
-                recovery.event('author_requested',target_role=author,request=instruction)
+                existing=resume_deliveries.pop(request['id'],None)
+                if existing:
+                    if instruction!=existing['expected_instruction']:raise RecoveryIncomplete('continued_request_changed')
+                else:recovery.event('author_requested',target_role=author,request=instruction)
+                recovery.event('diagnostic_context_added',request_id=request['id'],target_role=author,source_output_id=source['id'],
+                    leader_output_id=recovery.last_leader_id,reference_scope=reference_scope(self.s,source['id']),
+                    scope='Process evidence only; author must assess the diagnosis against its original input. Not a confirmed error, market observation or performance result.')
                 if request['needs_research'] and (not self.research_library or common['frozen_revision']):raise RecoveryIncomplete('requested_research_unavailable')
                 dispatch_id=None
                 if request['needs_research'] or request['historical_sources']:
-                    dispatch_id=self.s.append('recovery_research_dispatch',{'leader_output_id':recovery.last_leader_id,'request_id':request['id'],'target_role':author},as_of,run_id)
+                    dispatch_id=existing['dispatch_id'] if existing else self.s.append('recovery_research_dispatch',{'leader_output_id':recovery.last_leader_id,'request_id':request['id'],'target_role':author},as_of,run_id)
                 for source_request in request['historical_sources']:
                     facts=historical_facts(self.s,source_request['completed_id'],source_request['fact_ids'],as_of,boundary,self.model.mode,self.s.get(start_id)['seq'])
                     for fact in facts:
                         known=next((f for f in m['facts'] if f['id']==fact['id']),None)
-                        if known and known!=fact:raise RecoveryIncomplete('historical_fact_collision')
+                        if known and not same_observation(known,fact):raise RecoveryIncomplete('historical_fact_collision')
+                        if known and known!=fact:
+                            recovery.event('historical_provenance_verified',request_id=request['id'],dispatch_id=dispatch_id,
+                                completed_id=source_request['completed_id'],fact_id=fact['id'],
+                                historical_fact_sha256=__import__('hashlib').sha256(d.dumps(fact).encode()).hexdigest(),
+                                current_fact_sha256=__import__('hashlib').sha256(d.dumps(known).encode()).hexdigest(),
+                                equivalence='All observation and archive identity fields equal; only raw_refs cache_hit/retrieved_at may differ. Current fact retained, not new independent evidence')
                         if not known:
                             from .company_research import ResearchTools
                             researcher=ResearchTools(self.research_library,self.s,run_id,as_of)
@@ -386,7 +405,11 @@ class Engine:
                     changed=True  # Even an unavailable response changes what can be claimed.
                 if author=='evidence' and submitting_role=='evidence':
                     instruction['supplier_dispatch_id']=dispatch_id
-                elif dispatch_id:self.s.append('recovery_research_return',{'dispatch_id':dispatch_id,'request_id':request['id'],'fact_ids':instruction['fact_ids']},as_of,run_id)
+                elif dispatch_id:
+                    returned={'dispatch_id':dispatch_id,'request_id':request['id'],'fact_ids':instruction['fact_ids']}
+                    if existing and existing['return_id']:
+                        if self.s.get(existing['return_id'])['body']!=returned:raise RecoveryIncomplete('continued_return_changed')
+                    else:self.s.append('recovery_research_return',returned,as_of,run_id)
                 role_fact_deliveries.setdefault(author,set()).update(instruction['fact_ids'])
                 if author!='evidence':revision_instructions.setdefault(author,[]).append(instruction)
             if changed:
@@ -434,7 +457,7 @@ class Engine:
             if role in revision_instructions:
                 from .submission import pointer
                 payload['revision_instructions']=copy.deepcopy(revision_instructions[role])
-                payload['revision_sources']=[{'output_id':r['source_output_id'],'issue_path':r['issue_path'],'excerpt':copy.deepcopy(pointer(self.s.get(r['source_output_id'])['body']['output'],r['issue_path']))} for r in revision_instructions[role]]
+                payload['revision_sources']=[{'output_id':r['source_output_id'],'issue_path':r['issue_path'],'excerpt':copy.deepcopy(pointer(self.s.get(r['source_output_id'])['body']['output'],r['issue_path'])),'reference_scope':reference_scope(self.s,r['source_output_id'])} for r in revision_instructions[role]]
             payload.update(extra or {})
             if role=='validation':payload['submission_sources']=recovery.sources(set(personas())|{'evidence'}|({'leader'} if payload.get('final_proposal') else set()))
             payload['analysis_stage']='final_validation' if role=='validation' and 'final_proposal' in payload else 'perspective_validation' if role=='validation' else 'proposal_synthesis' if role=='leader' else role
@@ -584,7 +607,10 @@ class Engine:
                 research_revision_pending=False;perspective_cache.clear();continue
             if validation.get('revision_requests'):
                 revisions=validation['revision_requests']
-                routes=recovery.review('perspective_revision',revisions,recovery.sources({r['target_role'] for r in revisions}),historical_catalog=historical_catalog())
+                if resume_routing:
+                    if validation_id!=resume_routing['validation_output_id'] or revisions!=resume_routing['packet']['work_items']:raise RecoveryIncomplete('continued_validation_changed')
+                    routes=resume_routing['routes'];resume_routing=None
+                else:routes=recovery.review('perspective_revision',revisions,recovery.sources({r['target_role'] for r in revisions}),historical_catalog=historical_catalog())
                 fulfill(routes,revisions);research_revision_pending=False
                 recovery.event('invalidated',source_validation_id=validation_id,stages=['perspective_calculations','proposal_synthesis','final_validation'],reason='Perspective validation returned an author correction request')
                 continue
@@ -748,7 +774,7 @@ class Engine:
             'final_validation':copy.deepcopy(final_review.get('memory_reviews',[]))}
         learning_cycle['scope']='Stored/delivered/model-reported use are separately traceable; decision quality and investment outcomes are not inferred from receipts.'
         report['research_learning']=learning_cycle
-        if resume:report['execution_continuation']={'version':resume['version'],'receipt_id':resume['receipt_id'],'source_failed_id':resume['failure']['id'],'original_run_id':run_id,'pending_input_id':resume['pending']['id'],'reused_output_ids':resume['prefix_output_ids'],'knowledge_effects_reapplied':False,'raw_response_accepted':False}
+        if resume:report['execution_continuation']={'version':resume['version'],'kind':resume['kind'],'receipt_id':resume['receipt_id'],'source_failed_id':resume['failure']['id'],'source_failed_ids':resume['source_failed_ids'],'original_run_id':run_id,'pending_input_id':resume['pending']['id'],'reused_output_ids':resume['prefix_output_ids'],'knowledge_effects_reapplied':False,'raw_response_accepted':False}
         report['submission_recovery']={'version':'mara.submission-recovery/1.0','events':[dict(e['body'],event_id=e['id'],recorded_at=e['recorded']) for e in self.s.events('submission_recovery') if e['run_id']==run_id],
             'latest_accepted':[{'role':r,'stage':stage,'output_id':oid} for (r,stage),oid in recovery.latest.items()],
             'scope':'Only the current accepted author versions and final validation produce this report. Original rejected and superseded outputs remain audit evidence.'}

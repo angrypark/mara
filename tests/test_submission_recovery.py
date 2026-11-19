@@ -131,7 +131,8 @@ class SubmissionRecoveryTests(unittest.TestCase):
   from mara.submission_recovery import Coordinator
   co=Coordinator(self.s,DemoModel(),'2026-11-14','run','guide')
   for stage,value in [('evidence','first'),('evidence_followup','second'),('evidence','third')]:
-   oid=self.s.append('agent_output',{'role':'evidence','output':{'summary':value}},'2026-11-14','run');co.accepted('evidence',stage,oid)
+   iid=self.s.append('agent_input',{'role':'evidence','payload':{}},'2026-11-14','run')
+   oid=self.s.append('agent_output',{'role':'evidence','input_id':iid,'output':{'summary':value}},'2026-11-14','run');co.accepted('evidence',stage,oid)
   self.assertEqual(co.sources({'evidence'})['evidence']['output']['summary'],'third')
 
  def test_cases_are_independent_and_progress_uses_changed_source_not_new_ids(self):

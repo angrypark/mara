@@ -9,6 +9,49 @@ MAX_MODEL_CALLS=180
 MAX_REVIEWS=8
 MAX_CASE_ROUNDS=2
 
+def same_observation(left,right):
+ """Retrieval metadata may differ; observation and archived-source identity may not."""
+ if left==right:return True
+ lr,rr=left.get('raw_refs'),right.get('raw_refs')
+ if not isinstance(lr,list) or not isinstance(rr,list) or len(lr)!=len(rr):return False
+ for a,b in zip(lr,rr):
+  if a==b:continue
+  if not isinstance(a,dict) or not isinstance(b,dict) or any(k not in a or k not in b or a[k]!=b[k] for k in ('source','sha256','bytes')):return False
+  from datetime import datetime
+  for ref in (a,b):
+   if 'retrieved_at' in ref:
+    try:
+     if datetime.fromisoformat(ref['retrieved_at']).tzinfo is None:return False
+    except (TypeError,ValueError):return False
+ def normalized(fact):
+  value=copy.deepcopy(fact)
+  if isinstance(value.get('raw_refs'),list):
+   value['raw_refs']=[{k:v for k,v in r.items() if k not in ('cache_hit','retrieved_at')} if isinstance(r,dict) else r for r in value['raw_refs']]
+  return value
+ return normalized(left)==normalized(right)
+
+def case_progress(case_id,item,sources,diagnostic):
+ from .submission import pointer
+ descriptor={k:item.get(k) for k in ('target_role','issue_path','kind','question_ids')}
+ key=case_id+':'+hashlib.sha256(dumps(descriptor).encode()).hexdigest()
+ if diagnostic:
+  progress={'code':diagnostic.get('code'),'issues':[{k:r.get(k) for k in ('code','path')} for r in diagnostic.get('issues',[])], 'semantic':diagnostic.get('semantic_diagnostic')}
+ else:progress={'source_excerpt':pointer(sources[item['target_role']]['output'],item['issue_path'])}
+ return key,hashlib.sha256(dumps(progress).encode()).hexdigest()
+
+def reference_scope(session,output_id):
+ """Resolve local array paths against the author's immutable input, not a peer's."""
+ out=session.get(output_id);inp=session.get(out['body']['input_id']);p=inp['body']['payload'];mappings=[]
+ for path,rows in (('/research_feedback_history/requests',p.get('research_feedback_history',{}).get('requests',[])),('/evidence_feedback',p.get('evidence_feedback',[]))):
+  for index,row in enumerate(rows):
+   request_id=row['request_id'];response=row.get('response')
+   if response and response.get('request_id')!=request_id:raise ValueError('Original response/request identity mismatch')
+   mappings.append({'path':path+'/'+str(index),'request_id':request_id,'question_id':row.get('question_id'),
+    'response_request_id':response.get('request_id') if response else None,
+    'response_sha256':hashlib.sha256(dumps(response).encode()).hexdigest() if response else None})
+ return {'source_input_id':inp['id'],'source_input_digest':inp['digest'],'mappings':mappings,
+  'rule':'상대 배열 경로는 이 원 작성자 입력 기준이에요. 검증자/리더 입력의 같은 배열 번호로 해석하지 마세요. 안정 request_id와 원 응답 hash로 대조하세요. 수정 요청은 진단이며 확정된 오류나 시장 사실이 아니에요. 원 입력상 정확한 인용이면 이를 반박하고 원 위치와 안정 ID를 명시할 수 있어요.'}
+
 class RecoveryIncomplete(ContractError):
  def __init__(self,reason):
   self.diagnostic={'kind':'system_incomplete','reason':reason,'investment_decision':False}
@@ -52,24 +95,22 @@ class Coordinator:
   result={}
   for (role,stage),oid in self.latest.items():
    if role in roles and (role not in result or self.s.get(oid)['seq']>self.s.get(result[role]['output_id'])['seq']):
-    result[role]={'output_id':oid,'stage':stage,'output':copy.deepcopy(self.s.get(oid)['body']['output'])}
+    result[role]={'output_id':oid,'stage':stage,'output':copy.deepcopy(self.s.get(oid)['body']['output']),'reference_scope':reference_scope(self.s,oid)}
   return result
+ def restore_review(self,packet,output_id):
+  """Restore a verified already-dispatched review without resetting its budget."""
+  if self.reviews or self.rounds:raise ValueError('Recovery state already initialized')
+  if packet['budget']['reviews_used']!=1 or packet['budget']['case_round']!=1:raise ValueError('Only the first dispatched review is supported')
+  self.reviews=1;self.last_leader_id=output_id
+  for item in packet['work_items']:
+   key,signature=case_progress(packet['case_id'],item,packet['sources'],packet.get('diagnostic'))
+   self.rounds[key]=self.rounds.get(key,0)+1;self.signatures[key]=signature
  def review(self,case_id,work_items,sources,diagnostic=None,historical_catalog=None):
   if not work_items or len(work_items)>4:raise RecoveryIncomplete('invalid_work_item_count')
-  from .submission import pointer
   case_keys=[];repeated=False;over_limit=False
   for item in work_items:
-   descriptor={k:item.get(k) for k in ('target_role','issue_path','kind','question_ids')}
-   key=case_id+':'+hashlib.sha256(dumps(descriptor).encode()).hexdigest()
+   key,signature=case_progress(case_id,item,sources,diagnostic)
    case_keys.append(key);self.rounds[key]=self.rounds.get(key,0)+1
-   if diagnostic:
-    # A different invented ID at the same failing location is not progress.
-    progress={'code':diagnostic.get('code'),'issues':[{k:r.get(k) for k in ('code','path')} for r in diagnostic.get('issues',[])],
-     'semantic':diagnostic.get('semantic_diagnostic')}
-   else:
-    source=sources[item['target_role']]
-    progress={'source_excerpt':pointer(source['output'],item['issue_path'])}
-   signature=hashlib.sha256(dumps(progress).encode()).hexdigest()
    repeated=repeated or self.signatures.get(key)==signature
    self.signatures[key]=signature;over_limit=over_limit or self.rounds[key]>MAX_CASE_ROUNDS
   if self.reviews>=MAX_REVIEWS or over_limit or repeated:
