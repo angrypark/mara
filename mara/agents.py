@@ -300,6 +300,15 @@ class Agents:
         return self._submit(role,body['guide'],current,copy.deepcopy(body['contract']),body.get('skills',[]),
             original,original['input_budget']['max_characters'],supported(self.model,role),attempts=(2,))
 
+    def resume_prepared_repair(self,input_event):
+        """The already-prepared second attempt; never grant a new local repair."""
+        body=input_event['body'];role=body['role'];current=copy.deepcopy(body['payload'])
+        rejected=self.s.get(current['output_feedback']['rejected_output_id'])
+        original=self.s.get(rejected['body']['input_id'])['body']['payload']
+        from .model_wire import supported
+        return self._submit(role,body['guide'],current,copy.deepcopy(body['contract']),body.get('skills',[]),
+            copy.deepcopy(original),original['input_budget']['max_characters'],supported(self.model,role),attempts=(2,))
+
     def _submit(self,role,guide,current,contract,skills,original,context_limit,shared_input,attempts=(1,2)):
         from .model_wire import packed,serialized
         for attempt in attempts:

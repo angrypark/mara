@@ -22,18 +22,23 @@ def process_birth(pid):
 def alive(body):
  return bool(body.get('pid') and body.get('process_birth') and process_birth(body['pid'])==body['process_birth'])
 
-def prepare(session,model,failed_id,response_input_id,raw_response,resource_manifest=None,pending_dispatch=False):
+def prepare(session,model,failed_id,response_input_id,raw_response,resource_manifest=None,pending_dispatch=False,pending_repair=False):
  """Read-only eligibility, prefix and exact pending-input verification."""
  failure=session.get(failed_id);run=failure['run_id']
- if pending_dispatch:
+ coordinated=pending_dispatch or pending_repair
+ if pending_dispatch and pending_repair:raise ValueError('Choose one continuation boundary')
+ if pending_repair:
+  from .codex_model import INPUT_LIMIT_MESSAGE
+  if failure['kind']!='failed' or failure['body'].get('error_type')!='CodexError' or failure['body'].get('message')!=INPUT_LIMIT_MESSAGE:raise ValueError('Only the prepared input-limit repair boundary is supported')
+ elif pending_dispatch:
   if failure['kind']!='failed' or failure['body'].get('error_type')!='RecoveryIncomplete' or failure['body'].get('recovery',{}).get('reason')!='historical_fact_collision':raise ValueError('Only interrupted historical delivery is supported')
  elif failure['kind']!='failed' or failure['body'].get('error_type')!='CodexError' or failure['body'].get('message')!=LEGACY_MESSAGE:
   raise ValueError('Continuation requires the known legacy provider-submission boundary failure')
  ev=[session.decode(r) for r in session.store.db.execute('SELECT * FROM events WHERE owner=? AND run_id=? ORDER BY seq',(session.owner,run))]
- if any(e['kind']=='completed' or e['kind']=='continuation_started' and (not pending_dispatch or e['body'].get('source_failed_id')==failed_id) for e in ev):raise ValueError('Execution already completed or continuation already attempted')
+ if any(e['kind']=='completed' or e['kind']=='continuation_started' and (not coordinated or e['body'].get('source_failed_id')==failed_id) for e in ev):raise ValueError('Execution already completed or continuation already attempted')
  failures=[e for e in ev if e['kind']=='failed']
- if failures[-1]['id']!=failed_id or not pending_dispatch and len(failures)!=1:raise ValueError('Ambiguous original failure sequence')
- if pending_dispatch:
+ if failures[-1]['id']!=failed_id or not coordinated and len(failures)!=1:raise ValueError('Ambiguous original failure sequence')
+ if coordinated:
   for old in (e for e in ev if e['kind']=='continuation_started'):
    if not any(e['kind']=='continuation_failed' and e['body']['continuation_id']==old['id'] and e['seq']<failure['seq']+2 for e in ev):raise ValueError('Prior continuation is not terminal')
  starts=[e for e in ev if e['kind']=='run_started']
@@ -49,17 +54,20 @@ def prepare(session,model,failed_id,response_input_id,raw_response,resource_mani
  sensitive={'profile','actual','cashflow','history_reset','knowledge','user_persona','clarification_answer','quality_stability_result'}
  for kind in sensitive:
   if any(e['seq']>start['seq'] and (kind!='knowledge' or e['run_id']!=run or e['seq']>failure['seq']) for e in session.events(kind)):raise ValueError('Personal/history/knowledge state changed outside the verified prefix')
- if any(e['kind']=='evidence_feedback_dispatch' or not pending_dispatch and e['kind'] in ('recovery_leader_input','recovery_research_dispatch') for e in ev):raise ValueError('Continuation after feedback or coordinated recovery is unsupported')
- if not pending_dispatch and any(e['kind']=='agent_input' and e['body']['role'] in ('leader','validation') for e in ev):raise ValueError('Continuation after synthesis/validation is unsupported')
+ if any(e['kind']=='evidence_feedback_dispatch' or not coordinated and e['kind'] in ('recovery_leader_input','recovery_research_dispatch') for e in ev):raise ValueError('Continuation after feedback or coordinated recovery is unsupported')
+ if not coordinated and any(e['kind']=='agent_input' and e['body']['role'] in ('leader','validation') for e in ev):raise ValueError('Continuation after synthesis/validation is unsupported')
  inputs=[e for e in ev if e['kind']=='agent_input'];pending=inputs[-1];role=pending['body']['role']
- if pending_dispatch:
+ if pending_repair:
+  if role!='leader' or pending['body']['payload']['analysis_stage']!='proposal_synthesis' or not pending['body']['payload'].get('output_feedback'):raise ValueError('Only an unfinished leader correction is supported')
+  if any(e['kind']=='continuation_started' and e['body'].get('source_input_id')==pending['id'] for e in ev):raise ValueError('This pending correction was already continued')
+ elif pending_dispatch:
   if role!='validation' or pending['body']['payload']['analysis_stage'] not in ('perspective_validation','final_validation'):raise ValueError('Only a pre-feedback validation dispatch is supported')
   if any(e['kind']=='continuation_started' and e['body'].get('source_input_id')==pending['id'] for e in ev):raise ValueError('This dispatch continuation was already attempted')
  else:
   if pending['id']!=response_input_id or role not in personas() or pending['seq']>=failure['seq']:raise ValueError('Response must belong to the first unfinished perspective input')
   if any(e['kind']=='agent_output' and e['body']['input_id']==pending['id'] for e in ev):raise ValueError('Pending input already has an output')
   if not isinstance(raw_response,str) or not raw_response or len(raw_response.encode())>524288:raise ValueError('Bounded original unverified response required')
- if any(pending['body']['payload'].get(k) for k in ('output_feedback','submission_repair','revision_instructions')):raise ValueError('Only an interrupted first submission is supported; repair budget cannot reset')
+ if any(pending['body']['payload'].get(k) for k in (('submission_repair','revision_instructions') if pending_repair else ('output_feedback','submission_repair','revision_instructions'))):raise ValueError('Only the supported submission boundary may continue; repair budget cannot reset')
  if pending['body']['provider']!=model.identity:raise ValueError('Provider identity changed')
  accepted=[];by_role={}
  for e in ev:
@@ -70,10 +78,10 @@ def prepare(session,model,failed_id,response_input_id,raw_response,resource_mani
   if hashlib.sha256(inp['body']['guide'].encode()).hexdigest()!=inp['body']['guide_hash']:raise ValueError('Original guide hash mismatch')
   validate(out['body']['output'],inp['body']['contract']);validate_output(out['body']['role'],out['body']['output'],inp['body']['payload'])
   accepted.append(out);by_role.setdefault(out['body']['role'],[]).append(out)
- final_dispatch=pending_dispatch and pending['body']['payload']['analysis_stage']=='final_validation'
- roles=list(personas());expected=set(roles)|({'validation','leader'} if final_dispatch else {'validation'}) if pending_dispatch else set(roles[:roles.index(role)])
- if {r for r in by_role if r in roles or pending_dispatch and r in ('validation','leader')}!=expected or not {'context','evidence'}<=by_role.keys():raise ValueError('Accepted perspectives must be an uninterrupted prefix')
- if any(len(by_role.get(r,[]))!=1 for r in ({'context','evidence'} if final_dispatch else expected|{'context','evidence'})):raise ValueError('Ambiguous accepted prefix')
+ final_dispatch=pending_dispatch and pending['body']['payload']['analysis_stage']=='final_validation';advanced=final_dispatch or pending_repair
+ roles=list(personas());expected=set(roles)|({'validation','leader'} if advanced else {'validation'}) if coordinated else set(roles[:roles.index(role)])
+ if {r for r in by_role if r in roles or coordinated and r in ('validation','leader')}!=expected or not {'context','evidence'}<=by_role.keys():raise ValueError('Accepted perspectives must be an uninterrupted prefix')
+ if any(len(by_role.get(r,[]))!=1 for r in ({'context','evidence'} if advanced else expected|{'context','evidence'})):raise ValueError('Ambiguous accepted prefix')
  if by_role['context'][0]['body']['output']['missing']:raise ValueError('Context remains unresolved')
  audit=[e for e in ev if e['kind']=='pruning_audit']
  if len(audit)!=1:raise ValueError('Original knowledge pruning must be complete exactly once')
@@ -94,15 +102,18 @@ def prepare(session,model,failed_id,response_input_id,raw_response,resource_mani
     receipt=matches[0];knowledge=session.get(receipt['body']['knowledge_event_id'])
     if knowledge['run_id']!=run or knowledge['kind']!='knowledge' or knowledge['body']['action']!=op['action'] or not out['seq']<knowledge['seq']<receipt['seq']<audit[0]['seq']:raise ValueError('Learning application lineage mismatch')
     learning['applications'].append(dict(receipt['body'],event_id=receipt['id']))
- cache={r:(copy.deepcopy(by_role[r][-1]['body']['output']),by_role[r][-1]['id']) for r in ({'context','evidence'} if final_dispatch else expected|{'context','evidence'})}
- plan={'version':VERSION,'kind':'historical_dispatch' if pending_dispatch else 'initial_submission','phase':'final_validation' if final_dispatch else 'perspective_validation' if pending_dispatch else 'initial_submission','failure':failure,'start':start,'pending':pending,'raw_response':raw_response or '','cache':cache,
+ cache={r:(copy.deepcopy(by_role[r][-1]['body']['output']),by_role[r][-1]['id']) for r in ({'context','evidence'} if advanced else expected|{'context','evidence'})}
+ plan={'version':VERSION,'kind':'prepared_repair' if pending_repair else 'historical_dispatch' if pending_dispatch else 'initial_submission','phase':'proposal_synthesis' if pending_repair else 'final_validation' if final_dispatch else 'perspective_validation' if pending_dispatch else 'initial_submission','failure':failure,'start':start,'pending':pending,'raw_response':raw_response or '','cache':cache,
   'decision_scope':scope[0]['body'],'research_history':h[0]['body'] if h else None,'learning_cycle':learning,'reflection':reflection,
   'pruning_audit_id':audit[0]['id'],'user_persona':pending['body']['payload']['user_persona'],
   'facts':[e['body']['fact'] for e in ev if e['kind']=='research_evidence'],
   'prefix_output_ids':[e['id'] for e in accepted],
   'resources':resources,'resource_provenance':'original_run_snapshot' if b.get('runtime_resources') else 'caller_provided_legacy_snapshot',
   'prefix_digest':hashlib.sha256(dumps([{k:e[k] for k in ('id','digest')} for e in ev if e['seq']<=failure['seq']]).encode()).hexdigest()}
- if final_dispatch:
+ if pending_repair:
+  from .submission_continuation import verify_repair
+  plan['repair_submission']=verify_repair(session,model,plan,ev,by_role)
+ elif final_dispatch:
   from .dispatch_continuation import verify_final_dispatch
   plan['final_dispatch']=verify_final_dispatch(session,plan,ev,by_role)
  elif pending_dispatch:plan['dispatch']=verify_dispatch(session,plan,ev,by_role)
@@ -177,7 +188,7 @@ def begin(session,plan):
  cid=session.append('continuation_started',receipt,as_of,run)
  session.append('recovery',{'status':'resuming','continuation_id':cid,'pid':receipt['pid'],'process_birth':receipt['process_birth'],'source_failed_id':plan['failure']['id']},as_of,run)
  plan['receipt_id']=cid
- if plan['kind']=='historical_dispatch':return plan
+ if plan['kind']!='initial_submission':return plan
  error=ProviderSubmissionError('legacy_completion_unverified',plan['raw_response'],{'root_cause':'unknown; original CLI trace unavailable'})
  oid=session.append('agent_output',{'role':pending['body']['role'],'input_id':pending['id'],'output':error.output,'provider_failure':error.diagnostic,
   'raw_provider_response':plan['raw_response'],'continuation_id':cid,'origin':'Preserved caller-supplied response paired with original unfinished input; never provider-attested'},as_of,run)

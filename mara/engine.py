@@ -108,13 +108,17 @@ class Engine:
         """Continue a verified first historical delivery; no accepted role regeneration."""
         return self.resume(failed_id,None,None,resource_manifest,pending_dispatch=True)
 
-    def resume(self,failed_id,response_input_id,raw_response,resource_manifest=None,*,pending_dispatch=False):
+    def resume_repair(self,failed_id,resource_manifest=None):
+        """Continue only a verified undelivered second leader submission."""
+        return self.resume(failed_id,None,None,resource_manifest,pending_repair=True)
+
+    def resume(self,failed_id,response_input_id,raw_response,resource_manifest=None,*,pending_dispatch=False,pending_repair=False):
         """One explicit, verified continuation of an interrupted initial perspective."""
         from .continuation import prepare,begin
         failed=self.s.get(failed_id);run_id=failed['run_id'];self.s.lock(run_id)
         plan=None
         try:
-            plan=prepare(self.s,self.model,failed_id,response_input_id,raw_response,resource_manifest,pending_dispatch)
+            plan=prepare(self.s,self.model,failed_id,response_input_id,raw_response,resource_manifest,pending_dispatch,pending_repair)
             begin(self.s,plan);b=plan['start']['body']
             result=self._run(b['as_of'],b['market_id'],True,run_id,b.get('revision_reason'),None,None,b['profile_id'],b['actual_id'],None,b.get('learning_review_id'),resume=plan)
             self.s.append('continuation_completed',{'continuation_id':plan['receipt_id'],'source_failed_id':failed_id,'source_failed_ids':plan['source_failed_ids'],'completed_id':result['event_id']},b['as_of'],run_id)
@@ -258,19 +262,22 @@ class Engine:
         from .submission_recovery import Coordinator,RecoveryIncomplete,historical_facts,same_observation,reference_scope,historical_catalog as build_historical_catalog
         recovery=Coordinator(self.s,self.model,as_of,run_id,a.guide('leader'))
         revision_instructions={};perspective_cache={};research_revision_pending=False;role_fact_deliveries={}
-        resume_cache=copy.deepcopy(resume['cache']) if resume else {};resume_pending=resume['pending'] if resume and resume['kind']=='initial_submission' else None
+        resume_cache=copy.deepcopy(resume['cache']) if resume else {};resume_pending=resume['pending'] if resume and resume['kind'] in ('initial_submission','prepared_repair') else None
         resume_routing=copy.deepcopy(resume.get('dispatch')) if resume else None
         resume_deliveries=copy.deepcopy(resume_routing['receipts']) if resume_routing else {}
         resume_final=copy.deepcopy(resume.get('final_dispatch')) if resume else None
+        resume_repair=copy.deepcopy(resume.get('repair_submission')) if resume else None
+        resume_reference=copy.deepcopy(resume_repair['reference_event']) if resume_repair else None
         replaced_requests={}
         if resume:
             for oid in resume['prefix_output_ids']:
                 out=self.s.get(oid);inp=self.s.get(out['body']['input_id']);recovery.latest[(out['body']['role'],inp['body']['payload']['analysis_stage'])]=oid
             if resume_routing:recovery.restore_review(resume_routing['packet'],resume_routing['leader_output_id'])
-            if resume_final:
-                perspective_cache=copy.deepcopy(resume_final['perspectives'])
-                role_fact_deliveries={r:set(ids) for r,ids in resume_final['role_fact_deliveries'].items()}
-                for review in resume_final['reviews']:recovery.restore_review(review['packet'],review['output_id'])
+            restored=resume_final or resume_repair
+            if restored:
+                perspective_cache=copy.deepcopy(restored['perspectives'])
+                role_fact_deliveries={r:set(ids) for r,ids in restored['role_fact_deliveries'].items()}
+                for review in restored['reviews']:recovery.restore_review(review['packet'],review['output_id'])
         rebalance_due = d.day(as_of) >= d.day(h['last_rebalanced']) + timedelta(days=p['rebalance_every_days'])
         anchors = {'goal':p['goal'],'constraints':p['constraints'],'actual_rationale':h['rationale'],
             'previous_rationale':previous['body']['proposal']['rationale'] if previous else None,
@@ -475,7 +482,12 @@ class Engine:
                 try:
                     if resume_pending and role==resume_pending['body']['role']:
                         original_input=resume_pending;resume_pending=None
-                        result=a.submit_prepared(original_input,resume['feedback'])
+                        if resume['kind']=='prepared_repair':
+                            original=original_input['body']['payload']
+                            for key in ('analysis','perspectives','numeric_checks','validation','reference_feedback','market','profile','funding','valuation'):
+                                if original.get(key)!=payload.get(key):raise RecoveryIncomplete('prepared_repair_input_changed:'+key)
+                            result=a.resume_prepared_repair(original_input)
+                        else:result=a.submit_prepared(original_input,resume['feedback'])
                     else:result=a.call(role,payload)
                     break
                 except AgentOutputError as exc:
@@ -636,7 +648,10 @@ class Engine:
             common['analysis']=build_analysis(p,h,m,val,capital)
             proposal, proposal_id = call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation})
             from .report_references import errors as reference_errors
-            reference_attempt=0
+            reference_attempt=resume_reference['body']['attempt']-1 if resume_reference else 0
+            if resume_reference:
+                comparison_alternatives.update({str(i):item['weights'] for i,item in enumerate(proposal.get('investment_case',{}).get('alternatives',[]))})
+                common['analysis']=build_analysis(p,h,m,val,capital,proposal['weights'])
             while True:
                 reference_attempt+=1
                 alternatives={str(i):item['weights'] for i,item in enumerate(proposal.get('investment_case',{}).get('alternatives',[]))}
@@ -646,11 +661,16 @@ class Engine:
                 errors=reference_errors(proposal,common['analysis'],funding,val)
                 if proposal['action']=='hold' and any(abs(proposal['weights'].get(s,0)-val['weights'].get(s,0))>1e-6 for s in set(proposal['weights'])|set(val['weights'])):
                     errors.append({'path':'/proposal/action','reason':'Hold must preserve actual weights; revise action or weights without hiding allocation changes'})
-                self.s.append('proposal_reference_validation',{'output_id':proposal_id,'attempt':reference_attempt,
+                reference_check={'output_id':proposal_id,'attempt':reference_attempt,
                     'status':'failed' if errors or allocation_changed else 'passed','errors':errors,
                     'reference_status':'failed' if errors else 'passed',
                     'allocation_reconciliation_required':allocation_changed,
-                    'code':'allocation_reconciliation' if allocation_changed else 'proposal_reference' if errors else None},as_of,run_id)
+                    'code':'allocation_reconciliation' if allocation_changed else 'proposal_reference' if errors else None}
+                if resume_reference:
+                    if reference_check!=resume_reference['body']:raise RecoveryIncomplete('continued_reference_check_changed')
+                    self.s.append('continuation_reference_verified',{'source_event_id':resume_reference['id'],'source_digest':resume_reference['digest'],'attempt':reference_attempt,'status':'verified_without_new_failure_or_budget'},as_of,run_id)
+                    resume_reference=None
+                else:self.s.append('proposal_reference_validation',reference_check,as_of,run_id)
                 if not errors and not allocation_changed:break
                 if reference_attempt%3==0:
                     item=dict(id='proposal-calculation-links',target_role='leader',source_output_id=proposal_id,issue_path='/',kind='calculation_error',reason='Selected allocation or report calculation references remain inconsistent',requested_change='Reconcile the complete report with recomputed selected weights and calculation paths',acceptance='Original allocation and calculation reference checks pass',question_ids=[],fact_ids=[])

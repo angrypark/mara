@@ -25,6 +25,11 @@ def serialized(value):
     return json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(',',':'),allow_nan=False)
 
 def packed(value):
+    # Same wire language; choose the smaller lossless sharing plan. Short
+    # repeated values become significant when correction feedback is attached.
+    return min((_packed(value,64),_packed(value,24)),key=lambda x:len(serialized(x)))
+
+def _packed(value,minimum_shared_size):
     def encode(item):
         if isinstance(item,dict):
             if {MARKER,VALUE_MARKER,JSON_MARKER}&set(item):raise ValueError('Reserved input reference key')
@@ -42,7 +47,7 @@ def packed(value):
     counts=Counter()
     def count(item):
         raw=serialized(item)
-        if len(raw)>=64:
+        if len(raw)>=minimum_shared_size:
             counts[raw]+=1
             # A shared parent is encoded once, so count its descendants once too.
             if counts[raw]>1:return

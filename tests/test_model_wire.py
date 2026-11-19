@@ -2,6 +2,15 @@ import unittest
 from mara.model_wire import packed,unpacked,serialized,MARKER,VALUE_MARKER,VERSION
 
 class ModelWireTests(unittest.TestCase):
+    def test_short_repeated_correction_values_share_without_losing_or_expanding_inputs(self):
+        from mara.model_wire import _packed
+        original={'requests':[{'id':str(i),'reason':'same bounded correction diagnostic','status':'pending original author assessment'} for i in range(1000)],
+            'types':[False,0,1,'1',None],'unshared':'unique source text'}
+        legacy=_packed(original,64);wire=packed(original)
+        self.assertEqual(unpacked(wire),original)
+        self.assertLess(len(serialized(wire)),len(serialized(legacy))*.8)
+        for value in ({'one':'x'*30,'two':'x'*30},original,{'one':[1,2,3]}):
+            self.assertLessEqual(len(serialized(packed(value))),len(serialized(_packed(value,64))))
     def test_canonical_json_source_text_is_exact_and_v2_remains_readable(self):
         import json
         from mara.model_wire import JSON_MARKER

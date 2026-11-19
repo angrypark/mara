@@ -50,7 +50,7 @@ def process_failures(session,completed,as_of,before_seq):
    carry_links.setdefault(e['id'],{'receipt_id':receipt['id'],'completed_id':completed['id'],
     'source_status':'failed','continuation_status':'completed','scope':'Original failure remains failed; its prefix was reused by this completed execution. No root cause or benefit inferred.'})
  runs={completed['run_id']}|{e['run_id'] for e in failed}
- query='SELECT * FROM events WHERE owner=? AND seq<? AND effective<=? AND kind IN (\'agent_input\',\'agent_validation\') AND run_id IN ('+','.join('?' for _ in runs)+') ORDER BY seq'
+ query='SELECT * FROM events WHERE owner=? AND seq<? AND effective<=? AND kind IN (\'agent_input\',\'agent_output\',\'agent_validation\',\'proposal_reference_validation\') AND run_id IN ('+','.join('?' for _ in runs)+') ORDER BY seq'
  events += [session.decode(row) for row in session.store.db.execute(query,(session.owner,before_seq,as_of,*sorted(runs)))]
  rejected=[e for e in events if e['run_id'] in runs and e['kind']=='agent_validation' and e['body']['status']=='rejected']
  by_output={e['body']['output_id']:e for e in rejected}
@@ -116,6 +116,8 @@ def process_failures(session,completed,as_of,before_seq):
    'review_summary':finding['review_summary'],
    'review_detail':{key:copy.deepcopy(finding[key]) for key in ('classification','correction_or_review','source_path','source_body_sha256','original_sha256','fact_hashes','verification','reviewer','limits') if key in finding},
    'review_scope':'Process review only; not a market fact, independent financial confirmation, model self-correction, changed decision or investment performance.'})
+ from .reference_learning import failures as reference_failures
+ rows.extend(reference_failures(events,completed))
  # Terminal failures first, then most recent diagnostics. Originals stay in DB.
  selected=sorted(rows,key=lambda r:(r['kind']=='execution_failure',r['recorded_at']),reverse=True)[:60]
  return {'items':selected,'available':len(rows),'selected':len(selected),'omitted':len(rows)-len(selected),
