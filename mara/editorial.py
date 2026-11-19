@@ -59,6 +59,8 @@ def create(session,model,report,facts):
     receipt={'version':VERSION,'input_sha256':digest(payload),'guide_sha256':digest(guide),
         'provider':model.identity,'decision_scope':'Explanation only; decision and holdings unchanged'}
     for attempt in (1,2):
+        from .submission_recovery import guard
+        guard(session,run_id,as_of)
         iid=session.append('report_editor_input',dict(receipt,payload=payload,guide=guide,contract=contract,
             attempt=attempt,attempt_input_sha256=digest(payload)),as_of,run_id)
         output=model.complete('editor',guide,payload,contract)

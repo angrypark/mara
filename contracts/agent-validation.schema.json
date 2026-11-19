@@ -616,6 +616,89 @@
           "fact_ids"
         ]
       }
+    },
+    "revision_requests": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "target_role": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "source_output_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "issue_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "analysis_error",
+              "calculation_error",
+              "missing_evidence"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1600
+          },
+          "requested_change": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1600
+          },
+          "acceptance": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1600
+          },
+          "question_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "fact_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          }
+        },
+        "required": [
+          "id",
+          "target_role",
+          "source_output_id",
+          "issue_path",
+          "kind",
+          "reason",
+          "requested_change",
+          "acceptance",
+          "question_ids",
+          "fact_ids"
+        ]
+      }
     }
   },
   "required": [

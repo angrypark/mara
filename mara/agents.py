@@ -92,6 +92,11 @@ def validate_output(role, obj, payload):
     if role=='reflection':
         from .research_learning import validate_reflection
         validate_reflection(obj,payload)
+    from .output_validation import evidence_reference_errors
+    if evidence_reference_errors(obj,payload):raise ValueError('Invented evidence ID')
+    if role=='validation':
+        from .submission import validate_revisions
+        validate_revisions(obj,payload)
     return obj
 
 
@@ -141,6 +146,8 @@ class DemoModel:
             return {'answer':'합성 대화 예시예요. '+role+' 역할에 전달된 질문: '+p['question']+'\n이 실행의 판단 근거와 반대 조건을 함께 확인할 수 있어요. 실제 모델 응답이나 투자 분석이 아니에요.',
                 'evidence_ids':[f['id'] for f in p['sources'][:2]],'uncertainties':['합성 데이터로 화면과 저장 흐름만 확인해요.'],
                 'next_questions':['이 판단을 바꿀 조건은 무엇인가요?']}
+        if contract.get('$id')=='urn:mara:recovery-review:1.0':
+            return {'decision':'revise','reason':'Synthetic correction routing','requests':[dict({k:r[k] for k in ('id','target_role','source_output_id')},instruction='Correct the reported defect against delivered sources',acceptance='Submission CI passes without removing material limitations',needs_research=r.get('kind')=='missing_evidence',historical_sources=[]) for r in p['work_items']]}
         if role == 'context': return {'summary':'DEMO: supplied context','constraints':p['profile']['constraints'],'missing':[]}
         if role == 'evidence': return {'summary':'모의 시장 자료를 비교하는 동작 예시예요. 실제 시황 분석이 아니에요.',
             'facts':[x['id'] for x in p['market']['facts']], 'drivers':['합성 자료의 가격과 위험 가정을 확인해요.'],
@@ -153,7 +160,7 @@ class DemoModel:
                     'changes_since_previous':['DEMO: 이전 판단 비교 표시 예시예요.'] if p.get('previous') else [],
                     'assumptions':['Fixture only'], 'risks':['No real analysis'],
                     'falsifiers':['New verified evidence'], 'next_checks':['Check next observation']}
-        if role == 'validation': return {'issues':[], 'unsupported_claims':[], 'qualitative_pass':True,'reason':'DEMO fixture','findings':[]}
+        if role == 'validation': return {'issues':[], 'unsupported_claims':[], 'qualitative_pass':True,'reason':'DEMO fixture','findings':[],**({'revision_requests':[]} if 'submission_sources' in p else {})}
         if role == 'leader': return {'action':'hold','weights':p['valuation']['weights'],'rationale':'DEMO maintain actual holdings',
                     'dissent':['DEMO: independent perspectives retained in report'], 'risks':['Fixture only'],
                     'next_checks':['Verify live evidence'], 'premise_changes':['Compare prior report'], 'validation_response':'DEMO only'}
@@ -241,7 +248,7 @@ class Agents:
         original=copy.deepcopy(payload)
         current=copy.deepcopy(original)
         current['citation_scope']={'market_fact_ids':[f['id'] for f in original.get('market',{}).get('facts',[])],
-            'rule':'facts/evidence_ids는 이 목록의 시장 fact ID만 사용. 개인 맥락과 보유 원본 event ID는 설명에서 별도로 구분.'}
+            'rule':'모든 facts/evidence_ids/fact_ids/related_fact_ids는 이 목록의 ID를 정확히 복사해요. 과거 원자료도 검증 후 이 입력으로 전달된 경우 인용할 수 있어요. 과거 요청/회신은 followup_of로 연결하고 현재 evidence_assessments에 넣지 않아요. 개인 맥락 event ID는 시장 fact ID가 아니에요.'}
         if role=='evaluator':
             from .evaluation import raw_reference_paths
             current['citation_scope']['raw_reference_paths']=raw_reference_paths(original)
@@ -281,6 +288,8 @@ class Agents:
                 measurement='shared wire document including guide and output contract',
                 max_unshared_characters=context_limit*4)
         contract=contract_for(contract,role,current)
+        from .submission import bind
+        contract=bind(contract,role,current)
         for attempt in (1,2):
             original_size=len(dumps(current))
             within_source_bound=original_size<=context_limit*(4 if shared_input else 1)
@@ -288,6 +297,8 @@ class Agents:
             if len(guide)>22000 or not within_source_bound or measured_size>context_limit:
                 if attempt==2:raise AgentOutputError(role,code,oid,attempts=1)
                 raise ValueError('Role context budget exceeded; curate evidence')
+            from .submission_recovery import guard
+            guard(self.s,self.run_id,self.as_of)
             iid = self.s.append('agent_input', {'role':role, 'guide':guide,
                 'skills':skills,
                 'guide_hash':hashlib.sha256(guide.encode()).hexdigest(),'provider':self.model.identity,
@@ -301,11 +312,13 @@ class Agents:
             except (ValueError,TypeError,KeyError) as exc:
                 code=issue_code(exc)
                 from .decision_calibration import failure_subtype
+                from .submission import diagnostics
+                diagnostic=diagnostics(role,result,original,exc)
                 self.s.append('agent_validation',{'role':role,'input_id':iid,'output_id':oid,
-                    'status':'rejected','code':code,'subtype':failure_subtype(result,exc),'attempt':attempt},self.as_of,self.run_id)
+                    'status':'rejected','code':code,'subtype':failure_subtype(result,exc),'attempt':attempt,'diagnostic':diagnostic},self.as_of,self.run_id)
                 if attempt==2:raise AgentOutputError(role,code,oid) from None
                 current=copy.deepcopy(current)
-                current['output_feedback']={'code':code,'rejected_output_id':oid,'previous_output':result,
+                current['output_feedback']={'code':code,'rejected_output_id':oid,'previous_output':result,'submission_diagnostic':diagnostic,
                     'instruction':'직전 자기 응답을 원본 입력과 계약에 대조하여 한 번 교정하세요. 전체 JSON을 다시 반환하세요. 무관한 인용으로 치환하거나 자료 공백·반론·위험을 숨기지 마세요. 정성 검증 통과나 매수를 강요하지 않으며 필요하면 보류하세요.'}
                 from .output_validation import evidence_reference_errors
                 reference_errors=evidence_reference_errors(result,original)

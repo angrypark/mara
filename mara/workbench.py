@@ -142,6 +142,9 @@ def project(s,run_id):
             except (ValueError,TypeError,KeyError) as exc:
                 rejected=value;value=None;rejection_code=issue_code(exc)
                 status='running' if role==active_role and state=='running' and inp and out and inp['seq']>out['seq'] else 'failed'
+        pending_revision=next((e for e in reversed(ev) if e['kind']=='submission_recovery' and e['body'].get('target_role')==role and e['body'].get('state') in ('author_requested','accepted')),None)
+        if pending_revision and pending_revision['body']['state']=='author_requested' and not completed:
+            value=None;status='running' if state=='running' else 'failed'
         summary=next((value[k] for k in ('summary','thesis','rationale','reason','process_evaluation') if value and isinstance(value.get(k),str)), '')
         if not summary:summary={'skipped':'이번 실행에서는 아직 필요하지 않은 역할이에요.','pending':'아직 실행되지 않았어요.','running':'분석 중이에요.'}.get(status,'기록된 출력에서 확인해주세요.')
         rendered=blocks(value)
@@ -177,6 +180,7 @@ def project(s,run_id):
             records=records.get(role,[]),contract='/api/contracts/'+contract_name,
             extensions=dict({'final_proposal':report['body']['proposal']} if role=='leader' and completed else {},
                 research_activity=[dict(kind=e['kind'],event_id=e['id'],**e['body']) for e in ev if e['kind'] in ('research_plan','research_tool_result','research_tool_failure','research_progress') and e['body'].get('role')==role],
+                submission_recovery=[dict(e['body'],event_id=e['id']) for e in ev if e['kind']=='submission_recovery' and (e['body'].get('target_role')==role or role=='leader')],
                 output_validation=[dict(e['body'],event_id=e['id']) for e in ev if e['kind']=='agent_validation' and e['body'].get('role')==role])))
     ids={c['id'] for c in components};edges=[]
     def edge(a,b,label):
@@ -210,6 +214,9 @@ def project(s,run_id):
             message=label+(' 교정' if repair else '')+' 응답을 받는 중 실행이 중단됐어요.'
             if repair:message+=' 앞선 응답은 검증을 통과하지 못해 채택되지 않았어요.'
         elif rejected_component:message=rejected_component['label']+' 응답 검증 실패: '+rejected_component['summary']
+    terminal=next((e for e in reversed(ev) if e['kind']=='failed'),None)
+    if state=='failed' and terminal and terminal['body'].get('recovery'):
+        message=terminal['body'].get('message',message)
     evaluation=next((e['body'] for e in reversed(ev) if e['kind']=='report_evaluation'),None)
     action_results={e['body']['request_id']:e['body'] for e in ev if e['kind']=='decision_action_result'}
     actions=[dict(request_id=e['body']['request_id'],action=e['body']['action'],

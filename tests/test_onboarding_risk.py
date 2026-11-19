@@ -37,7 +37,7 @@ class TestModel(DemoModel):
     mode='live'; identity={'mode':'live','model':'test-only'}
     def complete(self,role,guide,p,contract):
         result=super().complete(role,guide,p,contract)
-        if contract.get('$id')=='urn:mara:research-plan:1.0.0':return result
+        if contract.get('$id') in ('urn:mara:research-plan:1.0.0','urn:mara:recovery-review:1.0'):return result
         if role in ('buffett','marks','bogle','wood','leader'):result['weights']={'TEST':0.2,'CASH':0.8}
         if role=='leader':result['action']='adjust'
         return result

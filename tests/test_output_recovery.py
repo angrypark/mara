@@ -8,6 +8,7 @@ import test_system as system_fixture
 import test_onboarding_risk as setup_fixture
 from mara.agents import Agents, DemoModel
 from mara.engine import Engine,ContextNeedsInput
+from mara.submission_recovery import RecoveryIncomplete
 from mara.output_validation import AgentOutputError,failed_job_diagnostic
 from mara.workbench import project,runs
 from mara.dialogue import Dialogues
@@ -97,7 +98,7 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(len(c['extensions']['output_validation']),2)
         with self.assertRaises(PermissionError):self.other.get(checks[0]['output_id'])
 
-    def test_persistent_invalid_reference_stops_after_two_and_is_not_adopted(self):
+    def test_persistent_invalid_reference_escalates_then_stops_without_progress(self):
         class Bad(DemoModel):
             seen=[]
             def complete(model,role,*args):
@@ -105,13 +106,13 @@ class RecoveryTests(unittest.TestCase):
                 if role=='buffett':value['evidence_ids']=['private-invalid-id']
                 return value
         self.e.model=Bad()
-        with self.assertRaises(AgentOutputError) as caught:self.initial()
-        self.assertEqual(Bad.seen.count('buffett'),2);self.assertNotIn('marks',Bad.seen)
-        self.assertNotIn('private-invalid-id',str(caught.exception));self.assertIn('Warren Buffett',str(caught.exception))
+        with self.assertRaises(RecoveryIncomplete) as caught:self.initial()
+        self.assertEqual(Bad.seen.count('buffett'),4);self.assertEqual(Bad.seen.count('leader'),1);self.assertNotIn('marks',Bad.seen)
+        self.assertNotIn('private-invalid-id',str(caught.exception));self.assertIn('Warren Buffett',caught.exception.message)
         self.assertFalse(self.s.events('completed'));self.assertFalse(self.s.events('proposal'))
         d=project(self.s,runs(self.s)[0]['id']);c=next(c for c in d['components'] if c['id']=='buffett')
         self.assertIsNone(c['output']);self.assertEqual(c['source_ids'],[]);self.assertEqual(c['status'],'failed')
-        self.assertIn('시장 근거',d['run']['message']);self.assertEqual(self.s.latest('failed')['body']['output_validation']['code'],'market_evidence_reference')
+        self.assertIn('분석 복구',d['run']['message']);self.assertEqual(self.s.latest('failed')['body']['output_validation']['code'],'market_evidence_reference')
 
     def test_provider_failure_is_not_retried_or_logged(self):
         class Provider(DemoModel):
@@ -166,7 +167,7 @@ class RecoveryTests(unittest.TestCase):
         class Broken(DemoModel):
             def complete(model,*args):return ['unexpected-output']
         self.e.model=Broken()
-        with self.assertRaises(AgentOutputError):self.initial()
+        with self.assertRaises(RecoveryIncomplete):self.initial()
         c=project(self.s,runs(self.s)[0]['id'])['components'][0]
         self.assertIsNone(c['output']);self.assertEqual(c['status'],'failed')
         self.assertEqual(len(c['extensions']['output_validation']),2)
@@ -216,7 +217,7 @@ class SetupFailureTests(unittest.TestCase):
                 if role=='buffett' and args[-1].get('$id')!='urn:mara:research-plan:1.0.0':v['evidence_ids']=['broker-event']
                 return v
         self.app.model_factory=Bad;self.app.start(self.value);self.app.thread.join(10)
-        job=self.app.state()['job'];self.assertEqual(job['error_type'],'AgentOutputError')
+        job=self.app.state()['job'];self.assertEqual(job['error_type'],'RecoveryIncomplete')
         self.assertIn('Warren Buffett',job['message']);self.assertNotIn('토스 연결',job['message'])
         self.assertEqual(job['output_validation']['code'],'market_evidence_reference')
         with self.app.session() as s:self.assertFalse(s.events('broker_intent'));self.assertFalse(s.events('completed'))
@@ -229,7 +230,8 @@ class SetupFailureTests(unittest.TestCase):
                 if role=='buffett' and args[-1].get('$id')!='urn:mara:research-plan:1.0.0':v['evidence_ids']=['old-broker-record']
                 return v
         self.app.model_factory=Bad
-        with self.assertRaises(AgentOutputError):self.app.generate(self.value,self.snapshot)
+        from mara.submission_recovery import RecoveryIncomplete
+        with self.assertRaises(RecoveryIncomplete):self.app.generate(self.value,self.snapshot)
         self.app.job('old','failed','예전 일반 오류',error_type='ValueError')
         with self.app.session() as s:original=s.latest('onboarding_job');count=s.store.db.execute('SELECT count(*) FROM events').fetchone()[0]
         state=self.app.state()

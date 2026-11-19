@@ -76,6 +76,25 @@ def process_failures(session,completed,as_of,before_seq):
    'code':e['body']['error_type'],'subtype':None,'recorded_at':e['recorded'],'as_of':e['effective'],'run_state':'failed','correction_status':'not_completed'})
  for row in rows:
   if row['failure_id'] in carry_links:row['recovery']=carry_links[row['failure_id']]
+ # A failed local repair can be followed by a separately verified leader recovery.
+ supervised={}
+ for event in session.events('submission_recovery',as_of):
+  b=event['body']
+  if event['run_id'] not in runs or event['seq']>=before_seq or b.get('state')!='resolved':continue
+  accepted_output=b.get('accepted_output_id')
+  accepted_event=next((v for v in events if v['kind']=='agent_validation' and v['body'].get('output_id')==accepted_output and v['body'].get('status')=='accepted' and v['run_id']==event['run_id'] and v['seq']<event['seq']),None)
+  if accepted_event:supervised[b['source_output_id']]={'receipt_id':event['id'],'accepted_output_id':accepted_output,'original_status':'rejected','status':'resolved_after_leader_request'}
+ for row in rows:
+  rejection=next((e for e in rejected if e['id']==row['failure_id']),None)
+  if not rejection:continue
+  if rejection['body'].get('diagnostic'):row['submission_diagnostic']=copy.deepcopy(rejection['body']['diagnostic'])
+  oid=rejection['body']['output_id']
+  for _ in range(8):
+   if oid in supervised:row['supervised_recovery']=supervised[oid];break
+   correction=corrections.get(oid)
+   next_rejection=next((e for e in rejected if correction and e['body']['input_id']==correction['id']),None)
+   if not next_rejection:break
+   oid=next_rejection['body']['output_id']
  # Independent post-run findings are separate process observations, not model
  # failures, market facts, new model judgments, or changed investment decisions.
  from .report_audit import findings as audit_findings
@@ -92,6 +111,17 @@ def process_failures(session,completed,as_of,before_seq):
  return {'items':selected,'available':len(rows),'selected':len(selected),'omitted':len(rows)-len(selected),
   'selection':'Terminal failures, then recent rejection diagnostics; maximum 60. Same case_id is one failure with repair, not independent confirmations.',
   'scope':'Previous completed run, its verified recovered terminal failure, and later terminal failed runs linked to it; same owner/history/mode, before the new run start. Process evidence only; no failed investment judgment.'}
+
+
+def recovery_history(session,completed,as_of,before_seq):
+ starts={e['run_id']:e for e in session.events('run_started',as_of) if e['seq']<before_seq}
+ boundary=completed['body'].get('history_scope',{}).get('after_seq',0)
+ runs={completed['run_id']}
+ for event in session.events('failed',as_of):
+  start=starts.get(event['run_id']);body=start['body'] if start else {}
+  if event['seq']<before_seq and body.get('previous_id')==completed['id'] and body.get('mode')==completed['body']['mode'] and body.get('history_scope',{}).get('after_seq',0)==boundary:runs.add(event['run_id'])
+ rows=[dict(e['body'],event_id=e['id'],recorded_at=e['recorded'],source_run_id=e['run_id']) for e in session.events('submission_recovery',as_of) if e['run_id'] in runs and e['seq']<before_seq]
+ return {'events':rows[-100:],'omitted':max(0,len(rows)-100),'scope':'Current predecessor and later linked failed runs; process requests, rejections and accepted versions, never independent market evidence.'}
 
 
 def history(session,completed,as_of=None,before_seq=None):
@@ -114,6 +144,7 @@ def history(session,completed,as_of=None,before_seq=None):
    failures.append({'event_id':e['id'],'role':e['body']['role'],'tool':e['body'].get('call',{}).get('tool'),'status':result.get('status'),'reason':result.get('reason')})
  diagnostics=process_failures(session,completed,as_of or completed['effective'],before_seq or completed['seq']+1)
  return {'schema_version':VERSION,'source_completed_id':completed['id'],'as_of':completed['effective'],'process_failures':diagnostics,
+  'submission_recovery':recovery_history(session,completed,as_of or completed['effective'],before_seq or completed['seq']+1),
   'final_action':body['proposal']['action'],'requests':rows,'tool_failures':failures,
   'status_counts':dict(Counter(x['status'] for x in rows)),'instruction':INSTRUCTION,
   'source_scope':'Complete immediate-predecessor request records; older originals remain in their completed events. Process observations are not additional market facts or independent investment confirmations.'}
@@ -127,8 +158,12 @@ def for_role(value,role):
   if result.get('process_failures'):
    result['process_failures']['items']=[r for r in result['process_failures']['items'] if r['role'] in (role,'runtime')]
    result['process_failures']['projection']='Own rejection diagnostics and runtime failure types only; counts describe the original snapshot.'
+  if result.get('submission_recovery'):
+   result['submission_recovery']['events']=[r for r in result['submission_recovery']['events'] if r.get('target_role')==role]
   result['projection']='Own prior requests and process counts; other investors\' assessments are omitted.'
  elif role=='evidence':
+  if result.get('submission_recovery'):
+   result['submission_recovery']['events']=[r for r in result['submission_recovery']['events'] if r.get('target_role')=='evidence' or r.get('state')=='research_returned']
   for r in result['requests']:
    r.pop('assessment',None);r.pop('assessment_history',None);r.pop('final_decision',None)
   result['projection']='Research needs and supplier results, without peer investment assessments.'

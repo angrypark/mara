@@ -37,7 +37,9 @@ class EditorialTests(unittest.TestCase):
    mode='live';identity={'provider':'synthetic'}
    def complete(self,*args):return answers.pop(0)
   self.report['run_id']='synthetic';before=copy.deepcopy(self.report)
-  record=create(Session(),Model(),self.report,self.facts)
+  from unittest.mock import patch
+  with patch('mara.submission_recovery.guard'):
+   record=create(Session(),Model(),self.report,self.facts)
   attempts=[body for kind,body in records if kind=='report_editor_input']
   self.assertEqual(len(attempts),2)
   self.assertNotEqual(attempts[0]['attempt_input_sha256'],attempts[1]['attempt_input_sha256'])

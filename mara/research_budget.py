@@ -84,8 +84,23 @@ def allocate(session,run_id,as_of,rows,role,fact,eligible):
     dispatches=[e for e in session.events('evidence_feedback_dispatch') if e['run_id']==run_id]
     returns=[e for e in session.events('evidence_feedback_return') if e['run_id']==run_id]
     feedback_active=role=='evidence' and bool(dispatches) and (not returns or dispatches[-1]['seq']>returns[-1]['seq'])
+    # A verified leader dispatch opens the same closed supplier using only the
+    # existing shared/released balance; no new reserve or budget is issued.
+    recovery_active=False
+    if role=='evidence':
+        returned={e['body']['dispatch_id'] for e in session.events('recovery_research_return') if e['run_id']==run_id}
+        for dispatch in session.events('recovery_research_dispatch'):
+            if dispatch['run_id']!=run_id or dispatch['id'] in returned:continue
+            try:
+                leader=session.get(dispatch['body']['leader_output_id'])
+                valid=leader['owner']==session.owner and leader['run_id']==run_id and leader['kind']=='recovery_leader_output' and leader['seq']<dispatch['seq']
+                valid=valid and any(e['run_id']==run_id and e['seq']<dispatch['seq'] and e['body'].get('output_id')==leader['id'] and e['body'].get('status')=='accepted' for e in session.events('recovery_leader_validation'))
+                valid=valid and any(r['id']==dispatch['body']['request_id'] and (r['needs_research'] or r['historical_sources']) for r in leader['body']['output']['requests'])
+                if valid:recovery_active=True;break
+            except (PermissionError,KeyError,TypeError):continue
+    receipt['recovery_supplier']=recovery_active
     receipt['feedback_supplier']=feedback_active
-    if role in closed and not feedback_active:return None,dict(receipt,blocked_reason='research_role_already_closed')
+    if role in closed and not (feedback_active or recovery_active):return None,dict(receipt,blocked_reason='research_role_already_closed')
     parts={'general':min(requested,max(0,frozen['general_limit']-general)),'role_reserved':0,'borrowed':0}
     remainder=requested-parts['general']
     if eligible and role in ROLES:

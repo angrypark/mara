@@ -16,6 +16,7 @@ from .codex_model import CodexModel,CodexError,status as codex_status
 from .connection import identity,save_private
 from .engine import Engine,ContextNeedsInput,ContextRepeatError
 from .output_validation import AgentOutputError, failed_job_diagnostic
+from .submission_recovery import RecoveryIncomplete
 from .clarifications import answers,save_answers,notes_history,questions
 from .store import Store
 from .reporting import present
@@ -370,6 +371,8 @@ class PortfolioSetup:
             self.job(jid,'failed',exc.message,error_type='ContextRepeatError')
         except AgentOutputError as exc:
             self.job(jid,'failed',exc.message,error_type='AgentOutputError',output_validation=exc.details)
+        except RecoveryIncomplete as exc:
+            self.job(jid,'failed',exc.message,error_type='RecoveryIncomplete',recovery=exc.diagnostic,output_validation=exc.diagnostic.get('output_validation'))
         except (InputError,CodexError) as exc: self.job(jid,'failed',str(exc))
         except Exception as exc:
             self.job(jid,'failed','생성하지 못했어요. 토스 연결·모델 설정·시장 자료를 확인한 뒤 다시 시도해주세요.',error_type=type(exc).__name__)

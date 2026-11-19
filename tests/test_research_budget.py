@@ -143,3 +143,22 @@ class ResearchBudgetTests(unittest.TestCase):
         parent=fixture.s.append('completed',original['body'],fixture_day,report['run_id'])
         with self.assertRaisesRegex(ValueError,'Inherited evidence ID collision'):
             Engine(fixture.s,DemoModel()).run(fixture_day,force=True,revision_reason='synthetic collision',improvement={'parent_completed_id':parent})
+    def recovery_dispatch(self,run,request_id='fix',valid=True):
+        oid=self.s.append('recovery_leader_output',{'output':{'requests':[{'id':request_id,'needs_research':True,'historical_sources':[]}]}},DAY,run)
+        self.s.append('recovery_leader_validation',{'output_id':oid,'status':'accepted' if valid else 'rejected'},DAY,run)
+        return self.s.append('recovery_research_dispatch',{'leader_output_id':oid,'request_id':request_id,'target_role':'bogle'},DAY,run)
+    def test_verified_recovery_supplier_uses_same_residual_budget_then_closes(self):
+        r=self.runner('run');m={'facts':[]}
+        self.assertTrue(r.activate('evidence',fact('base',80000),m));self.close('run','evidence')
+        self.assertFalse(r.activate('evidence',fact('denied',1000),m))
+        self.recovery_dispatch('run',valid=False)
+        self.assertFalse(r.activate('evidence',fact('invalid-leader',1000),m))
+        dispatch=self.recovery_dispatch('run','accepted')
+        self.assertTrue(r.activate('evidence',fact('response',2000),m))
+        row=self.s.events('research_evidence')[-1]['body']
+        self.assertEqual(row['budget_allocation'],{'general':0,'role_reserved':0,'borrowed':2000})
+        self.assertEqual(r.activation_budget['run_used'],80000)
+        self.s.append('recovery_research_return',{'dispatch_id':dispatch},DAY,'run')
+        self.assertFalse(r.activate('evidence',fact('closed-again',1000),m))
+        self.assertEqual(r.activation_budget['blocked_reason'],'research_role_already_closed')
+        self.assertEqual(len(self.s.events('research_budget_plan')),1)

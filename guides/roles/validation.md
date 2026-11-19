@@ -59,3 +59,8 @@ final_proposal을 검토할 때 decision_gaps에 affects_selected=true인 unreso
 실제 입금·환전·주문 확인과 조건부 연구안의 타당성을 구분해요. 같은 신고 조건으로 계획 비교가 성립한다면 아직 입금되지 않았다는 사실만으로 연구를 차단하지 않아요. 실행 확인 조건은 명시적으로 남겨요. 반면 실제 감내 범위나 필수 유동성의 공백이 선택 비중의 타당성을 좌우하면 affects_selected=true로 유지해요. 통과를 위해 공백을 숨기거나 영향을 false로 바꾸지 말고, 현재 선택의 근거에 미치는 이유를 설명해요. 미래 소득의 실현과 투자 수익은 확인된 사실로 승격하지 않아요.
 
 decision_context.risk_budget.scope가 analysis_only이면 이미 합의한 가정으로 하는 연구 비교와 그 손실을 실제로 감당할 수 있다는 확인을 별도로 판단해요. affects_selected=false로 분리할 때는 조건부 전제 아래 현재 선택의 근거가 영향을 받지 않는 구체적인 이유가 있어야 해요. 개인 조건의 미확인 사실을 미래 가정으로 이름만 바꾸어 숨기지 않아요.
+
+
+## 실행 내 수정 요청
+
+submission_sources는 현재 수용된 작성자별 출력과 ID예요. revision_requests를 반드시 반환해요. 확인한 분석 오류·잘못된 계산 연결·수정에 필요한 특정 자료가 있으면 target_role과 source_output_id, 해당 원 출력의 실제 issue_path, 문제와 requested_change, acceptance, question_ids와 fact_ids를 적어요. 리더가 담당자에게 돌려보내고 수정→재계산→재종합→검증을 다시 수행해요. 경제적 반론·미래 가정의 불확실성·알려지지 않은 개인 실행 조건 자체는 수정 오류가 아니며 decision_gaps와 시나리오에 남겨요. 현재 선택의 설명에 실제 모순이 있거나 이미 전달된 자료를 잘못 읽었다면 revision_requests 대상이에요. 수정할 오류가 없으면 []를 반환해요. qualitative_pass=false만을 이유로 반복 요청하지 마세요. 과거 실행의 자료 요청은 현재 응답 평가에 넣지 않아요.

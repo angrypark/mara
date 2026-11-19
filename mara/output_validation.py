@@ -22,7 +22,7 @@ def evidence_reference_errors(output,payload):
         if isinstance(value,dict):
             for key,item in value.items():
                 pointer=path+'/'+key.replace('~','~0').replace('/','~1')
-                if key in ('facts','evidence_ids','fact_ids') and isinstance(item,list):
+                if key in ('facts','evidence_ids','fact_ids','related_fact_ids') and isinstance(item,list):
                     for i,ref in enumerate(item):
                         if isinstance(ref,str) and ref not in allowed:
                             errors.append({'path':pointer+'/'+str(i),'undelivered_id':ref})
