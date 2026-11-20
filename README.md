@@ -142,6 +142,6 @@ provider identity에 정책 hash와 Mara 라우팅 규칙 버전이 들어가므
 
 ### 개인 잔고를 사용하지 않는 미국 주식 모형
 
-운영 서비스의 `POST /api/model-portfolio`에 32자리 소문자 hex `request_id`와 `preference`, `objective` 문자열을 제출해요. 대시보드의 다른 POST와 동일한 로컬 Origin·CSRF 검사를 적용해요. `GET /api/model-portfolio/{job_id}`에서 진행 상태와 최종 보고서를 조회해요. 같은 요청 ID는 같은 실행을 반환해요.
+운영 서비스의 `POST /api/model-portfolio`에 32자리 소문자 hex `request_id`와 `preference`, `objective` 문자열을 제출해요. 확인된 조건이 있으면 선택 필드 `minimum_holding_years`(양의 정수)와 `tolerable_drawdown_fraction`(0~1)을 보낼 수 있어요. 후자는 감내 범위를 담고, 원화 고점 대비 낙폭은 분석상의 잠정 해석으로 따로 전달해요. 대시보드의 다른 POST와 동일한 로컬 Origin·CSRF 검사를 적용해요. `GET /api/model-portfolio/{job_id}`에서 진행 상태와 최종 보고서를 조회해요. 같은 요청 ID는 같은 실행을 반환해요.
 
 모형은 미국 주식에 배정할 부분을 100%로 두고 전체시장·대형 성장·대형 가치·소형주 지수 ETF를 비교해요. 공식 보유 원문과 상품 정보를 모형 전용 자료실에 보존하고, 정규 역할 가이드·모델 라우팅·리더 계획·제출 검증을 사용해요. 개인 프로필·잔고·이전 보고서·계좌 API는 사용하지 않아요. 모형 이벤트는 개인 분석 및 거래 원장과 구분해 저장해요.

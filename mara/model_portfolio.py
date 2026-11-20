@@ -18,7 +18,7 @@ TEXT = {'type': 'string', 'minLength': 1, 'maxLength': 3000}
 STRINGS = {'type': 'array', 'items': TEXT, 'maxItems': 12}
 POLICY = (
     '미국 주식 ETF 모형의 목표 비중을 소수로 표시해요. 분모는 미국 주식에 배정할 부분 전체예요. '
-    '개인 자산·투입액·기간·허용손실은 미확인이에요. 장기 보유 가능과 조기 인출을 조건으로 비교해요. '
+    '확정된 조건은 confirmed에서 읽고 해석 가정과 미확인 사항을 구분해요. 가계 잔고·투입액은 추정하지 않아요. '
     '공격적이라는 선호만으로 성장주 집중을 가정하지 마세요. 동일 기준의 광범위 지수와 편향 대안을 비교하고 '
     '각 가중치의 한계효과, 비용, 중복, 주식 및 달러 하락, 반증 조건을 분석해요. 비중·보수·수익률은 fraction이고 배수와 개수에는 각 지표의 단위를 쓰며 '
     '비중 계산의 기준일과 상품 지표 관측일을 구분해요. 간결한 한국어로 작성해요.'
@@ -34,13 +34,23 @@ def fields(**props):
 
 
 def request(setup, body):
-    if not isinstance(body, dict) or set(body) != {'request_id', 'preference', 'objective'}:
+    required = {'request_id', 'preference', 'objective'}
+    optional = {'minimum_holding_years', 'tolerable_drawdown_fraction'}
+    if not isinstance(body, dict) or not required <= body.keys() <= required | optional:
         raise InputError('모형 분석 요청 ID와 두 입력을 확인해주세요.')
     if not isinstance(body['request_id'], str) or not re.fullmatch('[a-f0-9]{32}', body['request_id']):
         raise InputError('모형 분석 요청 ID와 두 입력을 확인해주세요.')
     for key in ('preference', 'objective'):
         if not isinstance(body[key], str) or not 1 <= len(body[key].strip()) <= 250:
             raise InputError('모형 선호와 목적을 짧게 입력해주세요.')
+    if 'minimum_holding_years' in body:
+        years = body['minimum_holding_years']
+        if type(years) is not int or years < 1:
+            raise InputError('최소 보유 기간을 양의 연 단위로 입력해주세요.')
+    if 'tolerable_drawdown_fraction' in body:
+        loss = body['tolerable_drawdown_fraction']
+        if type(loss) not in (int, float) or not 0 <= loss <= 1:
+            raise InputError('하락 감내 범위는 0에서 1 사이의 비율로 입력해주세요.')
     jid = body['request_id']
     as_of = datetime.now(KST).date().isoformat()
     with setup.guard, setup.session() as session:
@@ -73,7 +83,7 @@ def worker(setup, body, as_of):
         try:
             funds, positions, pairs = acquire(PublicArchive(setup.directory/'model-research'), as_of)
             run(session, setup.analysis_model(), jid, as_of,
-                {k: body[k] for k in ('preference','objective')}, funds, positions, pairs)
+                {k: v for k,v in body.items() if k!='request_id'}, funds, positions, pairs)
         except Exception as exc:
             session.append('model_failed', {'error_type':type(exc).__name__}, as_of, jid)
         finally:
@@ -99,9 +109,23 @@ def run(session, model, jid, as_of, inputs, funds, positions, pairs):
     if model.mode != 'live':
         raise ValueError('Production provider required')
     agent = Agents(session, model, as_of, jid)
-    unknowns = ['투자 기간과 인출 시점', '감내 가능한 손실', '실제 초기·월 투입 가능액']
+    years = inputs.get('minimum_holding_years')
+    loss = inputs.get('tolerable_drawdown_fraction')
+    unknowns = ['정확한 최초 인출 시점' if years is not None else '투자 기간과 인출 시점',
+                '실제 초기·월 투입 가능액']
+    if loss is None:
+        unknowns.append('감내 가능한 손실')
     base = dict(schema_version=VERSION, as_of=as_of, confirmed=inputs, unknowns=unknowns,
                 scope='미국 주식 배분 내부 100%, 가계 배분율과 금액 미산출')
+    risk_budget = '개인 한도 미확인. 공통 충격 시나리오로 비교'
+    if loss is not None:
+        risk_budget = {
+            'confirmed_tolerance_fraction':loss,
+            'interpretation':'잠정적으로 미국 주식 배정분의 원화 기준 고점 대비 낙폭으로 해석. 손실 상한 보장이나 자동 매도선이 아님.',
+            'comparison':'고점에서 시작하고 입출금이 없는 가정. 일회 충격과 실제 경로의 최대낙폭을 구별하고, '
+                         '주식·환율 동시 충격이 감내 범위를 넘는 정도와 각 대안에서 남는 위험을 설명.',
+        }
+        base['risk_interpretation'] = risk_budget
     allocation = dict(type='object', minProperties=1, propertyNames={'enum':list(funds)},
                       additionalProperties={'type':'number','minimum':0,'maximum':1})
     refs = dict(type='array',minItems=1,uniqueItems=True,items={'enum':list(funds)})
@@ -129,18 +153,25 @@ def run(session, model, jid, as_of, inputs, funds, positions, pairs):
         guide = role_guide(role) + '\n' + POLICY + '\n' + instruction
         return agent.submit_scoped(role, guide, payload, contract, verify)
     context, context_id = submit('context','context_analysis',fields(summary=TEXT, conditional_inputs=STRINGS),
-        {},'확정된 두 입력을 보존하고 나머지는 질문 또는 시나리오로 남겨요.')
+        {},'확정 입력과 최소 기간의 의미를 보존하고 나머지는 질문 또는 시나리오로 남겨요.')
     scope = dict(goal=inputs['objective'], candidates=list(funds), model_scope=base['scope'])
     common = dict(decision_scope=scope, user_persona={'body':dict(confirmed=inputs,unknowns=unknowns)},
-                  decision_context={'risk_budget':'개인 한도 미확인. 공통 충격 시나리오로 비교'},
+                  decision_context={'risk_budget':risk_budget},
                   context_analysis=context, funding={'basis':'dimensionless weights only'},
                   profile={'markets':['US'],'constraints':[base['scope']]}, analysis={'comparison':{}},
                   market={'base_currency':'USD'})
+    if years is not None:
+        common['profile']['constraints'].append(f'최소 {years}년 보유. 해당 연도 말의 인출이나 회복은 확정하지 않음.')
     plan = leader_mandate.run(session, model, role_guide('leader')+'\n'+POLICY, common, context_id,jid,as_of)
     singles = {t:calculate({t:1}, funds, positions) for t in funds}
     market = dict(funds=funds, full_fund_exposures=singles, overlap=pairs, method=METHOD,
                   candidate_basis='동일 운용사의 미국 전체시장, 대형 성장, 대형 가치, 소형 지수. 동일 자료형으로 비교하는 제한된 후보군.',
                   market={'facts':[{'id':t,'source':f['sources'][0]['source']} for t,f in funds.items()]})
+    if loss is not None:
+        # Fixed comparison size mirrors the existing style-tilt sensitivity, not a personal target.
+        market['style_comparisons'] = {
+            ticker:calculate({'ITOT':.85, ticker:.15}, funds, positions)
+            for ticker in funds if ticker != 'ITOT'}
     evidence, eid = submit('evidence','evidence_analysis',fields(summary=TEXT,evidence_ids=refs,gaps=STRINGS),
                            market, '상품과 보유 자료의 날짜·잔여분과 해석 한계를 점검해요.')
     shared = dict(market, evidence=evidence, evidence_output_id=eid)

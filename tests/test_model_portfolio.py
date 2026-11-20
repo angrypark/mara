@@ -7,7 +7,8 @@ from mara.agents import DemoModel
 from mara.domain import dumps
 from mara.model_exposures import acquire, calculate
 from unittest.mock import patch
-from mara.model_portfolio import read, run
+from mara.model_portfolio import read, request, run
+from mara.onboarding import InputError
 from mara.registry import personas
 from mara.store import Store
 
@@ -84,6 +85,33 @@ class ModelPortfolioTest(unittest.TestCase):
         other = self.db.session(self.db.create_user('other'))
         with self.assertRaises(PermissionError):
             read(other,self.jid)
+
+    def test_confirmed_horizon_and_tolerance_reach_planning_and_final_review(self):
+        inputs = dict(self.inputs, minimum_holding_years=7, tolerable_drawdown_fraction=.18)
+        model = Provider()
+        run(self.s, model, self.jid, self.date, inputs, self.funds, self.positions, {})
+        plan = next(packet for _,packet in model.calls if packet['analysis_stage']=='leader_mandate')
+        self.assertEqual(plan['user_persona']['body']['confirmed'],inputs)
+        budget = plan['decision_context']['risk_budget']
+        self.assertEqual(budget['confirmed_tolerance_fraction'],.18)
+        self.assertIn('잠정',budget['interpretation'])
+        self.assertIn('최소 7년',str(plan['constraint_basis']['constraints']))
+        for _,packet in model.calls:
+            if packet['analysis_stage']=='leader_mandate':
+                continue
+            self.assertEqual(packet['confirmed'], inputs)
+            self.assertEqual(packet['risk_interpretation'],budget)
+            self.assertNotIn('감내 가능한 손실',packet['unknowns'])
+        report = read(self.s,self.jid)['result']
+        self.assertEqual(report['risk_interpretation'],budget)
+        self.assertEqual(report['confirmed'],inputs)
+
+    def test_request_rejects_invalid_optional_inputs(self):
+        for key, value in [('minimum_holding_years',False),('minimum_holding_years',0),
+                           ('tolerable_drawdown_fraction',float('nan')),('tolerable_drawdown_fraction',1.1),
+                           ('tolerable_drawdown_fraction',True)]:
+            with self.subTest(key=key,value=value), self.assertRaises(InputError):
+                request(None,dict(self.inputs,request_id=self.jid,**{key:value}))
 
     def test_failed_final_review_cannot_publish(self):
         run(self.s, Provider(reject_final=True), self.jid, self.date, self.inputs,self.funds,self.positions,{})
