@@ -139,3 +139,9 @@ Codex 호출은 workspace의 `.agents/model-policy.json`을 인스턴스 생성 
 판단 오류(`hard_gap`, `future_fact`, `final_integrity`, `selected_integrity`, `symmetric_choices`)의 기존 두 번째 제출에서만 effort를 최대 high로 높일 수 있어요. ID·형식·자료 부족·전송·사용량·한도 오류에 추가 모델 호출을 붙이지 않아요. 근거·수치 검증과 재시도/조사 예산은 그대로예요. 판단 품질이나 비용 절감률은 별도 검증 대상이에요.
 
 provider identity에 정책 hash와 Mara 라우팅 규칙 버전이 들어가므로 이전 조건의 미완료 실행은 원래 provider 조건을 확인한 뒤 재개해요. `legacy=True`는 감사된 이전 실행의 명시적 보존용이며 일반 새 실행에서 사용하지 않아요. 과거 `CLI default`의 실제 모델/effort가 기록되지 않았다면 역추정하지 않아요. 실행 중 정책 파일을 바꿔도 이미 생성된 provider는 바뀌지 않아요.
+
+### 개인 잔고를 사용하지 않는 미국 주식 모형
+
+운영 서비스의 `POST /api/model-portfolio`에 32자리 소문자 hex `request_id`와 `preference`, `objective` 문자열을 제출해요. 대시보드의 다른 POST와 동일한 로컬 Origin·CSRF 검사를 적용해요. `GET /api/model-portfolio/{job_id}`에서 진행 상태와 최종 보고서를 조회해요. 같은 요청 ID는 같은 실행을 반환해요.
+
+모형은 미국 주식에 배정할 부분을 100%로 두고 전체시장·대형 성장·대형 가치·소형주 지수 ETF를 비교해요. 공식 보유 원문과 상품 정보를 모형 전용 자료실에 보존하고, 정규 역할 가이드·모델 라우팅·리더 계획·제출 검증을 사용해요. 개인 프로필·잔고·이전 보고서·계좌 API는 사용하지 않아요. 모형 이벤트는 개인 분석 및 거래 원장과 구분해 저장해요.

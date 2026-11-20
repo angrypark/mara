@@ -191,7 +191,8 @@ class LinkedData(HTMLParser):
             self.graph.extend(graph)
 
 
-def fund_profile(raw,symbol,as_of):
+def fund_profile(raw,symbol,as_of,product_url=None):
+    product_url = product_url or FUNDS[symbol]
     parser=LinkedData();parser.feed(raw)
     graph=parser.graph
     fund=next(x for x in graph if x.get('alternateName')==symbol)
@@ -201,7 +202,7 @@ def fund_profile(raw,symbol,as_of):
     dated(dt,as_of,10)
     desc=next(x['description'] for x in graph if x.get('@id','').endswith('#fund-description'))
     url=next(x['mainEntity']['contentUrl'] for x in graph if x.get('@id','').endswith('#holdings'))
-    if url!=FUNDS[symbol]+'/latest-holdings.csv':raise ValueError('unexpected holdings URL')
+    if url!=product_url+'/latest-holdings.csv':raise ValueError('unexpected holdings URL')
     metrics={};missing=[]
     definitions={'thirtyDayAverageVolume':('shares',1),'thirtyDayMedianBidAskSpread':('fraction',.01),
         'beta3Yr':('ratio',1),'numHoldings':('count',1),'priceBook':('ratio',1),
@@ -226,7 +227,7 @@ def fund_profile(raw,symbol,as_of):
             item=fields['Net Assets of Fund'];date=datetime.strptime(item['valueReference']['value'],'%b %d, %Y').date().isoformat()
             if item.get('unitText')!='USD' or date!=dt or not item['value'].startswith('$'):raise ValueError('NAV unit/date unavailable')
             result['net_assets']={'value':finite(item['value'][1:],1),'currency':'USD','observed_at':date}
-            result['net_assets_source']=FUNDS[symbol]
+            result['net_assets_source']=product_url
         except (ValueError,KeyError,TypeError,AttributeError):
             result['net_assets_issue']='Optional same-date USD NAV unavailable; objective/fee profile retained'
     return result

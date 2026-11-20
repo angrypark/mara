@@ -174,6 +174,10 @@ def make_server(app,port):
                 if self.path=='/dashboard.css': return self.send(200,app.assets['dashboard.css'],'text/css; charset=utf-8')
                 if self.path=='/health': return self.send(200,{'status':'ok','mode':'portfolio','live_trading':False})
                 if self.path=='/api/state': return self.send(200,app.state())
+                if self.path.startswith('/api/model-portfolio/'):
+                    from .model_portfolio import read
+                    with app.setup.session() as session:
+                        return self.send(200,read(session,self.path.rsplit('/',1)[-1]))
                 if self.path=='/api/persona': return self.send(200,app.persona.read())
                 parts=self.path.strip('/').split('/')
                 if parts[:2]==['api','contracts'] and len(parts)==3:
@@ -194,7 +198,9 @@ def make_server(app,port):
             origin='http://'+self.headers.get('Host','')
             if not self.host_ok() or self.headers.get('Origin')!=origin or self.headers.get('X-Mara-CSRF')!=app.nonce:
                 return self.send(403,{'error':'화면이 갱신되었거나 요청 출처를 확인할 수 없어요. 화면을 새로고침한 뒤 다시 시도해주세요.'})
-            routes={'/api/setup/draft':app.setup.draft,'/api/setup/model':app.setup.save_model,
+            from .model_portfolio import request as request_model_portfolio
+            routes={'/api/model-portfolio':lambda body:request_model_portfolio(app.setup,body),
+                    '/api/setup/draft':app.setup.draft,'/api/setup/model':app.setup.save_model,
                     '/api/persona/messages':app.persona.start,'/api/persona/analyze':app.setup.start_persona,
                     '/api/setup/generate':app.setup.start,'/api/setup/holdings':lambda body:app.setup.refresh(),
                     '/api/setup/answers':app.setup.answer_context}

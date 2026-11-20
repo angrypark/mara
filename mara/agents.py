@@ -303,6 +303,11 @@ class Agents:
         contract=bind(contract,role,current)
         return self._submit(role,guide,current,contract,skills,original,context_limit,shared_input)
 
+    def submit_scoped(self, role, guide, payload, contract, validator):
+        """Submit a purpose-specific contract through ordinary audited role validation."""
+        return self._submit(role, guide, copy.deepcopy(payload), contract, [], payload,
+                            128000, False, validator=validator)
+
     def submit_prepared(self,input_event,feedback):
         """Continue an interrupted submission with its exact original inputs."""
         body=input_event['body'];role=body['role'];original=copy.deepcopy(body['payload'])
@@ -320,7 +325,7 @@ class Agents:
         return self._submit(role,body['guide'],current,copy.deepcopy(body['contract']),body.get('skills',[]),
             copy.deepcopy(original),original['input_budget']['max_characters'],supported(self.model,role),attempts=(2,))
 
-    def _submit(self,role,guide,current,contract,skills,original,context_limit,shared_input,attempts=(1,2)):
+    def _submit(self,role,guide,current,contract,skills,original,context_limit,shared_input,attempts=(1,2),validator=None):
         from .model_wire import packed,serialized
         for attempt in attempts:
             original_size=len(dumps(current))
@@ -347,7 +352,11 @@ class Agents:
             oid = self.s.append('agent_output', dict(role=role,input_id=iid,output=result,**({'provider_failure':provider_error.diagnostic,'raw_provider_response':provider_error.raw_response} if provider_error else {})),self.as_of,self.run_id)
             try:
                 if provider_error:raise provider_error
-                validate_output(role,result,original)
+                if validator is None:
+                    validate_output(role,result,original)
+                else:
+                    validate(result,contract)
+                    validator(result)
             except (ValueError,TypeError,KeyError) as exc:
                 code=issue_code(exc)
                 from .decision_calibration import failure_subtype
