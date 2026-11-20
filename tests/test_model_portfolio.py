@@ -72,6 +72,11 @@ class ModelPortfolioTest(unittest.TestCase):
         self.assertLess([p['analysis_stage'] for _,p in model.calls].index('leader_mandate'),
                         [r for r,_ in model.calls].index('evidence'))
         self.assertTrue(report['final_validation']['qualitative_pass'])
+        for _, packet in model.calls:
+            if packet['analysis_stage'] in ('final_validation','frozen_quality_review'):
+                upstream=self.s.get(packet['validation_output_id'])
+                self.assertEqual(upstream['body']['output'],packet['perspective_validation'])
+                self.assertEqual(packet['leader_mandate']['output_id'],report['mandate']['output_id'])
         self.assertNotIn(secret,dumps(model.calls))
         self.assertTrue(all('perspectives' not in p for r,p in model.calls if r in personas()))
         self.assertEqual(len(self.s.events('model_revision')),1)

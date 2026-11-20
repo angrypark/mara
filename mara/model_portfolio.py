@@ -168,6 +168,8 @@ def run(session, model, jid, as_of, inputs, funds, positions, pairs):
             if not revisions:
                 metrics = calculate(final['weights'],funds,positions)
                 frozen = dict(sources, proposal=final, leader_output_id=leader_id,
+                              leader_mandate=leader_mandate.for_role(plan,'leader'),
+                              perspective_validation=first, validation_output_id=first_id,
                               final_metrics=metrics, benchmark=singles['ITOT'])
                 check, check_id = submit('validation','final_validation',review,frozen,
                     '최신 리더 제출과 재계산값을 직접 대조해요. 설명·계산이 충돌하면 실패 이유와 필요한 수정을 적어요.')
