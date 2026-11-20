@@ -30,3 +30,25 @@ def agent(role):
 
 def personas():
     return tuple(a['id'] for a in catalogue() if a['kind']=='perspective')
+
+
+def role_guide(role, instructions=None):
+    """Compose a fresh call. Persist the returned text for exact replay."""
+    path = 'guides/roles/editor.md' if role == 'editor' else agent(role)['guide']
+    canonical = resource(path).read_text()
+    text = canonical if instructions is None else instructions
+    # A local guide override replaces the strategy, while the role retains
+    # its handoff responsibilities. Extension roles may supply their own guide.
+    heading = '\n## 역할 책임과 인계\n'
+    _, marker, responsibilities = canonical.rpartition(heading)
+    if marker and responsibilities.strip() not in text:
+        text += marker + responsibilities
+    team = resource('guides/roles/team.md').read_text()
+    return text if team in text else text + '\n' + team
+
+
+def submission_guide(role, guide, payload):
+    """Standalone synthesis has no Agents envelope to resolve the role guide."""
+    if role == 'leader' and payload.get('analysis_stage') == 'proposal_synthesis' and 'input_budget' not in payload:
+        return role_guide(role, guide)
+    return guide

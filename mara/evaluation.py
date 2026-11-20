@@ -81,6 +81,7 @@ def evaluate_report(s,model,completed_id):
     report=copy.deepcopy(event['body']);run_id=event['run_id'];as_of=event['effective']
     report.pop('improvement',None)  # reviewer never receives earlier scores or authoring feedback
     report.pop('revision_reason',None)
+    report.pop('leader_mandate',None)  # internal authoring plan; judge the submitted report
     r=rubric();rhash=hashlib.sha256(dumps(r).encode()).hexdigest()
     evaluator=Agents(s,model,as_of,run_id)
     spec_hash=evaluator_fingerprint(s,model,as_of,evaluator.guide('evaluator'))

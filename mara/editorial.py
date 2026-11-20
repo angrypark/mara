@@ -9,7 +9,7 @@ from datetime import date
 from .contracts import validate, schema
 from .domain import dumps
 from .final_report import digest
-from .registry import resource
+from .registry import role_guide
 
 VERSION='mara.reader-brief/1.0'
 
@@ -54,7 +54,7 @@ def check(brief,payload):
 
 def create(session,model,report,facts):
     if model.mode!='live':return None
-    payload=inputs(report,facts);guide=resource('guides/roles/editor.md').read_text()
+    payload=inputs(report,facts);guide=role_guide('editor')
     contract=schema('reader-brief');run_id=report['run_id'];as_of=report['as_of']
     receipt={'version':VERSION,'input_sha256':digest(payload),'guide_sha256':digest(guide),
         'provider':model.identity,'decision_scope':'Explanation only; decision and holdings unchanged'}

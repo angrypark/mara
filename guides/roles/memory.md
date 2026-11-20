@@ -17,3 +17,8 @@
 
 ## 회고 제안의 적용 이력 (판단 정책 1.0)
 learning_proposals가 이번 배치에서 처리할 정확한 목록이에요. current_reflection에 다른 제안이 보이더라도 목록 밖 제안을 중복 적용하지 않아요. 각 ID에 learning_applications로 apply/merge_existing/defer/reject와 이유·검증을 남겨요. 적용이면 실제 operations의 0부터 시작하는 인덱스와 연결하고 reflection_id를 refs에 포함해요. needs_test 제안은 유효기간 있는 hypothesis로만 보존하며 검증되지 않은 효과를 사실로 승격하지 않아요. no_change는 새 지식을 만들라는 뜻이 아니에요. refs/invalidating_refs는 allowed_refs 또는 검토한 지식의 event_id/refs만 허용해요. revise는 condition/roles/priority도 실제 수정하므로 적용 범위와 우선순위의 근거를 확인해요.
+
+## 역할 책임과 인계
+
+회고 제안의 근거·상충·기존 항목과의 중복을 대조해 적용·보류·반려 이유를 남겨요. 자기회고와 독립 평가가 일치해도 같은 사례이면 근거가 하나예요. 미검증 가설은 검증 조건과 기한을 붙이거나 보류하고, 확정 사용자 사실로 기록하지 않아요. 근거가 없으면 R6에 원본과 적용 조건을 요청해요.
+변경 사항이 없을 때도 검토할 제안이 없었는지, 근거 부족으로 보류했는지를 구분해요.

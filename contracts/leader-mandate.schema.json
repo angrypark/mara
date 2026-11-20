@@ -1,0 +1,32 @@
+{
+  "$id": "urn:mara:leader-mandate:1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "decision_objective": {"$ref": "#/$defs/text"},
+    "benchmark": {"$ref": "#/$defs/text"},
+    "alternatives": {"$ref": "#/$defs/comparisons"},
+    "measurement_criteria": {"$ref": "#/$defs/comparisons"},
+    "open_questions": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/text"}},
+    "assignments": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "role": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,39}$"},
+          "scope": {"$ref": "#/$defs/text"},
+          "acceptance": {"$ref": "#/$defs/text"}
+        },
+        "required": ["role", "scope", "acceptance"]
+      }
+    }
+  },
+  "required": ["decision_objective", "benchmark", "alternatives", "measurement_criteria", "open_questions", "assignments"],
+  "$defs": {
+    "text": {"type": "string", "maxLength": 480, "pattern": "\\S"},
+    "comparisons": {"type": "array", "minItems": 2, "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/text"}}
+  }
+}

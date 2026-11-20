@@ -80,8 +80,8 @@ class RecoveryIncomplete(ContractError):
   return name+'분석 복구를 완료하지 못했어요. 사유: '+self.diagnostic['reason']+'. 새 투자 판단은 채택하지 않았고 원 제출과 교정 이력은 보존했어요.'
 
 def guard(session,run_id,as_of):
- kinds=('agent_input','research_plan_input','recovery_leader_input','report_editor_input')
- n=session.store.db.execute('SELECT count(*) FROM events WHERE owner=? AND run_id=? AND kind IN (?,?,?,?)',(session.owner,run_id,*kinds)).fetchone()[0]
+ kinds=('agent_input','research_plan_input','recovery_leader_input','report_editor_input','leader_mandate_input')
+ n=session.store.db.execute('SELECT count(*) FROM events WHERE owner=? AND run_id=? AND kind IN (?,?,?,?,?)',(session.owner,run_id,*kinds)).fetchone()[0]
  if n>=MAX_MODEL_CALLS:
   session.append('submission_recovery',{'version':VERSION,'state':'blocked','reason':'global_model_call_budget','calls':n},as_of,run_id)
   raise RecoveryIncomplete('global_model_call_budget')
@@ -102,6 +102,7 @@ class Coordinator:
  def __init__(self,session,model,as_of,run_id,guide):
   self.s,self.model,self.as_of,self.run_id,self.guide=session,model,as_of,run_id,guide
   self.rounds={};self.signatures={};self.reviews=0;self.latest={};self.last_leader_id=None
+  self.leader_mandate=None
  def event(self,state,**data):
   return self.s.append('submission_recovery',dict(version=VERSION,state=state,**copy.deepcopy(data)),self.as_of,self.run_id)
  def accepted(self,role,stage,output_id):
@@ -141,12 +142,15 @@ class Coordinator:
    'sources':sources,'diagnostic':diagnostic,'historical_catalog':historical_catalog or [],
    'budget':{'reviews_used':self.reviews,'reviews_max':MAX_REVIEWS,'case_round':max(self.rounds[k] for k in case_keys),'case_max':MAX_CASE_ROUNDS,'model_call_max':MAX_MODEL_CALLS},
    'boundary':'Process coordination, not portfolio synthesis. Sources may be rejected and must not become approved analyses. Send only author-specific defect and acceptance instructions; no peer allocation preferences. Missing evidence can be researched; future scenarios and economic disagreement are not errors. Do not guess IDs or relax checks.'}
+  if self.leader_mandate:packet['leader_mandate']=copy.deepcopy(self.leader_mandate)
   self.event('requested',case_id=case_id,work_items=work_items)
   return self.submit_routes(packet)
  def submit_routes(self,packet,attempts=(1,2),supersedes=None):
   work_items=packet['work_items'];spec=contract(work_items)
   rejected=[supersedes] if supersedes else []
   guide=self.guide+'\n이 호출은 제출/최종검증 복구 조정이에요. 투자 종합 대신 주어진 작은 계약만 반환하세요. 각 work item을 원 작성자에게 구체적으로 재요청하고 수용 조건을 정하세요. 잘못된 ID는 정확한 전달 목록을 복사하거나 근거 없는 주장을 미확인으로 고쳐야 해요. 다른 관점의 의견·비중을 지시에 섞지 마세요. 자료가 필요하면 needs_research로 담당 자료 조사를 요청하세요. 과거 자료가 현재 전달된 다른 관측과 충돌하면 덮어쓰지 마세요. 적합하면 이미 전달된 현재 자료를 사용하도록 지시하고 역사자료 요청을 빼거나 별도 필요한 조사를 요청하세요.'
+  if packet['case_id']=='leader_revision':
+   guide+='\n리더가 투자 판단 전 필요한 원 저자의 재검토 범위를 제시했어요. 재검토의 근거와 수용 조건을 배송하고 저자가 근거를 들어 원래 판단을 유지하거나 반박할 수 있게 요청하세요.'
   for attempt in attempts:
    if len(dumps(packet))>180000:raise RecoveryIncomplete('leader_review_input_budget')
    guard(self.s,self.run_id,self.as_of)

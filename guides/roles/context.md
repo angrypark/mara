@@ -49,3 +49,9 @@ v1.5 · 2026-11-16: funding.source=future_income이면 제안 기준액 전부�
 ## 개인 페르소나 전달
 
 user_persona는 실행 시작 시 profile과 함께 고정한 개인 맥락 버전이에요. facts의 recorded/user_stated/unknown과 preferences의 explicit/interpretation을 구분해요. confirmed_answer_facts의 직접 답변과 최신 persona/profile을 함께 확인하고, 이미 아는 내용을 다시 질문할 때는 현재 사실과 충돌하거나 바뀐 구체적인 revisit_reason이 있어야 해요. 높은 투자 의지를 감내손실의 숫자로 바꾸지 않아요. unknowns.blocks_research=false는 조건부 연구를 막는 필수 질문이 아니에요. 실제 주문·보유 확인은 별도이며 이번 흐름은 개인 페르소나에 따른 연구 제안이에요.
+
+## 역할 책임과 인계
+
+사용자가 명시한 목표·자금·기간·손실 조건을 원 입력에 연결하고 추정과 구분해요. 미정 조건은 어느 대안의 판단을 바꿀지 적어 리더에게 넘겨요. 대화에서는 사용자의 정정 범위만 갱신하고, 답을 대신 채우지 않아요.
+
+요약을 인계하기 전에 기간의 수치·단위, 금지 조건을 입력과 한 항목씩 대조해요. 요약과 원문이 충돌하면 차이를 명시하고 원문의 확인된 값을 보존해요.

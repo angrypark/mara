@@ -14,6 +14,7 @@ from .decision import semantics,decision_findings
 from .contracts import validate,schema
 from .context_budget import previous_for_role, improvement_for_role
 from . import history
+from . import leader_mandate
 
 
 class ContextNeedsInput(ValueError):
@@ -243,11 +244,13 @@ class Engine:
         from .persona import ensure as ensure_persona,snapshot as persona_snapshot
         user_persona=copy.deepcopy(resume['user_persona']) if resume else persona_snapshot(ensure_persona(self.s,pe))
         from .continuation import resource_fingerprint
+        mandate_version = getattr(self.model, 'leader_mandate_version', None)
         start_id = resume['start']['id'] if resume else self.s.append('run_started',{'market_id':me['id'],'profile_id':pe['id'],
              'persona_id':user_persona['id'],'persona_hash':user_persona['hash'],
              'actual_id':he['id'],'previous_id':previous['id'] if previous else None,
              'mode':self.model.mode,'as_of':as_of,'revision_of':revision_of,'revision_reason':revision_reason,'learning_review_id':learning_review_id,
-             'history_scope':boundary,'runtime_resources':resource_fingerprint(),'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement,'external_review':external_review},as_of,run_id)
+             'history_scope':boundary,'runtime_resources':resource_fingerprint(),'agent_registry':catalogue(),'amendment':amendment,'improvement':improvement,'external_review':external_review,
+             **({'leader_mandate_version':mandate_version} if mandate_version == leader_mandate.VERSION else {})},as_of,run_id)
         from .research_questions import freeze,ledger
         decision_scope=copy.deepcopy(frozen['body']['decision_scope']) if frozen and frozen['body'].get('decision_scope') else freeze(p,m)
         if resume:
@@ -261,6 +264,7 @@ class Engine:
         a = Agents(self.s,self.model,as_of,run_id,self.research_library)
         from .submission_recovery import Coordinator,RecoveryIncomplete,historical_facts,same_observation,reference_scope,historical_catalog as build_historical_catalog
         recovery=Coordinator(self.s,self.model,as_of,run_id,a.guide('leader'))
+        mandate = None
         revision_instructions={};perspective_cache={};research_revision_pending=False;role_fact_deliveries={}
         resume_cache=copy.deepcopy(resume['cache']) if resume else {};resume_pending=resume['pending'] if resume and resume['kind'] in ('initial_submission','prepared_repair') else None
         resume_routing=copy.deepcopy(resume.get('dispatch')) if resume else None
@@ -368,13 +372,17 @@ class Engine:
         def historical_catalog():
             if not previous:return []
             return build_historical_catalog(self.s,previous,m['facts'],as_of)
-        def fulfill(requests,items,submitting_role=None):
-            nonlocal research_revision_pending
+        def fulfill(requests,items,submitting_role=None,requesting_leader_id=None):
+            nonlocal evidence, research_revision_pending
             changed=False
             for request in requests:
                 item=next(r for r in items if r['id']==request['id'])
                 author=request['target_role']
                 instruction=dict(request,kind=item['kind'],issue_path=item['issue_path'],reason=item['reason'],question_ids=item.get('question_ids',[]),fact_ids=item.get('fact_ids',[]))
+                if requesting_leader_id:
+                    instruction['leader_review_request']={'output_id':requesting_leader_id,
+                        'requested_change':item['requested_change'],'acceptance':item['acceptance'],
+                        'rule':'수용·반박·미해소를 원자료와 비교해 설명해요. 리더 의견에 맞출 필요는 없어요.'}
                 # The author receives only its own source and diagnosis, not peers.
                 source=self.s.get(request['source_output_id'])
                 if source['owner']!=self.s.owner or source['run_id']!=run_id or source['body']['role']!=author:raise RecoveryIncomplete('revision_source_scope')
@@ -410,10 +418,10 @@ class Engine:
                 if author=='evidence':revision_instructions.setdefault(author,[]).append(instruction)
                 if (request['needs_research'] or author=='evidence') and not (author=='evidence' and submitting_role=='evidence'):
                     before={f['id'] for f in m['facts']}
-                    supplied,supplier_id=call('evidence',{'recovery_research':{'request_id':request['id'],'instruction':request['instruction'],'acceptance':request['acceptance'],'question_ids':item.get('question_ids',[]),'fact_ids':instruction['fact_ids']},'evidence_feedback_reassessment':not request['needs_research']})
-                    common['evidence_analysis']={k:v for k,v in supplied.items() if k!='evidence_responses'}
+                    evidence,supplier_id=call('evidence',{'recovery_research':{'request_id':request['id'],'instruction':request['instruction'],'acceptance':request['acceptance'],'question_ids':item.get('question_ids',[]),'fact_ids':instruction['fact_ids']},'evidence_feedback_reassessment':not request['needs_research']})
+                    common['evidence_analysis']={k:v for k,v in evidence.items() if k!='evidence_responses'}
                     recovery.event('research_returned',target_role=author,request_id=request['id'],supplier_output_id=supplier_id,new_fact_ids=sorted({f['id'] for f in m['facts']}-before))
-                    instruction['fact_ids']=sorted(set(instruction['fact_ids'])|set(supplied.get('facts',[])))
+                    instruction['fact_ids']=sorted(set(instruction['fact_ids'])|set(evidence.get('facts',[])))
                     changed=True  # Even an unavailable response changes what can be claimed.
                 if author=='evidence' and submitting_role=='evidence':
                     instruction['supplier_dispatch_id']=dispatch_id
@@ -433,6 +441,10 @@ class Engine:
                 result=resume_cache.pop(role);stage=self.s.get(self.s.get(result[1])['body']['input_id'])['body']['payload']['analysis_stage']
                 output_receipts.append((role,stage,result[1],result[0]));return result
             payload = dict(common,knowledge=k.retrieve(as_of,role))
+            if mandate:
+                assignment = leader_mandate.for_role(mandate, role)
+                if assignment:
+                    payload['leader_mandate'] = assignment
             if improvement and role not in ('leader','validation'):
                 payload['improvement']=improvement_for_role(improvement,role,frozen['body'])
             if frozen:
@@ -472,6 +484,13 @@ class Engine:
                 payload['revision_sources']=[{'output_id':r['source_output_id'],'issue_path':r['issue_path'],'excerpt':copy.deepcopy(pointer(self.s.get(r['source_output_id'])['body']['output'],r['issue_path'])),'reference_scope':reference_scope(self.s,r['source_output_id'])} for r in revision_instructions[role]]
             payload.update(extra or {})
             if role=='validation':payload['submission_sources']=recovery.sources(set(personas())|{'evidence'}|({'leader'} if payload.get('final_proposal') else set()))
+            if role=='leader' and mandate:
+                revision_history = [e['body'] for e in self.s.events('submission_recovery') if
+                           e['run_id']==run_id and e['body']['state']=='invalidated' and 'source_leader_output_id' in e['body']]
+                if revision_history:payload['leader_revision_history']=revision_history
+                if not payload.get('reference_feedback'):
+                    payload['submission_sources']={role_id:{'output_id':source['output_id'],'stage':source['stage']}
+                        for role_id,source in recovery.sources(set(personas())|{'evidence'}).items()}
             payload['analysis_stage']='final_validation' if role=='validation' and 'final_proposal' in payload else 'perspective_validation' if role=='validation' else 'proposal_synthesis' if role=='leader' else role
             if role=='evidence' and payload.get('evidence_assignments'):payload['analysis_stage']='evidence_followup'
             if amendment and role==amendment.get('target_role',amendment['agent_id']) and (not amendment.get('target_stage') or amendment['target_stage']==payload['analysis_stage']):
@@ -484,7 +503,7 @@ class Engine:
                         original_input=resume_pending;resume_pending=None
                         if resume['kind']=='prepared_repair':
                             original=original_input['body']['payload']
-                            for key in ('analysis','perspectives','numeric_checks','validation','reference_feedback','market','profile','funding','valuation'):
+                            for key in ('analysis','perspectives','numeric_checks','validation','reference_feedback','market','profile','funding','valuation','leader_mandate'):
                                 if original.get(key)!=payload.get(key):raise RecoveryIncomplete('prepared_repair_input_changed:'+key)
                             result=a.resume_prepared_repair(original_input)
                         else:result=a.submit_prepared(original_input,resume['feedback'])
@@ -594,6 +613,12 @@ class Engine:
             if repeated_questions(context,p):raise ContextRepeatError(ContextRepeatError.message)
         if context['missing']: raise ContextNeedsInput(context['missing'],context_id,questions(context))
         common['context_analysis']=context
+        if resume:
+            mandate = resume.get('leader_mandate')
+        elif mandate_version == leader_mandate.VERSION:
+            mandate = leader_mandate.run(self.s, self.model, a.guide('leader'), common, context_id, run_id, as_of)
+        if mandate:
+            recovery.leader_mandate = leader_mandate.for_role(mandate, 'leader')
         evidence, initial_evidence_id = call('evidence')
         initial_evidence=copy.deepcopy(evidence)
         common.update(context_analysis=context,evidence_analysis=evidence)
@@ -647,6 +672,15 @@ class Engine:
             checks = {r:evaluate(x['weights'],p,m,capital,val) for r,x in perspectives.items()}
             common['analysis']=build_analysis(p,h,m,val,capital)
             proposal, proposal_id = call('leader',{'perspectives':perspectives,'numeric_checks':checks,'validation':validation})
+            revisions=proposal.get('revision_requests',[])
+            if revisions:
+                sources=recovery.sources({r['target_role'] for r in revisions})
+                routes=recovery.review('leader_revision',revisions,sources,historical_catalog=historical_catalog())
+                fulfill(routes,revisions,requesting_leader_id=proposal_id);research_revision_pending=False
+                recovery.event('invalidated',source_leader_output_id=proposal_id,requests=revisions,
+                    stages=['selected_calculations','perspective_validation','proposal_synthesis','final_validation'],
+                    reason='Leader requested a targeted analysis revision before deciding')
+                continue
             from .report_references import errors as reference_errors
             reference_attempt=resume_reference['body']['attempt']-1 if resume_reference else 0
             if resume_reference:
@@ -817,9 +851,13 @@ class Engine:
             'latest_accepted':[{'role':r,'stage':stage,'output_id':oid} for (r,stage),oid in recovery.latest.items()],
             'scope':'Only the current accepted author versions and final validation produce this report. Original rejected and superseded outputs remain audit evidence.'}
         report['decision_scope']=decision_scope
+        if mandate:
+            report['leader_mandate'] = copy.deepcopy(mandate)
         report['research_questions']=ledger(self.s,run_id,decision_scope,delivery,final_review)
-        report['market_observations']={'stage':'evidence_followup' if feedback_round else 'evidence','output_id':next((x['output_id'] for x in reversed(delivery) if x['role']=='evidence'),None),
-            'analysis':copy.deepcopy(evidence),'scope':'최종 제안 전에 작성한 시황 기록이에요. 당시 비중 설명을 최종 상태로 해석하지 않아요.'}
+        market_receipt=next(x for x in reversed(delivery) if x['role']=='evidence')
+        report['market_observations']={'stage':market_receipt['stage'],'output_id':market_receipt['output_id'],
+            'analysis':self.s.get(market_receipt['output_id'])['body']['output'],
+            'scope':'최종 제안 전에 작성한 시황 기록이에요. 당시 비중 설명을 최종 상태로 해석하지 않아요.'}
         from .decision import contributions
         report['contribution_basis']=dict(contributions(p),every_days=p.get('contribution_every_days') if p.get('contribution_schedule')!='monthly' else None)
         # Write the reader's summary only after late research and final review.

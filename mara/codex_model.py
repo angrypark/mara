@@ -10,6 +10,8 @@ import threading
 import time
 from pathlib import Path
 from .domain import dumps
+from .registry import submission_guide
+from .leader_mandate import VERSION as LEADER_MANDATE_VERSION
 
 DISABLED_FEATURES=('shell_tool','shell_snapshot','apps','plugins','hooks','memories',
     'browser_use','browser_use_external','computer_use','image_generation','view_image',
@@ -26,7 +28,7 @@ def build_prompt(model,role,guide,payload,contract):
         'Preserve uncertainty and dissent. Never invent source evidence. '
         'Weights apply to funding.proposal_capital when present; planned money is not actual cash. '
         'Return the JSON envelope result_json, whose string value is a JSON object matching the contract below.\n')
-    wire={'role_guide':guide,'contract':contract,'input':payload}
+    wire={'role_guide':submission_guide(role,guide,payload),'contract':contract,'input':payload}
     from .model_wire import supported,packed,serialized,INSTRUCTION
     return prefix+(INSTRUCTION+serialized(packed(wire)) if supported(model,role) else dumps(wire))
 
@@ -107,6 +109,7 @@ def run_process(command,prompt,directory,timeout):
 
 
 class CodexModel:
+    leader_mandate_version = LEADER_MANDATE_VERSION
     decision_policy_version='mara.decision-calibration/1.0'
     mode='live'
     input_wire_version='mara.model-wire/3.0'

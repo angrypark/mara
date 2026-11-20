@@ -42,6 +42,8 @@ class EditorialTests(unittest.TestCase):
    record=create(Session(),Model(),self.report,self.facts)
   attempts=[body for kind,body in records if kind=='report_editor_input']
   self.assertEqual(len(attempts),2)
+  for attempt in attempts:
+   self.assertIn('## 팀 공통 책임',attempt['guide']);self.assertIn('## 역할 책임과 인계',attempt['guide'])
   self.assertNotEqual(attempts[0]['attempt_input_sha256'],attempts[1]['attempt_input_sha256'])
   for attempt in attempts:self.assertEqual(attempt['attempt_input_sha256'],digest(attempt['payload']))
   self.assertEqual(record['provenance']['attempt_input_sha256'],attempts[1]['attempt_input_sha256'])

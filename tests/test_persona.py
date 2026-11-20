@@ -116,7 +116,10 @@ class PersonaFlowTests(unittest.TestCase):
         self.prepare();q='월 소득 500만원이 아니라 300만원'
         self.send(q,{'reply':'월 소득 500만원으로 변경했습니다','updates':[update('monthly_income',5000000,'월 소득 500만원')],'question':None})
         result=self.chat.read()['turns'][-1]['result'];self.assertEqual(result['updates'],[]);self.assertTrue(result['issues']);self.assertNotIn('500만원으로 변경',result['reply'])
-        with self.app.session() as s:self.assertTrue(s.events('persona_model_output'))
+        with self.app.session() as s:
+            self.assertTrue(s.events('persona_model_output'))
+            guide=s.latest('persona_model_input')['body']['guide']
+            self.assertIn('## 팀 공통 책임',guide);self.assertIn('## 역할 책임과 인계',guide)
 
     def test_late_model_response_cannot_overwrite_newer_profile(self):
         self.prepare();entered=threading.Event();release=threading.Event();q='월 소득 700만원'

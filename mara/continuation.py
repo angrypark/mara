@@ -83,6 +83,8 @@ def prepare(session,model,failed_id,response_input_id,raw_response,resource_mani
  if {r for r in by_role if r in roles or coordinated and r in ('validation','leader')}!=expected or not {'context','evidence'}<=by_role.keys():raise ValueError('Accepted perspectives must be an uninterrupted prefix')
  if any(len(by_role.get(r,[]))!=1 for r in ({'context','evidence'} if advanced else expected|{'context','evidence'})):raise ValueError('Ambiguous accepted prefix')
  if by_role['context'][0]['body']['output']['missing']:raise ValueError('Context remains unresolved')
+ from .leader_mandate import restore as restore_mandate
+ mandate=restore_mandate(session,ev,start,by_role['context'][0],by_role['evidence'][0],pending,accepted)
  audit=[e for e in ev if e['kind']=='pruning_audit']
  if len(audit)!=1:raise ValueError('Original knowledge pruning must be complete exactly once')
  h=[e for e in ev if e['kind']=='research_feedback_history'];scope=[e for e in ev if e['kind']=='decision_scope']
@@ -104,7 +106,7 @@ def prepare(session,model,failed_id,response_input_id,raw_response,resource_mani
     learning['applications'].append(dict(receipt['body'],event_id=receipt['id']))
  cache={r:(copy.deepcopy(by_role[r][-1]['body']['output']),by_role[r][-1]['id']) for r in ({'context','evidence'} if advanced else expected|{'context','evidence'})}
  plan={'version':VERSION,'kind':'prepared_repair' if pending_repair else 'historical_dispatch' if pending_dispatch else 'initial_submission','phase':'proposal_synthesis' if pending_repair else 'final_validation' if final_dispatch else 'perspective_validation' if pending_dispatch else 'initial_submission','failure':failure,'start':start,'pending':pending,'raw_response':raw_response or '','cache':cache,
-  'decision_scope':scope[0]['body'],'research_history':h[0]['body'] if h else None,'learning_cycle':learning,'reflection':reflection,
+  'decision_scope':scope[0]['body'],'leader_mandate':mandate,'research_history':h[0]['body'] if h else None,'learning_cycle':learning,'reflection':reflection,
   'pruning_audit_id':audit[0]['id'],'user_persona':pending['body']['payload']['user_persona'],
   'facts':[e['body']['fact'] for e in ev if e['kind']=='research_evidence'],
   'prefix_output_ids':[e['id'] for e in accepted],

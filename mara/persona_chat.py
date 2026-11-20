@@ -4,7 +4,7 @@ from datetime import date
 from . import domain as d
 from .contracts import validate,schema
 from .persona import ensure,snapshot,build,value_at
-from .registry import resource
+from .registry import role_guide, resource
 
 class PersonaError(ValueError):pass
 
@@ -214,7 +214,7 @@ class PersonaConversations:
                     'allowed_update_fields':sorted(FIELDS),'scope':'개인 맥락 대화. 원본은 보존하고 현재 사실과 해석을 갱신. 투자 제안/실제 보유/주문 변경이 아님.'}
                 while len(d.dumps(payload))>60000 and payload['recent_conversation']:payload['recent_conversation'].pop(0)
                 if len(d.dumps(payload))>60000:raise PersonaError('현재 맥락이 대화 입력 한도를 넘었어요. 긴 설명은 핵심 사실 중심으로 정리해주세요. 원본은 보존돼요.')
-                model=self.setup.analysis_model();contract=schema('persona-reply');guide=resource('guides/roles/persona-conversation.md').read_text()
+                model=self.setup.analysis_model();contract=schema('persona-reply');guide=role_guide('context',resource('guides/roles/persona-conversation.md').read_text())
                 s.append('persona_model_input',{'request_id':request['request_id'],'payload':payload,'contract':contract,'guide':guide,'provider':model.identity},event['effective'])
                 output=model.complete('context',guide,payload,contract)
                 s.append('persona_model_output',{'request_id':request['request_id'],'output':output},event['effective'])

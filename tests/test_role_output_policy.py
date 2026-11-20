@@ -50,6 +50,37 @@ class RoleOutputPolicyTests(unittest.TestCase):
             self.assertIn('judgment_report',contract['required'])
             self.assertEqual(payload['role_output_policy']['format'],'detailed_report')
             self.assertIn('공백 제외 최소 1,400자',guide)
+    def test_accountability_reaches_provider_and_saved_input_for_each_role(self):
+        import json
+        from mara.codex_model import build_prompt
+        from mara.model_wire import INSTRUCTION, VERSION as WIRE_VERSION, unpacked
+        from mara.registry import catalogue, resource
+
+        self.model.input_wire_version = WIRE_VERSION
+        common = resource('guides/roles/team.md').read_text().strip()
+        for row in catalogue():
+            role = row['id']
+            with self.subTest(role=role):
+                _, guide, payload, contract = self.capture(role)
+                saved = self.session.latest('agent_input')['body']
+                wire = build_prompt(self.model, role, guide, payload, contract)
+                resolved = unpacked(json.loads(wire.split(INSTRUCTION, 1)[1]))
+                self.assertEqual(saved['guide'], resolved['role_guide'])
+                self.assertIn(common, guide)
+                section = resource(row['guide']).read_text().split('## 역할 책임과 인계')[1].strip()
+                self.assertIn(section, guide)
+
+    def test_fresh_override_and_standalone_leader_keep_handoff(self):
+        from mara.registry import role_guide, submission_guide
+        override = role_guide('leader', 'custom role strategy')
+        self.assertTrue(override.startswith('custom role strategy'))
+        self.assertIn('## 역할 책임과 인계', override)
+        sparse = {'analysis_stage':'proposal_synthesis'}
+        self.assertEqual(submission_guide('leader', override, sparse), override)
+        self.assertEqual(submission_guide('leader', 'custom role strategy', sparse), override)
+        prepared = dict(sparse, input_budget={'version':'archived'})
+        self.assertEqual(submission_guide('leader', 'archived text', prepared), 'archived text')
+
     def test_concise_context_output_is_accepted_without_repair(self):
         output={'summary':'판단에 필요한 현금 계획을 확인했어요.','constraints':['한도 유지'],'missing':[]}
         self.model.complete=lambda *_:copy.deepcopy(output)

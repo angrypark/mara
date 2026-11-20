@@ -38,12 +38,16 @@ def bind(contract,role,payload):
  if role=='validation' and payload.get('submission_sources') is not None:
   result['properties']['revision_requests']={'type':'array','maxItems':4,'items':copy.deepcopy(REVISION)}
   result['required']=list(dict.fromkeys(result['required']+['revision_requests']))
+ elif role=='leader' and 'submission_sources' not in payload:
+  result['properties'].pop('revision_requests',None)
  visit(result)
  return result
 
-def validate_revisions(output,payload):
- if 'submission_sources' not in payload:return
- if 'revision_requests' not in output:raise ContractError('Explicit revision_requests required, including an empty list when no correctable defect exists')
+def validate_revisions(output,payload,optional=False):
+ if 'submission_sources' not in payload:
+  if optional and 'revision_requests' in output:raise ContractError('Leader revision requests are only available during initial synthesis')
+  return
+ if not optional and 'revision_requests' not in output:raise ContractError('Explicit revision_requests required, including an empty list when no correctable defect exists')
  rows=output.get('revision_requests',[]);sources=payload['submission_sources']
  if len({r['id'] for r in rows})!=len(rows):raise ContractError('Duplicate revision request ID')
  questions={q['id'] for q in payload.get('decision_scope',{}).get('questions',[])}
@@ -51,7 +55,9 @@ def validate_revisions(output,payload):
   source=sources.get(r['target_role'])
   if not source or source['output_id']!=r['source_output_id']:raise ContractError('Revision must address the current accepted author output')
   if not set(r['question_ids'])<=questions:raise ContractError('Revision cites unknown decision question')
-  try:pointer(source['output'],r['issue_path'])
+  target=source.get('output',payload.get('evidence_analysis') if r['target_role']=='evidence' else payload.get('perspectives',{}).get(r['target_role']))
+  if target is None:raise ContractError('Revision source author analysis was not delivered')
+  try:pointer(target,r['issue_path'])
   except (ValueError,KeyError,TypeError,IndexError):raise ContractError('Revision issue_path must locate the supplied author output') from None
 
 def diagnostics(role,output,payload,error):
