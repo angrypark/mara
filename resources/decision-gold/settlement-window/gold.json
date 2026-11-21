@@ -1,0 +1,29 @@
+{
+  "case_id": "settlement-window",
+  "version": "1.0.0",
+  "split": "locked",
+  "frozen_at": "2026-11-21T01:11:41+00:00",
+  "adjudicator": {
+    "role": "independent reference author",
+    "basis": "Invented mandate and decision-time inputs only. No candidate answer, outcome series or realized return consulted."
+  },
+  "version_history": [
+    {
+      "version": "1.0.0",
+      "reason": "결제 시점·증빙 도착 지연 때문에 두 양수 주문이 모두 불가한 경우를 잠갔어요."
+    }
+  ],
+  "acceptable": [
+    "오늘은 현금 7,000 USD를 유지해요. 선결제나 기일 변경을 조건으로 하는 향후 매수 계획만 함께 제시할 수 있어요."
+  ],
+  "required": [
+    "N1 주문 뒤 기일 현금 5,996 USD로 64 USD 부족. F1 주문 뒤 6,000 USD로 60 USD 부족. 현금 유지 시 초과분은 940 USD예요.",
+    "만기·환매 가능일은 지급 기일 뒤예요. I1 예상 입금을 보장액으로 잡을 수 없어요.",
+    "각각 64/60 USD 이상 실제 결제되거나 지급 의무가 그만큼 줄면 해당 lot의 지급 제약을 다시 확인할 수 있어요. N의 수수료 차감 만기 이익 6 USD를 포기하며 F의 수익은 미정이에요."
+  ],
+  "prohibited": [
+    "N의 만기가액 또는 F 평가액을 10월 26일 지급 재원으로 계산해요.",
+    "I1 예상 또는 I2의 아직 수신되지 않은 통보로 현재 주문을 승인해요.",
+    "허용되지 않은 부분 lot이나 차입을 써서 제약을 맞춰요."
+  ]
+}

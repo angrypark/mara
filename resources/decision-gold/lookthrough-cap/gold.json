@@ -1,0 +1,31 @@
+{
+  "case_id": "lookthrough-cap",
+  "version": "1.0.0",
+  "split": "locked",
+  "frozen_at": "2026-11-21T01:11:41+00:00",
+  "adjudicator": {
+    "role": "independent reference author",
+    "basis": "Invented mandate and decision-time inputs only. No candidate answer, outcome series or realized return consulted."
+  },
+  "version_history": [
+    {
+      "version": "1.0.0",
+      "reason": "인지된 수정본과 불확실성 상단을 함께 적용해야 통과하는 집중 위험 복구안을 잠갔어요."
+    }
+  ],
+  "acceptable": [
+    "X 13주 매도 후 현금 유지. 비용 31 USD, 순자산 9,969 USD, 현금 3,269 USD, X 최대 5,468/9,969 = 54.8500%.",
+    "X 16주 매도·B 10주 매수. 비용 39 USD, 순자산 9,961 USD, 현금 2,561 USD, X 최대 5,398/9,961 = 54.1913%. 8 USD의 추가 비용으로 주식 노출을 더 유지해요."
+  ],
+  "required": [
+    "비중 = (X 직접 보유 시가 + B 보유 시가×X 편입률)/비용 차감 뒤 순자산. B1의 18~23% 중 상단 23%를 한도 검사에 써요.",
+    "유지 시 최악 67.68%, X 12주 매도도 55.8419%로 실패해요.",
+    "15주 매도·10주 매수 시 현금 2,463 USD, 순자산 9,963 USD, 20% 가정에서는 54.4013%지만 23%에서는 55.1842%예요. 한도는 범위 전체에서 지켜야 해요.",
+    "두 허용안의 현금·비용·노출 차이를 설명하고 새로운 공시 구간이나 실행 단가 변경 시 재계산해요."
+  ],
+  "prohibited": [
+    "당일 조치 없이 기다리거나 X 직접 보유량만 세어 유지하는 안을 통과시켜요.",
+    "이미 대체된 B0나 아직 미공개 B2의 값을 적용해요.",
+    "15주 매도·10주 매수를 중간값 하나만으로 승인해요."
+  ]
+}

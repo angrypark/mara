@@ -1,0 +1,89 @@
+{
+  "case_id": "lookthrough-cap",
+  "version": "1.0.0",
+  "split": "locked",
+  "fixture_kind": "invented_nonpersonal",
+  "as_of": "2026-10-19T13:00:00Z",
+  "task": "가상 위원회가 단일 발행사 X 비중을 오늘 한도 안으로 낮춰야 해요. 아래 조합 안에서 접수할 안을 골라요. 실질 노출 범위와 비용이 반영된 선택 근거, 다른 실행 가능한 안의 장단점을 설명해요.",
+  "persona": {
+    "objective": "오늘 확인 가능한 모든 노출 범위에서 발행사 한도를 지켜요. 그다음 거래비용·시장 노출 사이 선택은 재량이에요.",
+    "horizon": "4년"
+  },
+  "holdings": {
+    "currency": "USD",
+    "cash": 2000,
+    "positions": {
+      "X": 64,
+      "B": 16
+    }
+  },
+  "regimes": [
+    "look-through uncertainty",
+    "concentration repair"
+  ],
+  "constraints": {
+    "maximum_issuer_X_fraction": 0.55,
+    "denominator": "거래 비용과 즉시 납부 세금 차감 뒤 시가 순자산",
+    "exposure_policy": "오늘 공시된 발행사 비중 범위 어디서든 상한을 지켜야 해요.",
+    "orders": "제시한 정수 조합만 허용. 차입·공매도 불가."
+  },
+  "alternatives": [
+    "유지",
+    "X 12주 매도",
+    "X 13주 매도",
+    "X 15주 매도와 B 10주 매수",
+    "X 16주 매도와 B 10주 매수"
+  ],
+  "records": [
+    {
+      "id": "P1",
+      "series_id": "tradable_marks",
+      "observed_at": "2026-10-19T12:00:00Z",
+      "released_at": "2026-10-19T12:00:00Z",
+      "revision_at": "2026-10-19T12:00:00Z",
+      "available_at": "2026-10-19T12:00:00Z",
+      "source": "fictional desk / two-way quote",
+      "text": "X와 바스켓 B 모두 매매·평가 단가 100 USD. 호가는 결정 시점에 유효해요."
+    },
+    {
+      "id": "C1",
+      "series_id": "charges",
+      "observed_at": "2026-10-19T12:02:00Z",
+      "released_at": "2026-10-19T12:02:00Z",
+      "revision_at": "2026-10-19T12:02:00Z",
+      "available_at": "2026-10-19T12:02:00Z",
+      "source": "fictional desk / charges notice",
+      "text": "X 매도 한 주문당 5 USD와 매도 주당 즉시 세금 2 USD. B 매수 한 주문당 2 USD. 그 밖의 비용과 환전은 없어요."
+    },
+    {
+      "id": "B0",
+      "series_id": "basket_x_range",
+      "observed_at": "2026-10-16T15:00:00Z",
+      "released_at": "2026-10-19T09:00:00Z",
+      "revision_at": "2026-10-19T09:00:00Z",
+      "available_at": "2026-10-19T09:00:00Z",
+      "source": "fictional desk / basket disclosure v0",
+      "text": "지난 편입 범위 추정은 X 14~17%예요."
+    },
+    {
+      "id": "B1",
+      "series_id": "basket_x_range",
+      "observed_at": "2026-10-16T15:00:00Z",
+      "released_at": "2026-10-19T09:00:00Z",
+      "revision_at": "2026-10-19T11:00:00Z",
+      "available_at": "2026-10-19T11:03:00Z",
+      "source": "fictional desk / basket disclosure v1",
+      "text": "구성 종목 대사 뒤 바스켓 B의 X 비중 추정을 18~23%로 수정해요. 확정 단일값은 없어요."
+    },
+    {
+      "id": "B2",
+      "series_id": "basket_x_range",
+      "observed_at": "2026-10-16T15:00:00Z",
+      "released_at": "2026-10-19T09:00:00Z",
+      "revision_at": "2026-10-19T15:30:00Z",
+      "available_at": "2026-10-19T15:32:00Z",
+      "source": "fictional desk / basket disclosure v2",
+      "text": "최종 편입 비중은 19%예요."
+    }
+  ]
+}

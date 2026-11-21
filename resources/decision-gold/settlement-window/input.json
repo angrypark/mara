@@ -1,0 +1,74 @@
+{
+  "case_id": "settlement-window",
+  "version": "1.0.0",
+  "split": "locked",
+  "fixture_kind": "invented_nonpersonal",
+  "as_of": "2026-10-12T13:00:00Z",
+  "task": "가상 운영 기금이 유휴 달러를 단기로 운용하려 해요. 기일에 사용할 수 있는 현금으로 선택을 판정하고, 재검토를 허용할 관측 조건과 그 전까지 치르는 기회비용을 설명해요.",
+  "persona": {
+    "objective": "지급을 보장한 뒤에만 유휴 현금의 수익 기회를 검토해요.",
+    "horizon": "14일 후 지급, 그 뒤 잔여 자금 운용"
+  },
+  "holdings": {
+    "currency": "USD",
+    "cash": 7000,
+    "positions": {}
+  },
+  "regimes": [
+    "redemption delay",
+    "unconfirmed inflow"
+  ],
+  "constraints": {
+    "required_cash_usd": 6060,
+    "deadline": "2026-10-26T12:00:00Z",
+    "borrowing": false,
+    "inflow_policy": "이미 결제된 현금만 지급 보장액에 포함해요."
+  },
+  "alternatives": [
+    "현금 유지",
+    "N 1 lot 매수",
+    "F 1 lot 매수"
+  ],
+  "records": [
+    {
+      "id": "N1",
+      "series_id": "note_terms",
+      "observed_at": "2026-10-12T10:00:00Z",
+      "released_at": "2026-10-12T10:00:00Z",
+      "revision_at": "2026-10-12T10:00:00Z",
+      "available_at": "2026-10-12T10:00:00Z",
+      "source": "fictional desk / N term sheet",
+      "text": "N은 1 lot 1,000 USD에 주문 수수료 4 USD. 11월 9일 만기에 1,010 USD를 지급하며 중도 환매·매도는 불가해요."
+    },
+    {
+      "id": "F1",
+      "series_id": "fund_terms",
+      "observed_at": "2026-10-12T10:05:00Z",
+      "released_at": "2026-10-12T10:05:00Z",
+      "revision_at": "2026-10-12T10:05:00Z",
+      "available_at": "2026-10-12T10:05:00Z",
+      "source": "fictional desk / F dealing calendar",
+      "text": "F는 1 lot 995 USD에 주문 수수료 5 USD. 차기 출금 가능일은 11월 2일이에요. 그 전에 양도할 수 없고 수익은 미정이에요."
+    },
+    {
+      "id": "I1",
+      "series_id": "invoice_status",
+      "observed_at": "2026-10-12T11:00:00Z",
+      "released_at": "2026-10-12T11:00:00Z",
+      "revision_at": "2026-10-12T11:00:00Z",
+      "available_at": "2026-10-12T11:00:00Z",
+      "source": "fictional desk / settlement ledger",
+      "text": "2,400 USD를 10월 22일에 받을 것이란 추정만 있고 결제되지 않았어요. 지연될 수 있어요."
+    },
+    {
+      "id": "I2",
+      "series_id": "invoice_status",
+      "observed_at": "2026-10-12T11:00:00Z",
+      "released_at": "2026-10-12T12:50:00Z",
+      "revision_at": "2026-10-12T12:50:00Z",
+      "available_at": "2026-10-12T13:15:00Z",
+      "source": "fictional desk / settlement ledger second notice",
+      "text": "인보이스가 조기 결제되었다는 통보예요."
+    }
+  ]
+}

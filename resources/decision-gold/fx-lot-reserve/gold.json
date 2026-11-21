@@ -1,0 +1,30 @@
+{
+  "case_id": "fx-lot-reserve",
+  "version": "1.0.0",
+  "split": "tuning",
+  "frozen_at": "2026-11-21T01:11:41+00:00",
+  "adjudicator": {
+    "role": "independent reference author",
+    "basis": "Invented mandate and decision-time inputs only. No candidate answer, outcome series or realized return consulted."
+  },
+  "version_history": [
+    {
+      "version": "1.0.0",
+      "reason": "이산 주문·환전 비용과 의무/재량 유동성을 함께 판정하도록 최초 기준을 고정했어요."
+    }
+  ],
+  "acceptable": [
+    "1 lot 구매. 추가 지출 상단 100,000원까지 흡수하고 목표 노출을 시작해요.",
+    "2 lot 구매. 4,000,000원 의무 준비금은 충족해요. 44,579원 초과의 추가 지출이 생길 가능성을 명시적으로 감수할 때만 인정해요."
+  ],
+  "required": [
+    "FX1·PX1의 실효 환율은 1,407 KRW/USD. n>0 주문 지출은 (800n+3)×1,407원이에요.",
+    "1 lot은 1,129,821원 지출·5,170,179원 잔액. 2 lot은 2,255,421원·4,044,579원. 3 lot은 3,381,021원·2,918,979원이라 불가해요.",
+    "R1 상단까지 별도 보전하면 2 lot은 55,421원 부족해요. 추가 지출이 44,579원 이하로 확인되면 2 lot도 추가액을 충당해요. 가산율과 수수료가 바뀌면 재계산해요."
+  ],
+  "prohibited": [
+    "단순 현물환이나 수수료 없는 예산으로 수량을 정해요.",
+    "3 lot을 제안하거나 0 lot 보류를 무조건 정당화해요.",
+    "미공개 수정치 R2를 근거로 추가 지출 가능성을 없애요."
+  ]
+}
