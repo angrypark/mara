@@ -1,8 +1,8 @@
 {
   "case_id": "fx-lot-reserve",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "split": "tuning",
-  "frozen_at": "2026-11-21T01:11:41+00:00",
+  "frozen_at": "2026-11-21T01:15:45+00:00",
   "adjudicator": {
     "role": "independent reference author",
     "basis": "Invented mandate and decision-time inputs only. No candidate answer, outcome series or realized return consulted."
@@ -10,7 +10,13 @@
   "version_history": [
     {
       "version": "1.0.0",
-      "reason": "이산 주문·환전 비용과 의무/재량 유동성을 함께 판정하도록 최초 기준을 고정했어요."
+      "reason": "이산 주문·환전 비용과 의무/재량 유동성을 함께 판정하도록 최초 기준을 고정했어요.",
+      "frozen_at": "2026-11-21T01:11:41+00:00",
+      "sha256": "f93a5246c08ca100625b4d9699dbb07f6cb770d35b3d6ec9dedc0fa56504a6bd"
+    },
+    {
+      "version": "1.0.1",
+      "reason": "판정자가 시점 밖 자료를 유추할 수 있는 문구를 제거했어요. 허용 판단과 당시 자료에 따른 산술은 유지하고, 합성 의사결정 한 건에 판정 단위 ID를 부여했어요."
     }
   ],
   "acceptable": [
@@ -25,6 +31,6 @@
   "prohibited": [
     "단순 현물환이나 수수료 없는 예산으로 수량을 정해요.",
     "3 lot을 제안하거나 0 lot 보류를 무조건 정당화해요.",
-    "미공개 수정치 R2를 근거로 추가 지출 가능성을 없애요."
+    "결정 시점에 확인한 현금 수요 추정 범위를 설명하지 않고 상단을 감당할 수 있다고 단정해요."
   ]
 }

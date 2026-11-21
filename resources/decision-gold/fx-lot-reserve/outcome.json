@@ -1,0 +1,58 @@
+{
+  "asset_label": "1 lot and KRW reserve",
+  "benchmark_label": "2 lots and KRW reserve",
+  "basis": "Invented KRW mark-to-market paths, not forecasts or observed returns. Gross 6,300,000 KRW before entry; from the second observation purchase terms include spread and one USD 3 fee. Cash earns zero, no sales, donations, distributions, tax, withdrawals or subsequent costs. Known optional short-term bill does not occur on this hypothetical path. Discrete observations understate intraperiod drawdown. One shared market/FX path; alternative/cash paths model capacity and identical fills, with no causal or skill attribution.",
+  "counterfactuals": {
+    "cash deferral": "cash"
+  },
+  "series": [
+    {
+      "date": "2026-10-05",
+      "asset": 6300000,
+      "benchmark": 6300000,
+      "cash": 6300000,
+      "usd_price": null,
+      "krw_per_usd": null
+    },
+    {
+      "date": "2026-10-06",
+      "asset": 6290179,
+      "benchmark": 6284579,
+      "cash": 6300000,
+      "usd_price": 800,
+      "krw_per_usd": 1400
+    },
+    {
+      "date": "2026-10-20",
+      "asset": 5843619,
+      "benchmark": 5391459,
+      "cash": 6300000,
+      "usd_price": 552,
+      "krw_per_usd": 1220
+    },
+    {
+      "date": "2026-11-20",
+      "asset": 6054179,
+      "benchmark": 5812579,
+      "cash": 6300000,
+      "usd_price": 680,
+      "krw_per_usd": 1300
+    },
+    {
+      "date": "2027-10-05",
+      "asset": 6296259,
+      "benchmark": 6296739,
+      "cash": 6300000,
+      "usd_price": 816,
+      "krw_per_usd": 1380
+    },
+    {
+      "date": "2029-10-05",
+      "asset": 6475179,
+      "benchmark": 6654579,
+      "cash": 6300000,
+      "usd_price": 900,
+      "krw_per_usd": 1450
+    }
+  ]
+}

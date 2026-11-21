@@ -1,6 +1,6 @@
 {
   "case_id": "fx-lot-reserve",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "split": "tuning",
   "fixture_kind": "invented_nonpersonal",
   "as_of": "2026-10-05T13:00:00Z",
@@ -70,5 +70,6 @@
       "source": "fictional desk / cash desk revision",
       "text": "추가 지출 추정치는 0원으로 수정됐어요."
     }
-  ]
+  ],
+  "independence_unit": "fictional-fx-lot-reserve-episode-1"
 }

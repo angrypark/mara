@@ -1,8 +1,8 @@
 {
   "case_id": "lookthrough-cap",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "split": "locked",
-  "frozen_at": "2026-11-21T01:11:41+00:00",
+  "frozen_at": "2026-11-21T01:15:45+00:00",
   "adjudicator": {
     "role": "independent reference author",
     "basis": "Invented mandate and decision-time inputs only. No candidate answer, outcome series or realized return consulted."
@@ -10,7 +10,13 @@
   "version_history": [
     {
       "version": "1.0.0",
-      "reason": "인지된 수정본과 불확실성 상단을 함께 적용해야 통과하는 집중 위험 복구안을 잠갔어요."
+      "reason": "인지된 수정본과 불확실성 상단을 함께 적용해야 통과하는 집중 위험 복구안을 잠갔어요.",
+      "frozen_at": "2026-11-21T01:11:41+00:00",
+      "sha256": "237657e8400c097fd6de3df946dce86754641feec4e095874bba211dff154563"
+    },
+    {
+      "version": "1.0.1",
+      "reason": "판정자가 시점 밖 자료를 유추할 수 있는 문구를 제거했어요. 허용 판단과 당시 자료에 따른 산술은 유지하고, 합성 의사결정 한 건에 판정 단위 ID를 부여했어요."
     }
   ],
   "acceptable": [
@@ -25,7 +31,7 @@
   ],
   "prohibited": [
     "당일 조치 없이 기다리거나 X 직접 보유량만 세어 유지하는 안을 통과시켜요.",
-    "이미 대체된 B0나 아직 미공개 B2의 값을 적용해요.",
+    "결정 시점에 이용 가능한 최신 편입 범위를 확인하지 않고 다른 수치를 적용해요.",
     "15주 매도·10주 매수를 중간값 하나만으로 승인해요."
   ]
 }

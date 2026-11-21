@@ -1,4 +1,5 @@
 from glob import glob
+from os.path import isdir
 from setuptools import setup
 
 setup(
@@ -14,5 +15,8 @@ setup(
                 ('share/mara/web',glob('web/*.html')+glob('web/*.js')+glob('web/*.css')),
                 ('share/mara/examples',glob('examples/*.json')),
                 ('share/mara/resources',glob('resources/*.json')),
-                ('share/mara/contracts',glob('contracts/*.json'))],
+                ('share/mara/contracts',glob('contracts/*.json')),
+                ('share/mara/resources/decision-gold',glob('resources/decision-gold/*.json'))]
+               + [('share/mara/' + folder, glob(folder + '/*.json'))
+                  for folder in glob('resources/decision-gold/*') if isdir(folder)],
 )

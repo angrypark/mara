@@ -1,0 +1,49 @@
+{
+  "version": "mara.decision-gold/1",
+  "policy_sha256": "4bf9431a58071d87dab4d50c654e20c5c84340e44289594f20841cc29823c83e",
+  "cases": {
+    "fx-lot-reserve": {
+      "split": "tuning",
+      "regimes": [
+        "FX friction",
+        "reserve sizing"
+      ],
+      "version": "1.0.1",
+      "input_sha256": "7c2311111c5b39f2ef030e8d6d0258c799bb16e27668d50ce3652f09186ab160",
+      "replay_sha256": "f741f1f7cb537e1d16f41c4b69e9658b3a3584e45593a5506afbe8fefef7fcaa",
+      "gold_sha256": "0e5c85a7abad976f5cb39667121fc0bb5833f716d6f9d8a87bab8ffddc679897",
+      "gold_provenance_recorded": true,
+      "independence_unit": "fictional-fx-lot-reserve-episode-1",
+      "outcome_sha256": "b1cd30f0acab29d30730ddb04d3610492ba084f167599a8251fa87d0323ce234"
+    },
+    "lookthrough-cap": {
+      "split": "locked",
+      "regimes": [
+        "look-through uncertainty",
+        "concentration repair"
+      ],
+      "version": "1.0.1",
+      "input_sha256": "26623d5cbfdbee669e0807d397e641fe761f63d140978102d8291f6a2b143ac6",
+      "replay_sha256": "f55019861405792281e5005da4b9dacbb1a3c65b15efd8c2df392a15a8ca93d6",
+      "gold_sha256": "8561f0b2ce3a2dcf50441ae1cd19a97c43b66956e10f4bc7ecd72c72f8f65085",
+      "gold_provenance_recorded": true,
+      "independence_unit": "fictional-lookthrough-cap-episode-1",
+      "outcome_sha256": null
+    },
+    "settlement-window": {
+      "split": "locked",
+      "regimes": [
+        "redemption delay",
+        "unconfirmed inflow"
+      ],
+      "version": "1.0.1",
+      "input_sha256": "d3da11fa704be83126295fac49c9c46c8cbefaa49d1dda5fd0a4a1c15cd5179d",
+      "replay_sha256": "ead887e71ed8f448743566b23a13deb98b22357d2bea614c4dde6a68972a1664",
+      "gold_sha256": "591a6065fc47d172fe877da0fea122cbe1cbc3fb2f74170d860ef652935f75be",
+      "gold_provenance_recorded": true,
+      "independence_unit": "fictional-settlement-window-episode-1",
+      "outcome_sha256": null
+    }
+  },
+  "design": null
+}

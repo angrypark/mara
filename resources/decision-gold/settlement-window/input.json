@@ -1,6 +1,6 @@
 {
   "case_id": "settlement-window",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "split": "locked",
   "fixture_kind": "invented_nonpersonal",
   "as_of": "2026-10-12T13:00:00Z",
@@ -70,5 +70,6 @@
       "source": "fictional desk / settlement ledger second notice",
       "text": "인보이스가 조기 결제되었다는 통보예요."
     }
-  ]
+  ],
+  "independence_unit": "fictional-settlement-window-episode-1"
 }

@@ -1,6 +1,6 @@
 {
   "case_id": "lookthrough-cap",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "split": "locked",
   "fixture_kind": "invented_nonpersonal",
   "as_of": "2026-10-19T13:00:00Z",
@@ -85,5 +85,6 @@
       "source": "fictional desk / basket disclosure v2",
       "text": "최종 편입 비중은 19%예요."
     }
-  ]
+  ],
+  "independence_unit": "fictional-lookthrough-cap-episode-1"
 }

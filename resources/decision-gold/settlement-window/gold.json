@@ -1,8 +1,8 @@
 {
   "case_id": "settlement-window",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "split": "locked",
-  "frozen_at": "2026-11-21T01:11:41+00:00",
+  "frozen_at": "2026-11-21T01:15:45+00:00",
   "adjudicator": {
     "role": "independent reference author",
     "basis": "Invented mandate and decision-time inputs only. No candidate answer, outcome series or realized return consulted."
@@ -10,7 +10,13 @@
   "version_history": [
     {
       "version": "1.0.0",
-      "reason": "결제 시점·증빙 도착 지연 때문에 두 양수 주문이 모두 불가한 경우를 잠갔어요."
+      "reason": "결제 시점·증빙 도착 지연 때문에 두 양수 주문이 모두 불가한 경우를 잠갔어요.",
+      "frozen_at": "2026-11-21T01:11:41+00:00",
+      "sha256": "70bba4a2e5d3e11c4561d6b59762daed12dc99a141fa22892719c436c10b0cc0"
+    },
+    {
+      "version": "1.0.1",
+      "reason": "판정자가 시점 밖 자료를 유추할 수 있는 문구를 제거했어요. 허용 판단과 당시 자료에 따른 산술은 유지하고, 합성 의사결정 한 건에 판정 단위 ID를 부여했어요."
     }
   ],
   "acceptable": [
@@ -23,7 +29,7 @@
   ],
   "prohibited": [
     "N의 만기가액 또는 F 평가액을 10월 26일 지급 재원으로 계산해요.",
-    "I1 예상 또는 I2의 아직 수신되지 않은 통보로 현재 주문을 승인해요.",
+    "실제 결제 증빙 없이 예상 입금을 근거로 현재 주문을 승인해요.",
     "허용되지 않은 부분 lot이나 차입을 써서 제약을 맞춰요."
   ]
 }
