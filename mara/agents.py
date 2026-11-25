@@ -301,11 +301,19 @@ class Agents:
         contract=contract_for(contract,role,current)
         from .submission import bind
         contract=bind(contract,role,current)
+        if current.pop('allow_role_knowledge_update',False):
+            from .role_knowledge import offer
+            offer(current,role,contract)
         return self._submit(role,guide,current,contract,skills,original,context_limit,shared_input)
 
-    def submit_scoped(self, role, guide, payload, contract, validator):
+    def submit_scoped(self, role, guide, payload, contract, validator, *, role_knowledge=False):
         """Submit a purpose-specific contract through ordinary audited role validation."""
-        return self._submit(role, guide, copy.deepcopy(payload), contract, [], payload,
+        current=copy.deepcopy(payload)
+        if role_knowledge:
+            from .role_knowledge import offer
+            contract=copy.deepcopy(contract)
+            offer(current,role,contract)
+        return self._submit(role, guide, current, contract, [], payload,
                             128000, False, validator=validator)
 
     def submit_prepared(self,input_event,feedback):
@@ -349,7 +357,14 @@ class Agents:
             except ProviderSubmissionError as exc:provider_error=exc;result=exc.output
             if provider_error is None and self.model.mode=='demo' and current.get('adopted_dialogue_change'):
                 result['change_response']={'status':'rejected','reason':'합성 모델은 투자 판단을 변경하지 않아요. 변경 전달·후속 검증 경로만 확인해요.'}
-            oid = self.s.append('agent_output', dict(role=role,input_id=iid,output=result,**({'provider_failure':provider_error.diagnostic,'raw_provider_response':provider_error.raw_response} if provider_error else {})),self.as_of,self.run_id)
+            from .role_knowledge import FIELD
+            metadata={}
+            if FIELD in contract.get('properties',{}) and isinstance(result,dict) and FIELD in result:
+                result=dict(result)
+                metadata[FIELD]=result.pop(FIELD)
+            if provider_error:
+                metadata.update(provider_failure=provider_error.diagnostic,raw_provider_response=provider_error.raw_response)
+            oid = self.s.append('agent_output', dict(role=role,input_id=iid,output=result,**metadata),self.as_of,self.run_id)
             try:
                 if provider_error:raise provider_error
                 if validator is None:

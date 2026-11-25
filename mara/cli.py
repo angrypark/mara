@@ -30,9 +30,17 @@ def parser():
         s.add_argument('--demo',action='store_true'); s.add_argument('--force',action='store_true')
     s=sub.add_parser('due'); s.add_argument('--as-of',required=True)
     s=sub.add_parser('report'); s.add_argument('--id')
+    s=sub.add_parser('link-portfolio-replay')
+    for name in ('report_id','prepared','submission','outcomes'):s.add_argument(name)
+    s.add_argument('--comparability',required=True);s.add_argument('--as-of',required=True)
     s=sub.add_parser('export'); s.add_argument('output')
     s=sub.add_parser('prune-shared'); s.add_argument('--as-of',required=True)
     s=sub.add_parser('prune'); s.add_argument('--as-of',required=True)
+    from .registry import catalogue
+    s=sub.add_parser('role-knowledge')
+    s.add_argument('role',choices=[a['id'] for a in catalogue()])
+    s.add_argument('--namespace', choices=('model_portfolio',))
+    s.add_argument('--as-of',required=True)
     s=sub.add_parser('guide'); s.add_argument('role',choices=list(CONTRACTS)+list(PERSONAS)); s.add_argument('file'); s.add_argument('--reason',required=True); s.add_argument('--as-of',required=True)
     s=sub.add_parser('restore-guide'); s.add_argument('event_id'); s.add_argument('--reason',required=True); s.add_argument('--as-of',required=True)
     s=sub.add_parser('recover'); s.add_argument('--reason',required=True); s.add_argument('--as-of',required=True)
@@ -69,6 +77,13 @@ def main(argv=None):
             elif c=='report':
                 result=s.get(args.id) if args.id else s.latest('completed')
                 if result is None: raise ValueError('No completed report')
+                if result['kind'] in ('completed','model_completed'):
+                    from .portfolio_replay import status_for_proposal
+                    result['portfolio_replay']=status_for_proposal(s,result['id'])
+            elif c=='link-portfolio-replay':
+                from .portfolio_replay import link
+                result={'event_id':link(s,args.report_id,read(args.prepared),read(args.submission),
+                                       read(args.outcomes),args.comparability,args.as_of)}
             elif c=='export':
                 path=Path(args.output)
                 # Exclusive creation avoids clobbering any preexisting user file.
@@ -76,6 +91,10 @@ def main(argv=None):
                 with os.fdopen(fd,'w') as f: f.write(dumps(s.export())+'\n')
                 result={'export':str(path)}
             elif c=='prune': result={'audit_id':Knowledge(s).prune(args.as_of)}
+            elif c=='role-knowledge':
+                items = Knowledge(s,namespace=args.namespace).current(args.as_of)
+                result={'role':args.role,'items':[item for item in items.values()
+                                                  if item.get('owner_role')==args.role]}
             elif c=='knowledge': result={'event_id':Knowledge(s).apply(read(args.file),args.as_of)}
             elif c in {'guide','restore-guide'}:
                 if not args.reason.strip(): raise ValueError('Reason required')

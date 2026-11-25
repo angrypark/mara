@@ -91,6 +91,7 @@ def worker(setup, body, as_of):
 
 
 def read(session, jid):
+    from .portfolio_replay import status_for_proposal
     rows = session.store.db.execute(
         'SELECT * FROM events WHERE owner=? AND run_id=? AND kind IN (?,?,?,?,?) ORDER BY seq DESC',
         (session.owner, jid, 'model_completed', 'model_failed', 'recovery', 'model_request','model_blocked')).fetchall()
@@ -101,7 +102,9 @@ def read(session, jid):
     row = session.decode(terminal if terminal is not None else rows[0])
     status = {'model_request':'running','model_completed':'completed','model_failed':'failed',
               'recovery':'interrupted','model_blocked':'blocked'}[row['kind']]
-    return {'run_id':jid, 'status':status, 'as_of':request_row['effective'],
+    return {'run_id':jid, 'report_id':row['id'] if status=='completed' else None,
+            'status':status, 'as_of':request_row['effective'],
+            'portfolio_replay':status_for_proposal(session,row['id']) if status=='completed' else None,
             'result':row['body'] if status!='running' else None}
 
 
@@ -109,6 +112,9 @@ def run(session, model, jid, as_of, inputs, funds, positions, pairs):
     if model.mode != 'live':
         raise ValueError('Production provider required')
     agent = Agents(session, model, as_of, jid)
+    from .knowledge import Knowledge
+    knowledge = Knowledge(session, namespace='model_portfolio')
+    submissions = []
     years = inputs.get('minimum_holding_years')
     loss = inputs.get('tolerable_drawdown_fraction')
     unknowns = ['정확한 최초 인출 시점' if years is not None else '투자 기간과 인출 시점',
@@ -140,6 +146,7 @@ def run(session, model, jid, as_of, inputs, funds, positions, pairs):
                     revision_requests=changes)
     def submit(role, stage, contract, inputs_for_role, instruction):
         payload = dict(base, **inputs_for_role, analysis_stage=stage)
+        payload['knowledge'] = knowledge.retrieve(as_of,role)
         if role in (*personas(), 'evidence', 'validation', 'leader') and stage != 'leader_mandate':
             payload['leader_mandate'] = leader_mandate.for_role(plan, role)
         def verify(output):
@@ -151,7 +158,9 @@ def run(session, model, jid, as_of, inputs, funds, positions, pairs):
             if output.get('qualitative_pass') and requests:
                 raise ContractError('A revision requires a new review')
         guide = role_guide(role) + '\n' + POLICY + '\n' + instruction
-        return agent.submit_scoped(role, guide, payload, contract, verify)
+        result, output_id=agent.submit_scoped(role, guide, payload, contract, verify, role_knowledge=True)
+        submissions.append(output_id)
+        return result, output_id
     context, context_id = submit('context','context_analysis',fields(summary=TEXT, conditional_inputs=STRINGS),
         {},'확정 입력과 최소 기간의 의미를 보존하고 나머지는 질문 또는 시나리오로 남겨요.')
     scope = dict(goal=inputs['objective'], candidates=list(funds), model_scope=base['scope'])
@@ -214,7 +223,11 @@ def run(session, model, jid, as_of, inputs, funds, positions, pairs):
                         accepted_ids=dict(context=context_id,evidence=eid,leader=leader_id,validation=check_id,quality=qid))
                     from .portfolio_replay import status_for_proposal
                     report['portfolio_replay']=status_for_proposal()
-                    session.append('model_completed',report,as_of,jid)
+                    from .role_knowledge import record
+                    with session.store.transaction():
+                        report['role_knowledge_updates']=record(knowledge,as_of,jid,submissions)
+                        report['role_knowledge_pruning_id']=knowledge.prune(as_of,jid)
+                        session.append('model_completed',report,as_of,jid)
                     return
                 revisions, requester = check['revision_requests'], check_id
                 last_feedback = {'previous_leader':final,'required_review':check,'review_output_id':check_id}

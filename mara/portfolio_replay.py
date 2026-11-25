@@ -21,6 +21,16 @@ def allocation(value, universe):
     return dict(value)
 
 
+def calendar_for(policy, start, end):
+    calendar = policy['calendar']
+    check(isinstance(calendar, list) and all(isinstance(day,str) for day in calendar)
+          and calendar == sorted(set(calendar)) and len(calendar) >= 2
+          and calendar[0] == start and calendar[-1] == end
+          and all(date.fromisoformat(day).isoformat() == day for day in calendar),
+          'Freeze the common trading calendar for the exact window')
+    return calendar
+
+
 def prepare(case):
     """Project disclosure, revisions and quote observations at the same cutoff."""
     source = replay(case)
@@ -33,6 +43,7 @@ def prepare(case):
     start, end = map(date.fromisoformat, (policy['start'], policy['end']))
     check(end > start > cutoff.date(), 'Freeze a post-decision start and end date')
     check(string(policy['currency']) and string(policy['basis']), 'Currency and price basis required')
+    calendar = calendar_for(policy, start.isoformat(), end.isoformat())
     selected = {row['id'] for row in source['records']}
     prices = []
     for row in case['records']:
@@ -47,11 +58,26 @@ def prepare(case):
     source['quotes'] = sorted(prices, key=lambda row: (row['asset'], row['observed_at'], row['record_id']))
     return {'version': VERSION, 'packet': source, 'policy': {
         'universe': universe, 'benchmark': benchmark, 'start': start.isoformat(), 'end': end.isoformat(),
-        'currency': policy['currency'], 'basis': policy['basis'],
+        'currency': policy['currency'], 'basis': policy['basis'], 'calendar': calendar,
     }}
 
 
+def validate_prepared(prepared):
+    packet = prepared['packet']
+    by_id = {row['id']: dict(row) for row in packet['records']}
+    check(len(by_id) == len(packet['records']), 'Repeated prepared record')
+    for quote in packet['quotes']:
+        row = by_id.get(quote['record_id'])
+        check(row is not None and quote['observed_at'] == row['observed_at'] and 'quote' not in row,
+              'Quote lacks an eligible source record')
+        row['quote'] = {k: quote[k] for k in ('asset', 'level', 'currency', 'basis')}
+    case = dict(packet, records=list(by_id.values()), split='tuning', regimes=['prepared'],
+                portfolio_policy=prepared['policy'])
+    check(prepared == prepare(case), 'Prepared portfolio contains noncanonical or ineligible inputs')
+
+
 def freeze(prepared, candidate, review=None):
+    validate_prepared(prepared)
     check(set(candidate) == set(AUTHOR_CONTRACT), 'Unrecognized proposal fields')
     weights_ = allocation(candidate['weights'], prepared['policy']['universe'])
     evidence_ids = candidate['evidence_ids']
@@ -73,6 +99,7 @@ def freeze(prepared, candidate, review=None):
 
 
 def author(prepared, model):
+    validate_prepared(prepared)
     payload = {'packet': prepared['packet'], 'universe': prepared['policy']['universe'],
                'benchmark': prepared['policy']['benchmark'], 'currency': prepared['policy']['currency']}
     evidence = model.complete('evidence',
@@ -107,11 +134,8 @@ def score(prepared, receipt, data):
               'start': policy['start'], 'end': policy['end'], 'method': 'fixed shares, gross, no trades after entry'}
     by_day = {day: row['levels'] for day, row in zip(dates, rows)
               if policy['start'] <= day <= policy['end']}
-    calendar = data['calendar']
-    check(isinstance(calendar, list) and calendar == sorted(set(calendar)) and calendar
-          and calendar[0] == policy['start'] and calendar[-1] == policy['end']
-          and all(date.fromisoformat(day).isoformat() == day for day in calendar),
-          'Provide the common trading calendar for the exact frozen window')
+    calendar = policy['calendar']
+    check(data['calendar'] == calendar, 'Outcome calendar differs from the frozen policy')
     check(set(by_day) <= set(calendar), 'Outcome rows outside the common calendar')
     if set(by_day) != set(calendar):
         return dict(result, status='unavailable', reason='missing_observation_dates')
@@ -130,7 +154,33 @@ def score(prepared, receipt, data):
                 excess_return=metrics['proposal']['return'] - metrics['benchmark']['return'])
 
 
-def status_for_proposal():
+def link(session, report_id, prepared, receipt, data, comparability, as_of):
+    """Associate an audited analogue with the owner-scoped immutable report."""
+    report = session.get(report_id)
+    check(report['owner'] == session.owner and report['kind'] in ('completed','model_completed'),
+          'An owned completed portfolio report is required')
+    check(string(comparability) and len(comparability) <= 1000,
+          'Explain which features of the original decision and analogue are comparable')
+    result = score(prepared, receipt, data)
+    check(result['status'] == 'available', 'Historical outcome coverage is incomplete')
+    check(as_of >= max(result['end'], report['effective']), 'The link date precedes the outcome or report')
+    link_body = {'report_id': report_id, 'case_id': receipt['case_id'], 'scope': 'historical_analogue',
+                 'cutoff': prepared['packet']['as_of'], 'comparability': comparability,
+                 'historical_weights': receipt['proposal']['weights'],
+                 'benchmark_weights': prepared['policy']['benchmark'],
+                 'decision_review': receipt['decision_review'], 'score': result,
+                 'outcome_sha256': digest(data)}
+    with session.store.transaction():
+        prior = [e for e in session.events('portfolio_replay_link') if e['body'] == link_body]
+        return prior[-1]['id'] if prior else session.append('portfolio_replay_link',link_body,as_of,report['run_id'])
+
+
+def status_for_proposal(session=None, report_id=None):
+    if session is not None and report_id is not None:
+        links = [dict(e['body'], event_id=e['id']) for e in session.events('portfolio_replay_link')
+                 if e['body']['report_id'] == report_id]
+        if links:
+            return {'status': 'available', 'method': VERSION, 'cases': links}
     return {'status': 'no_comparable_replay', 'method': VERSION,
             'reason': 'Comparable evidence and a frozen historical submission have not been attached.'}
 

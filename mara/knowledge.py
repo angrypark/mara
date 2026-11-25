@@ -6,14 +6,16 @@ PROTECTED = {'principle', 'rare_risk'}
 
 
 class Knowledge:
-    def __init__(self, session, after_seq=None):
+    def __init__(self, session, after_seq=None, *, namespace=None):
         self.s = session
+        self.namespace = namespace
         from .history import scope
         self.after_seq=scope(session)['after_seq'] if after_seq is None else after_seq
 
     def current(self, as_of):
         result = {}
         for e in self.s.events('knowledge', as_of):
+            if e['body'].get('namespace') != self.namespace:continue
             from .history import belongs
             if not belongs(self.s,e,{'after_seq':self.after_seq}):continue
             result[e['body']['key']] = dict(e['body'], event_id=e['id'])
@@ -27,19 +29,19 @@ class Knowledge:
     def retrieve(self, as_of, role, limit=6000):
         from .store import Session, SHARED
         available = self.active(as_of)
-        if self.s.owner != SHARED:
+        if self.s.owner != SHARED and self.namespace is None:
             available += Knowledge(Session(self.s.store, SHARED),self.after_seq).active(as_of)
-        items = sorted(available, key=lambda k: (k['category'] in PROTECTED, k['priority']), reverse=True)
+        items = sorted((k for k in available if role in k['roles'] or '*' in k['roles']),
+                       key=lambda k: (k['category'] in PROTECTED, k['priority']), reverse=True)
         selected, size = [], 0
         for k in items:
-            if role not in k['roles'] and '*' not in k['roles']: continue
             n = len(dumps(k))
             if size+n <= limit:
                 selected.append(k); size += n
         return {'items': selected, 'budget_chars': limit, 'used_chars': size,
                 'omitted': len(items)-len(selected)}
 
-    def apply(self, op, as_of, run_id=None):
+    def apply(self, op, as_of, run_id=None, *, owner_role=None, source_output_id=None, maintenance=False):
         from .contracts import validate,schema
         validate(op,schema('knowledge-operation'))
         required(op, ['action', 'reason'])
@@ -48,11 +50,17 @@ class Knowledge:
         current = self.current(as_of)
         key = op.get('key')
         old = current.get(key)
+        if old and old.get('owner_role') != owner_role and not maintenance:
+            raise ValueError('Knowledge belongs to another role')
+        if owner_role and 'roles' in op and op['roles'] != [owner_role]:
+            raise ValueError('Role knowledge must stay in its owner namespace')
         if action == 'add':
             required(op, ['text','topic','condition','perspective','category','roles','refs','valid_until','priority'])
             key = uuid.uuid4().hex
             body = {k: op[k] for k in ['text','topic','condition','perspective','category','roles','refs','valid_until','priority']}
             body.update(key=key, version=1, status='active', occurrences=1, conflicts=[])
+            if owner_role:body['owner_role']=owner_role
+            if self.namespace:body['namespace']=self.namespace
         elif action in {'revise','merge','deactivate','archive','restore'}:
             if old is None: raise ValueError('Unknown knowledge key')
             body = {k:v for k,v in old.items() if k != 'event_id'}
@@ -67,6 +75,8 @@ class Knowledge:
             elif action == 'restore':
                 e = self.s.get(op['version_event'])
                 if e['kind'] != 'knowledge' or e['body']['key'] != key: raise ValueError('Invalid restore version')
+                if e['body'].get('owner_role') != old.get('owner_role'):
+                    raise ValueError('Restored knowledge belongs to a different namespace')
                 body = dict(e['body'], version=body['version'], status='active')
             elif action == 'revise':
                 required(op,['text','refs'])
@@ -90,6 +100,7 @@ class Knowledge:
         if not isinstance(body['text'],str) or not body['text'].strip() or len(body['text'])>2000: raise ValueError('Knowledge text too large/empty')
         if body['valid_until']: day(body['valid_until'])
         body.update(action=action, reason=op['reason'], previous_event=old['event_id'] if old else None)
+        if source_output_id:body['source_output_id']=source_output_id
         return self.s.append('knowledge', body, as_of, run_id)
 
     def prune(self, as_of, run_id=None):
@@ -98,17 +109,18 @@ class Knowledge:
         for k in self.current(as_of).values():
             if k['status'] != 'active': continue
             if k['valid_until'] and k['valid_until'] < as_of and k['category'] not in PROTECTED:
-                changes.append(self.apply({'action':'deactivate','key':k['key'],'reason':'Validity expired'},as_of,run_id)); continue
+                changes.append(self.apply({'action':'deactivate','key':k['key'],'reason':'Validity expired'},as_of,run_id,maintenance=True)); continue
             fingerprint = (k['topic'], k['condition'], k['perspective'], ' '.join(k['text'].lower().split()),
-                k['category'],tuple(sorted(k['roles'])),k['priority'],k['valid_until'])
+                k['category'],tuple(sorted(k['roles'])),k['priority'],k['valid_until'],k.get('owner_role'))
             if fingerprint in groups and k['category'] not in PROTECTED:
                 primary = groups[fingerprint]
-                changes.append(self.apply({'action':'merge','key':primary,'refs':k['refs'],'reason':'Exact duplicate; no confidence increase'},as_of,run_id))
-                changes.append(self.apply({'action':'archive','key':k['key'],'reason':'Duplicate retained through merged provenance'},as_of,run_id))
+                changes.append(self.apply({'action':'merge','key':primary,'refs':k['refs'],'reason':'Exact duplicate; no confidence increase'},as_of,run_id,maintenance=True))
+                changes.append(self.apply({'action':'archive','key':k['key'],'reason':'Duplicate retained through merged provenance'},as_of,run_id,maintenance=True))
             else: groups[fingerprint] = k['key']
         # Persist unresolved groups for semantic review; differences of perspective remain distinct.
         topics = {}
-        for k in self.active(as_of): topics.setdefault((k['topic'],k['condition']), []).append(k['key'])
+        for k in self.active(as_of):
+            if not k.get('owner_role'):topics.setdefault((k['topic'],k['condition']), []).append(k['key'])
         unresolved = [{'topic':t[0],'condition':t[1],'keys':keys} for t,keys in topics.items() if len(keys)>1]
         return self.s.append('pruning_audit', {'changes':changes,'unresolved_groups':unresolved,
             'policy':'Full scan; preserve source records, principles, rare risks and perspective differences'},as_of,run_id)

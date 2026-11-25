@@ -87,7 +87,7 @@ class Engine:
             result=self._run(as_of,market_id,force,run_id,revision_reason,amendment,improvement,profile_id,actual_id,external_review_id,learning_review_id)
             from .evaluation import evaluate_report
             try:
-                if evaluate_after:evaluate_report(self.s,self.model,result['event_id'])
+                if evaluate_after:evaluate_report(self.s,self.model,result['event_id'],learn_role=not improvement)
             except Exception:pass  # evaluation_status reports failure; completed proposal remains.
             return result
         except Exception as exc:
@@ -441,6 +441,8 @@ class Engine:
                 result=resume_cache.pop(role);stage=self.s.get(self.s.get(result[1])['body']['input_id'])['body']['payload']['analysis_stage']
                 output_receipts.append((role,stage,result[1],result[0]));return result
             payload = dict(common,knowledge=k.retrieve(as_of,role))
+            if self.model.mode=='live' and not frozen and not resume:
+                payload['allow_role_knowledge_update']=True
             if mandate:
                 assignment = leader_mandate.for_role(mandate, role)
                 if assignment:
@@ -571,7 +573,7 @@ class Engine:
                 reflection_input_id=self.s.get(reflection_id)['body']['input_id'])
             common['current_reflection'] = reflection
             # Every active record is inspected in bounded batches, including unrelated topics.
-            active = k.active(as_of)
+            active = [item for item in k.active(as_of) if not item.get('owner_role')]
             batches, batch, size = [], [], 0
             for item in active:
                 n = len(d.dumps(item))
@@ -871,8 +873,10 @@ class Engine:
                 'scope':'Final decision preserved; reader brief unavailable'},as_of,run_id)
             report['reader_brief']=None
         from .final_report import safe_assemble
-        report['final_report']=safe_assemble(report,m['facts'])
         with self.s.store.transaction():
+            from .role_knowledge import record
+            report['role_knowledge_updates']=record(k,as_of,run_id,recovery.latest.values())
+            report['final_report']=safe_assemble(report,m['facts'])
             proposal_id = self.s.append('proposal',proposal,as_of,run_id)
             report['proposal_id'] = proposal_id
             eid = self.s.append('completed',report,as_of,run_id)

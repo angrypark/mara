@@ -73,7 +73,7 @@ class DecisionActions:
                 model=self.models()
                 if req['action']=='evaluate':
                     s.lock(req['request_id'])
-                    try:evaluate_report(s,model,req['completed_id'])
+                    try:evaluate_report(s,model,req['completed_id'],learn_role=True)
                     finally:s.unlock(req['request_id'])
                 else:
                     source=s.get(req['completed_id'])

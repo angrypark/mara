@@ -75,7 +75,7 @@ def evaluator_fingerprint(s,model,as_of,guide_text=None):
     return hashlib.sha256(dumps(specification).encode()).hexdigest()
 
 
-def evaluate_report(s,model,completed_id):
+def evaluate_report(s,model,completed_id,*,learn_role=False):
     event=s.get(completed_id)
     if event['kind']!='completed':raise ValueError('Completed report required')
     report=copy.deepcopy(event['body']);run_id=event['run_id'];as_of=event['effective']
@@ -85,6 +85,19 @@ def evaluate_report(s,model,completed_id):
     r=rubric();rhash=hashlib.sha256(dumps(r).encode()).hexdigest()
     evaluator=Agents(s,model,as_of,run_id)
     spec_hash=evaluator_fingerprint(s,model,as_of,evaluator.guide('evaluator'))
+    evaluated_at=date.today().isoformat()
+    knowledge=None
+    own=[]
+    if learn_role and model.mode=='live':
+        from .history import scope,belongs
+        boundary=scope(s,evaluated_at)
+        if belongs(s,event,boundary):
+            from .knowledge import Knowledge
+            knowledge=Knowledge(s,after_seq=boundary['after_seq'])
+            own=[item for item in knowledge.retrieve(evaluated_at,'evaluator')['items']
+                 if item.get('owner_role')=='evaluator']
+            from .role_knowledge import POLICY
+            spec_hash=hashlib.sha256(dumps([spec_hash,POLICY,own]).encode()).hexdigest()
     # Idempotent for this immutable result and exact evaluator specification.
     # A changed rubric, guide, model or scoring implementation is a new assessment.
     for old in s.events('report_evaluation'):
@@ -112,6 +125,9 @@ def evaluate_report(s,model,completed_id):
     if report.get('persona_id'):
         from .persona import snapshot
         payload['user_persona']=snapshot(s.get(report['persona_id']))
+    if knowledge is not None:
+        payload['knowledge']={'items':own,'scope':'Reusable evaluator process only. The fixed rubric defines the score. No new investment evidence.'}
+        payload['allow_role_knowledge_update']=True
     s.append('evaluation_status',{'status':'running','completed_id':completed_id,'rubric_hash':rhash},date.today().isoformat(),run_id)
     try:
         output,oid=evaluator.call('evaluator',payload)
@@ -121,7 +137,11 @@ def evaluate_report(s,model,completed_id):
             'independence':'separate invocation and frozen rubric; same configured model may be used'}
         from .contracts import validate,schema
         validate(result,schema('evaluation'))
-        s.append('report_evaluation',result,date.today().isoformat(),run_id)
+        with s.store.transaction():
+            if knowledge is not None:
+                from .role_knowledge import record
+                record(knowledge,max(as_of,evaluated_at),run_id,[oid])
+            s.append('report_evaluation',result,evaluated_at,run_id)
         s.append('evaluation_status',{'status':'completed','completed_id':completed_id},date.today().isoformat(),run_id)
         return result
     except Exception as exc:

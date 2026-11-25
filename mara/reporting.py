@@ -83,11 +83,13 @@ def present(session,row):
     brief=presented_brief(r.get('reader_brief'),r,facts)
     from .report_audit import findings as audit_findings
     from .feedback_provenance import present as feedback_provenance
+    from .portfolio_replay import status_for_proposal
     result['view']={'audit_findings':audit_findings(session,result),'feedback_provenance':feedback_provenance(session,result),'user_persona':frozen_persona,'persona_is_current':bool(frozen_persona and latest_profile and latest_profile['id']==r['profile_id']), 'version':1,'kind':'revision' if r.get('revision_of') else 'weekly' if previous else 'initial',
         'base_currency':profile['base_currency'],'context':analyses.get('context'),
         'judgment_reports':list(role_reports.values()),
         'judgment_report_history':report_history,
         'final_report':reader,'final_report_status':reader_status,'evidence_graph':evidence_graph,
+        'portfolio_replay':status_for_proposal(session,row['id']),
         'judgment_report_status':{'available':bool(role_reports),'final_action':r['proposal']['action'],
             'eligibility':r['proposal']['eligibility'],
             'rule':'각 문서는 해당 역할·단계의 원문 의견. 리더 종합안도 최종 검증 전 문서이며 공식 행동·보류 여부는 최종 검증을 반영한 상태가 우선해요.'},

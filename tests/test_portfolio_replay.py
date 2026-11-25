@@ -1,7 +1,10 @@
 import copy
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
-from mara.portfolio_replay import author, freeze, prepare, score
+from mara.portfolio_replay import author, freeze, link, prepare, score, status_for_proposal
+from mara.store import Store
 
 
 def row(key, clock, level):
@@ -17,6 +20,7 @@ class ReplayTests(unittest.TestCase):
                          as_of='2023-01-03T00:00:00Z', task='Frozen task', holdings={}, persona={},
                          portfolio_policy=dict(universe=['A', 'CASH'], benchmark={'CASH': 1.0},
                                                start='2023-01-04', end='2023-01-06',
+                                               calendar=['2023-01-04','2023-01-05','2023-01-06'],
                                                currency='USD', basis='total_return'),
                          records=[row('public', '2023-01-02T21:00:00Z', 100),
                                   row('future-sentinel', '2023-01-03T00:01:00Z', 123456789)])
@@ -50,8 +54,43 @@ class ReplayTests(unittest.TestCase):
         receipt = freeze(prepared, self.candidate)
         self.outcomes['rows'].pop(1)
         self.assertEqual(score(prepared, receipt, self.outcomes)['reason'], 'missing_observation_dates')
+        self.outcomes['calendar'].pop(1)
+        with self.assertRaisesRegex(ValueError, 'calendar'):
+            score(prepared, receipt, self.outcomes)
         receipt['proposal']['rationale'] = 'Changed'
         with self.assertRaisesRegex(ValueError, 'changed'):
             score(prepared, receipt, self.outcomes)
         with self.assertRaisesRegex(ValueError, 'outside'):
             freeze(prepared, dict(self.candidate,evidence_ids=['future-sentinel']))
+
+    def test_modified_prepared_input_is_checked_before_provider_call(self):
+        prepared = prepare(self.case)
+        prepared['packet']['records'][0]['available_at'] = '2023-01-03T00:01:00Z'
+        with self.assertRaisesRegex(ValueError, 'ineligible'):
+            author(prepared, None)
+        prepared = prepare(self.case)
+        prepared['packet']['quotes'][0]['record_id'] = 'future-sentinel'
+        with self.assertRaisesRegex(ValueError, 'eligible source'):
+            author(prepared, None)
+
+    def test_link_exposes_outcome_for_owned_report_without_rewriting_it(self):
+        with TemporaryDirectory() as root:
+            store = Store(Path(root)/'test.sqlite')
+            self.addCleanup(store.close)
+            own = store.session(store.create_user('own'))
+            other = store.session(store.create_user('other'))
+            report_id = own.append('model_completed', {'proposal':{'weights':{'A':1}}}, '2023-01-02', 'run')
+            prepared = prepare(self.case)
+            receipt = freeze(prepared, self.candidate)
+            args = (report_id, prepared, receipt, self.outcomes, 'Both decisions evaluate A exposure.',
+                    '2023-01-06')
+            before = own.get(report_id)
+            first = link(own,*args)
+            self.assertEqual(link(own,*args), first)
+            self.assertEqual(own.get(report_id), before)
+            self.assertEqual(status_for_proposal(other, report_id)['status'], 'no_comparable_replay')
+            outcome, = status_for_proposal(own, report_id)['cases']
+            self.assertEqual(outcome['event_id'], first)
+            self.assertAlmostEqual(outcome['score']['excess_return'], 0.1)
+            with self.assertRaises(PermissionError):
+                link(other,*args)
