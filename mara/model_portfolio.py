@@ -212,6 +212,8 @@ def run(session, model, jid, as_of, inputs, funds, positions, pairs):
                         measurement=METHOD, perspectives=views, proposal=final, metrics=metrics,
                         benchmark=singles['ITOT'], final_validation=check, quality_review=rating,
                         accepted_ids=dict(context=context_id,evidence=eid,leader=leader_id,validation=check_id,quality=qid))
+                    from .portfolio_replay import status_for_proposal
+                    report['portfolio_replay']=status_for_proposal()
                     session.append('model_completed',report,as_of,jid)
                     return
                 revisions, requester = check['revision_requests'], check_id

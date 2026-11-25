@@ -851,6 +851,8 @@ class Engine:
             'latest_accepted':[{'role':r,'stage':stage,'output_id':oid} for (r,stage),oid in recovery.latest.items()],
             'scope':'Only the current accepted author versions and final validation produce this report. Original rejected and superseded outputs remain audit evidence.'}
         report['decision_scope']=decision_scope
+        from .portfolio_replay import status_for_proposal
+        report['portfolio_replay']=status_for_proposal()
         if mandate:
             report['leader_mandate'] = copy.deepcopy(mandate)
         report['research_questions']=ledger(self.s,run_id,decision_scope,delivery,final_review)
